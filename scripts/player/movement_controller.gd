@@ -1,8 +1,9 @@
 extends Node3D
 ## Moves the player between MovementNodes with a smooth physical tween —
-## never a teleport. Shows a subtle floor marker toward every reachable
-## neighbor of the node the player currently occupies, purely as a visual
-## hint; they are not click targets.
+## never a teleport. Shows a subtle floor marker toward every movement
+## candidate of the node the player currently occupies (see
+## MovementNode.get_movement_candidates()), purely as a visual hint;
+## they are not click targets.
 ##
 ## Movement is triggered by looking toward a destination and left-clicking
 ## anywhere on screen: see `_try_move_toward_look_direction()`.
@@ -63,10 +64,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		_try_move_toward_look_direction()
 
 
-## Picks whichever neighbor of `current_node` is most closely aligned
-## (horizontally) with where the camera is currently looking, and moves
-## there if it's within `move_select_angle_degrees`. Pitch (looking up/down)
-## is ignored entirely — only the look yaw matters.
+## Picks whichever movement candidate of `current_node` is most closely
+## aligned (horizontally) with where the camera is currently looking, and
+## moves there if it's within `move_select_angle_degrees`. Pitch (looking
+## up/down) is ignored entirely — only the look yaw matters.
 func _try_move_toward_look_direction() -> void:
 	if _is_moving:
 		return
@@ -80,15 +81,15 @@ func _try_move_toward_look_direction() -> void:
 	var best_neighbor: Node3D = null
 	var best_angle := INF
 
-	for neighbor in current_node.get_neighbor_nodes():
-		var to_neighbor: Vector3 = neighbor.global_position - current_node.global_position
-		to_neighbor.y = 0.0
-		if to_neighbor.length_squared() < 0.0001:
+	for candidate in current_node.get_movement_candidates():
+		var to_candidate: Vector3 = candidate.global_position - current_node.global_position
+		to_candidate.y = 0.0
+		if to_candidate.length_squared() < 0.0001:
 			continue
-		var angle := look_dir.angle_to(to_neighbor.normalized())
+		var angle := look_dir.angle_to(to_candidate.normalized())
 		if angle < best_angle:
 			best_angle = angle
-			best_neighbor = neighbor
+			best_neighbor = candidate
 
 	if best_neighbor != null and best_angle <= deg_to_rad(move_select_angle_degrees):
 		move_to(best_neighbor)
@@ -128,10 +129,10 @@ func _on_step_timer_timeout() -> void:
 
 func _refresh_prompts() -> void:
 	_clear_prompts()
-	for neighbor in current_node.get_neighbor_nodes():
+	for candidate in current_node.get_movement_candidates():
 		var prompt := MovementPromptScene.instantiate()
 		get_tree().current_scene.add_child(prompt)
-		var midpoint := current_node.global_position.lerp(neighbor.global_position, 0.6)
+		var midpoint := current_node.global_position.lerp(candidate.global_position, 0.6)
 		midpoint.y = floor_marker_height
 		prompt.global_position = midpoint
 		_active_prompts.append(prompt)

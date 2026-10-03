@@ -32,44 +32,56 @@ environment = SubResource("Environment_main")
 [node name="Geometry" type="Node3D" parent="."]
 
 [node name="ControlRoomFloor" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
-size = Vector3(4.4, 0.2, 4.4)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0.5)
+size = Vector3(2.8, 0.2, 3.4)
 material = SubResource("StandardMaterial3D_floor")
 use_collision = true
 
 [node name="ControlRoomCeiling" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.1, 0)
-size = Vector3(4.4, 0.2, 4.4)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.1, 0.5)
+size = Vector3(2.8, 0.2, 3.4)
 material = SubResource("StandardMaterial3D_wall")
 use_collision = true
 
 [node name="ControlRoomWestWall" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.1, 1.5, 0)
-size = Vector3(0.2, 3.0, 4.4)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.3, 1.5, 0.5)
+size = Vector3(0.2, 3.0, 3.4)
 material = SubResource("StandardMaterial3D_wall")
 use_collision = true
 
 [node name="ControlRoomEastWall" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.1, 1.5, 0)
-size = Vector3(0.2, 3.0, 4.4)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3, 1.5, 0.5)
+size = Vector3(0.2, 3.0, 3.4)
 material = SubResource("StandardMaterial3D_wall")
 use_collision = true
 
 [node name="ControlRoomBackWall" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, -2.1)
-size = Vector3(4.4, 3.0, 0.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, -1.1)
+size = Vector3(2.8, 3.0, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="ControlRoomBackCornerWest" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(0.7071068, 0, -0.7071068, 0, 1, 0, 0.7071068, 0, 0.7071068, -1.378553, 1.5, -1.178553)
+size = Vector3(1.0, 3.0, 0.49497)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="ControlRoomBackCornerEast" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(0.7071068, 0, 0.7071068, 0, 1, 0, -0.7071068, 0, 0.7071068, 1.378553, 1.5, -1.178553)
+size = Vector3(1.0, 3.0, 0.49497)
 material = SubResource("StandardMaterial3D_wall")
 use_collision = true
 
 [node name="ControlRoomDoorwayWallWest" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.4, 1.5, 2.1)
-size = Vector3(1.6, 3.0, 0.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.0, 1.5, 2.1)
+size = Vector3(0.8, 3.0, 0.2)
 material = SubResource("StandardMaterial3D_wall")
 use_collision = true
 
 [node name="ControlRoomDoorwayWallEast" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.4, 1.5, 2.1)
-size = Vector3(1.6, 3.0, 0.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.0, 1.5, 2.1)
+size = Vector3(0.8, 3.0, 0.2)
 material = SubResource("StandardMaterial3D_wall")
 use_collision = true
 
@@ -112,10 +124,10 @@ use_collision = true
 [node name="Interactables" type="Node3D" parent="."]
 
 [node name="ToggleSwitch" parent="Interactables" instance=ExtResource("3_switch")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.0, 1.4, -1.0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.2, 1.4, -0.3)
 
 [node name="ControlPanel" parent="Interactables" instance=ExtResource("4_panel")]
-transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 2.0, 1.4, -1.0)
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 1.2, 1.4, -0.3)
 
 [node name="Lights" type="Node3D" parent="."]
 
@@ -151,17 +163,39 @@ omni_range = 3.0
 
 [node name="MovementNodes" type="Node3D" parent="."]
 
-[node name="ControlRoom" type="Node3D" parent="MovementNodes"]
-transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 1.6, -0.5)
+[node name="ControlRoomFrontLeft" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -0.7, 1.6, 1.4)
 script = ExtResource("2_node")
-node_id = "control_room"
-neighbors = [NodePath("../Doorway")]
+node_id = "control_room_front_left"
+neighbors = [NodePath("../Doorway"), NodePath("../ControlRoomRearLeft")]
+region = &"control_room"
+
+[node name="ControlRoomFrontRight" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0.7, 1.6, 1.4)
+script = ExtResource("2_node")
+node_id = "control_room_front_right"
+neighbors = [NodePath("../Doorway"), NodePath("../ControlRoomRearRight")]
+region = &"control_room"
+
+[node name="ControlRoomRearLeft" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -0.7, 1.6, -0.5)
+script = ExtResource("2_node")
+node_id = "control_room_rear_left"
+neighbors = [NodePath("../ControlRoomFrontLeft"), NodePath("../ControlRoomRearRight")]
+region = &"control_room"
+
+[node name="ControlRoomRearRight" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0.7, 1.6, -0.5)
+script = ExtResource("2_node")
+node_id = "control_room_rear_right"
+neighbors = [NodePath("../ControlRoomFrontRight"), NodePath("../ControlRoomRearLeft")]
+region = &"control_room"
 
 [node name="Doorway" type="Node3D" parent="MovementNodes"]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 1.6, 2.1)
 script = ExtResource("2_node")
 node_id = "doorway"
-neighbors = [NodePath("../ControlRoom"), NodePath("../Corridor1")]
+neighbors = [NodePath("../ControlRoomFrontLeft"), NodePath("../ControlRoomFrontRight"), NodePath("../Corridor1")]
 
 [node name="Corridor1" type="Node3D" parent="MovementNodes"]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 1.6, 4.5)
@@ -182,4 +216,4 @@ node_id = "corridor_end"
 neighbors = [NodePath("../Corridor2")]
 
 [node name="Player" parent="." instance=ExtResource("1_player")]
-starting_node = NodePath("../MovementNodes/ControlRoom")
+starting_node = NodePath("../MovementNodes/ControlRoomRearLeft")
