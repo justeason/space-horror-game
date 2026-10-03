@@ -1,11 +1,16 @@
 extends StaticBody3D
-## A physical maintenance switch: look at it, click it, it flips between
-## ON and OFF. The lever physically rotates and a small indicator light
+## A physical toggle switch: look at it, click it, it flips between ON
+## and OFF. The lever physically rotates and a small indicator light
 ## swaps between dim red and dim green. No text, no popup, no abstract UI.
 ##
 ## `interact()` is the only contract InteractionController requires —
 ## any future interactable (buttons, panels, doors) just needs its own
-## version of this method.
+## version of this method. Emits `state_changed` so an owning device
+## (e.g. a ControlPanel) can react — but this switch neither knows nor
+## cares whether anything is listening, so it works identically standing
+## alone or mounted on a panel.
+
+signal state_changed(is_on: bool)
 
 const LEVER_ANGLE_OFF := -0.45 # radians, ~-26 degrees
 const LEVER_ANGLE_ON := 0.45 # ~+26 degrees
@@ -34,6 +39,7 @@ func _ready() -> void:
 func interact() -> void:
 	is_on = not is_on
 	_apply_state()
+	state_changed.emit(is_on)
 
 
 func _apply_state() -> void:

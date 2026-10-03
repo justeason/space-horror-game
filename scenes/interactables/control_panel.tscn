@@ -1,0 +1,37 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/interactables/control_panel.gd" id="1_panel"]
+[ext_resource type="PackedScene" path="res://scenes/interactables/toggle_switch.tscn" id="2_switch"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_backplate"]
+size = Vector3(0.04, 0.6, 1.1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_backplate"]
+albedo_color = Color(0.18, 0.18, 0.2, 1)
+roughness = 0.85
+metallic = 0.15
+
+[sub_resource type="BoxMesh" id="BoxMesh_status"]
+size = Vector3(0.02, 0.07, 0.07)
+
+[node name="ControlPanel" type="Node3D"]
+script = ExtResource("1_panel")
+switch_a_path = NodePath("SwitchA")
+switch_b_path = NodePath("SwitchB")
+
+[node name="Backplate" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.02, 0, 0)
+mesh = SubResource("BoxMesh_backplate")
+surface_material_override/0 = SubResource("StandardMaterial3D_backplate")
+
+[node name="StatusLight" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.015, 0.18, 0)
+mesh = SubResource("BoxMesh_status")
+
+[node name="SwitchA" parent="." instance=ExtResource("2_switch")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.05, -0.28)
+is_on = false
+
+[node name="SwitchB" parent="." instance=ExtResource("2_switch")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.05, 0.28)
+is_on = true

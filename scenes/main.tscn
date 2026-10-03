@@ -1,8 +1,9 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="1_player"]
 [ext_resource type="Script" path="res://scripts/navigation/movement_node.gd" id="2_node"]
-[ext_resource type="PackedScene" path="res://scenes/interactables/maintenance_switch.tscn" id="3_switch"]
+[ext_resource type="PackedScene" path="res://scenes/interactables/toggle_switch.tscn" id="3_switch"]
+[ext_resource type="PackedScene" path="res://scenes/interactables/control_panel.tscn" id="4_panel"]
 
 [sub_resource type="Environment" id="Environment_main"]
 background_mode = 1
@@ -110,8 +111,11 @@ use_collision = true
 
 [node name="Interactables" type="Node3D" parent="."]
 
-[node name="MaintenanceSwitch" parent="Interactables" instance=ExtResource("3_switch")]
+[node name="ToggleSwitch" parent="Interactables" instance=ExtResource("3_switch")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.0, 1.4, -1.0)
+
+[node name="ControlPanel" parent="Interactables" instance=ExtResource("4_panel")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 2.0, 1.4, -1.0)
 
 [node name="Lights" type="Node3D" parent="."]
 

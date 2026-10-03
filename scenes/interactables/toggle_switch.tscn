@@ -1,6 +1,6 @@
 [gd_scene load_steps=7 format=3]
 
-[ext_resource type="Script" path="res://scripts/interactables/maintenance_switch.gd" id="1_switch"]
+[ext_resource type="Script" path="res://scripts/interactables/toggle_switch.gd" id="1_switch"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_collision"]
 size = Vector3(0.22, 0.42, 0.32)
@@ -19,7 +19,7 @@ size = Vector3(0.14, 0.03, 0.03)
 [sub_resource type="BoxMesh" id="BoxMesh_indicator"]
 size = Vector3(0.02, 0.05, 0.05)
 
-[node name="MaintenanceSwitch" type="StaticBody3D"]
+[node name="ToggleSwitch" type="StaticBody3D"]
 script = ExtResource("1_switch")
 
 [node name="Collision" type="CollisionShape3D" parent="."]
