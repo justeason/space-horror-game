@@ -1,0 +1,13 @@
+# Godot 4 editor/import cache — regenerated locally, must not be committed.
+.godot/
+*.translation
+
+# Imported assets cache
+.import/
+
+# Mono/C# build artifacts (not used, but harmless to exclude)
+.mono/
+data_*/
+
+# OS cruft
+.DS_Store

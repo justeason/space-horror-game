@@ -1,0 +1,175 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="1_player"]
+[ext_resource type="Script" path="res://scripts/navigation/movement_node.gd" id="2_node"]
+
+[sub_resource type="Environment" id="Environment_main"]
+background_mode = 1
+background_color = Color(0.01, 0.01, 0.015, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.25, 0.3, 0.35, 1)
+ambient_light_energy = 0.25
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wall"]
+albedo_color = Color(0.45, 0.47, 0.5, 1)
+roughness = 0.85
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_floor"]
+albedo_color = Color(0.3, 0.31, 0.34, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_corridor"]
+albedo_color = Color(0.38, 0.4, 0.44, 1)
+roughness = 0.85
+
+[node name="Main" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_main")
+
+[node name="Geometry" type="Node3D" parent="."]
+
+[node name="ControlRoomFloor" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
+size = Vector3(4.4, 0.2, 4.4)
+material = SubResource("StandardMaterial3D_floor")
+use_collision = true
+
+[node name="ControlRoomCeiling" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.1, 0)
+size = Vector3(4.4, 0.2, 4.4)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="ControlRoomWestWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.1, 1.5, 0)
+size = Vector3(0.2, 3.0, 4.4)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="ControlRoomEastWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.1, 1.5, 0)
+size = Vector3(0.2, 3.0, 4.4)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="ControlRoomBackWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, -2.1)
+size = Vector3(4.4, 3.0, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="ControlRoomDoorwayWallWest" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.4, 1.5, 2.1)
+size = Vector3(1.6, 3.0, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="ControlRoomDoorwayWallEast" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.4, 1.5, 2.1)
+size = Vector3(1.6, 3.0, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="ControlRoomDoorwayLintel" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.6, 2.1)
+size = Vector3(1.2, 0.8, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="CorridorFloor" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 6.1)
+size = Vector3(1.6, 0.2, 8.0)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="CorridorCeiling" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 6.1)
+size = Vector3(1.6, 0.2, 8.0)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="CorridorWestWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.7, 1.3, 6.1)
+size = Vector3(0.2, 2.6, 8.0)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="CorridorEastWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.7, 1.3, 6.1)
+size = Vector3(0.2, 2.6, 8.0)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="CorridorEndWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 10.1)
+size = Vector3(1.6, 2.6, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="Lights" type="Node3D" parent="."]
+
+[node name="Light_ControlRoom" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.8, -0.5)
+light_color = Color(0.95, 0.95, 1, 1)
+light_energy = 1.4
+omni_range = 5.0
+
+[node name="Light_Doorway" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, 2.1)
+light_color = Color(0.85, 0.9, 1, 1)
+light_energy = 0.8
+omni_range = 3.0
+
+[node name="Light_Corridor1" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 4.5)
+light_color = Color(0.8, 0.88, 1, 1)
+light_energy = 1.0
+omni_range = 3.5
+
+[node name="Light_Corridor2" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 7.0)
+light_color = Color(0.8, 0.88, 1, 1)
+light_energy = 1.0
+omni_range = 3.5
+
+[node name="Light_CorridorEnd" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 9.5)
+light_color = Color(0.8, 0.88, 1, 1)
+light_energy = 0.9
+omni_range = 3.0
+
+[node name="MovementNodes" type="Node3D" parent="."]
+
+[node name="ControlRoom" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 1.6, -0.5)
+script = ExtResource("2_node")
+node_id = "control_room"
+neighbors = [NodePath("../Doorway")]
+
+[node name="Doorway" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 1.6, 2.1)
+script = ExtResource("2_node")
+node_id = "doorway"
+neighbors = [NodePath("../ControlRoom"), NodePath("../Corridor1")]
+
+[node name="Corridor1" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 1.6, 4.5)
+script = ExtResource("2_node")
+node_id = "corridor_1"
+neighbors = [NodePath("../Doorway"), NodePath("../Corridor2")]
+
+[node name="Corridor2" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 1.6, 7.0)
+script = ExtResource("2_node")
+node_id = "corridor_2"
+neighbors = [NodePath("../Corridor1"), NodePath("../CorridorEnd")]
+
+[node name="CorridorEnd" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 1.6, 9.5)
+script = ExtResource("2_node")
+node_id = "corridor_end"
+neighbors = [NodePath("../Corridor2")]
+
+[node name="Player" parent="." instance=ExtResource("1_player")]
+starting_node = NodePath("../MovementNodes/ControlRoom")
