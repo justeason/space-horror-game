@@ -139,6 +139,7 @@ func _init() -> void:
 	while GameSettings.get_difficulty() != GameSettings.Difficulty.NORMAL: GameSettings.cycle_difficulty()
 
 	await _test_keyboard_input_and_alternate_profile()
+	await _test_tuning_state_progression()
 
 	print("")
 	if _ok: print("ALL TESTS PASSED")
@@ -203,6 +204,83 @@ func _test_keyboard_input_and_alternate_profile() -> void:
 ## Dispatches a real InputEventKey through the view's own
 ## _unhandled_input(), the same entry point a real keypress reaches --
 ## not a direct _on_freq_nudge()/_on_gain_nudge() call.
+## Round 18 Priority 4 coverage: the named tuning-state progression
+## (SEARCHING -> SIGNAL ACQUIRED -> FINE TUNING -> STABILIZING -> SIGNAL
+## LOCKED) actually reflects real frequency_accuracy()/gain_accuracy()/
+## signal_quality() state, driven via real keyboard input end to end --
+## not merely that five strings exist somewhere, but that the state
+## machine transitions at the right moments as the player actually
+## tunes, including losing STABILIZING when quality drops back out of
+## range (the brief's own "make failure/lost lock understandable").
+func _test_tuning_state_progression() -> void:
+	var main: Node = (load("res://scenes/main.tscn") as PackedScene).instantiate()
+	get_root().add_child(main)
+	current_scene = main
+	for i in 5: await process_frame
+
+	var player := main.get_node("Player")
+	var free_body := main.get_node("FreeMoveBody")
+	free_body.set_active(false)
+	var day_plan := main.get_node("DayPlan")
+	var station := main.get_node("Interactables/SignalCalibrationStation")
+	var view := player.get_node("HUD/SignalCalibrationView")
+	station.debug_force_profile(&"default")
+	station.interact()
+	await process_frame
+
+	_check("[state] starts SEARCHING (far from target on both axes)", view._current_state() == view._TuneState.SEARCHING)
+	_check("[state] SEARCHING status text names the state", view._status_label.text.findn("SEARCHING") != -1)
+
+	# Freq 12 -> 56 (22 steps of +2): within frequency_accuracy()'s own
+	# >= 0.5 threshold, gain untouched -- exactly ONE axis close.
+	for i in 22:
+		_key(view, KEY_RIGHT)
+	view._refresh()
+	_check("[state] frequency_accuracy alone crosses the axis-ok threshold", station.frequency_accuracy() >= 0.5)
+	_check("[state] gain_accuracy still far below it (gain untouched)", station.gain_accuracy() < 0.5)
+	_check("[state] -> SIGNAL ACQUIRED once exactly one axis is close", view._current_state() == view._TuneState.ACQUIRED)
+	_check("[state] ACQUIRED status text names frequency specifically as the close axis", view._status_label.text.findn("frequency is close") != -1)
+
+	# Gain 0.2 -> 0.55 (7 steps of +0.05): now BOTH axes close, but
+	# combined quality (~0.53*0.625=0.33) is still well under NORMAL's
+	# 0.72 completion threshold -- FINE TUNING, not yet STABILIZING.
+	for i in 7:
+		_key(view, KEY_UP)
+	view._refresh()
+	_check("[state] gain_accuracy now also crosses the axis-ok threshold", station.gain_accuracy() >= 0.5)
+	_check("[state] combined quality is still below the completion threshold", station.signal_quality() < station.quality_threshold())
+	_check("[state] -> FINE TUNING once both axes are close but quality isn't there yet", view._current_state() == view._TuneState.FINE_TUNING)
+
+	# Drive both all the way to their exact targets -> full quality ->
+	# STABILIZING.
+	for i in 4: _key(view, KEY_RIGHT) # freq 56 -> 64 (target 63, within step)
+	for i in 3: _key(view, KEY_UP) # gain 0.55 -> 0.70 (exact target)
+	view._refresh()
+	_check("[state] combined quality now meets the completion threshold", station.signal_quality() >= station.quality_threshold())
+	_check("[state] -> STABILIZING once quality meets the threshold", view._current_state() == view._TuneState.STABILIZING)
+	_check("[state] STABILIZING status text shows a holding percentage", view._status_label.text.findn("STABILIZING") != -1)
+
+	# Detune gain hard -> quality drops back out of range -> state falls
+	# back (the brief's own "make failure/lost lock understandable").
+	for i in 10: _key(view, KEY_DOWN)
+	view._refresh()
+	_check("[state] losing quality drops OUT of STABILIZING (lost-lock is understandable, not stuck)", view._current_state() != view._TuneState.STABILIZING)
+
+	# Re-tune and actually hold for the full real sustain duration ->
+	# LOCKED, with the color-coded status label reflecting it.
+	for i in 10: _key(view, KEY_UP)
+	await create_timer(station.sustain_seconds() + 0.3).timeout
+	_check("[state] -> SIGNAL LOCKED once held for the full sustain duration", view._current_state() == view._TuneState.LOCKED)
+	_check("[state] LOCKED status text says SIGNAL LOCKED", view._status_label.text.findn("SIGNAL LOCKED") != -1)
+	_check("[state] LOCKED status label is modulated the distinct LOCKED color", view._status_label.modulate.is_equal_approx(view._STATE_COLOR[view._TuneState.LOCKED]))
+	_check("m02 marked done", day_plan.is_task_done(&"m02"))
+
+	main.get_node("FocusedInteractionState").end()
+	await process_frame
+	main.queue_free()
+	await create_timer(0.2).timeout
+
+
 func _key(view: Control, keycode: int) -> void:
 	var ev := InputEventKey.new()
 	ev.keycode = keycode

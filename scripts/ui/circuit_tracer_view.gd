@@ -106,7 +106,7 @@ func _refresh() -> void:
 		_controls_label.text = "[Enter] Close"
 	else:
 		_status_label.text = "Diagnose the intermittent fault."
-		_controls_label.text = "Click a test point to probe it. Click the wire segment you believe is faulty to submit your diagnosis."
+		_controls_label.text = "Click a test point to probe. Click the faulty segment to submit."
 
 	var wrong: StringName = _station.consume_last_wrong_guess()
 	if wrong != &"":

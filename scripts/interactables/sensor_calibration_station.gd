@@ -43,6 +43,12 @@ extends StaticBody3D
 ## picks; the seam is real (a future second station/scenario would
 ## just export a different value here), even though only one scenario
 ## exists today.
+## Round 18 Priority 3: no longer read by sensor_calibration_view.gd --
+## the player's own explicit instruction this round ties the required-
+## calibration count to DIFFICULTY (randomized within a per-difficulty
+## range each attempt), superseding this export's whole premise. Left
+## in place (not deleted) only because it is still a harmless, unused
+## @export; a future round could repurpose or remove it.
 @export_range(1, 3, 1) var fault_count: int = 2
 
 @onready var _day_plan: Node = get_node(day_plan_path)

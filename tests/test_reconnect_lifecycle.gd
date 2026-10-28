@@ -100,6 +100,26 @@ func _run_lifecycle_scenario(hard: bool, label: String) -> void:
 	carry.pick_up(wire)
 	terminal.interact() # opens the focused procedure for real
 	await process_frame
+	# Round 18 Priority 9 root-cause fix: a render frame (process_frame)
+	# is not the same signal as a PHYSICS step, and opening the
+	# procedure just synced every wire/breaker StaticBody3D's pose via
+	# sync_full_state() -- but even a FIXED count of physics_frame ticks
+	# turned out not to be reliable here (measured directly: 1 tick cut
+	# the failure rate noticeably but not to zero, 2 ticks got closer
+	# but still failed intermittently across 15+ runs). The actual
+	# amount of settling needed varies run to run -- this diorama's own
+	# SubViewport (own_world_3d = true) can take a VARIABLE number of
+	# physics steps to finish registering a freshly-instantiated scene's
+	# StaticBody3D colliders with the physics server the first time,
+	# especially now that half the panel's wires/terminals are built
+	# procedurally in _ready() (Round 18 Priority 2) rather than present
+	# from scene deserialization. _wait_for_raycast_ready() polls an
+	# ACTUAL raycast against the breaker (always allowed at the isolate
+	# stage) until it genuinely resolves -- a deterministic readiness
+	# check instead of a guessed delay: it waits exactly as long as
+	# reality requires, never longer, and can't silently under-wait the
+	# way a fixed count did.
+	await _wait_for_raycast_ready(diorama, diorama._breaker_collider)
 
 	# ---- Through to RECONNECT: isolate, disconnect all three, replace. ----
 	await _real_click(diorama, diorama._breaker_collider)
@@ -171,6 +191,20 @@ func _run_lifecycle_scenario(hard: bool, label: String) -> void:
 ## the Round 13 fix), not a direct `_dispatch_click()`/backend call.
 func _real_click(diorama: Node3D, collider: Node3D) -> void:
 	var pos: Vector2 = diorama.screen_position_for(collider.global_position)
+	# Round 18 Priority 9: a fresh raycast at this exact position can be
+	# a TRANSIENT miss immediately after a PRECEDING click moved some
+	# OTHER collider (measured directly: the physics server's broadphase
+	# appears to still be mid-rebuild around the just-moved collider for
+	# one more step) even though this click's own target never moved --
+	# one retry after a real physics step resolves it reliably. This
+	# mirrors _wait_for_raycast_ready()'s "poll for the real signal,
+	# don't guess a count" principle, scoped to a single extra attempt
+	# since the miss is rare and transient, not a guaranteed-slow
+	# first-activation case. A genuinely disallowed/wrong click still
+	# correctly resolves to "" on the retry too (nothing about this
+	# changes the _allowed gate), so this never masks a real rejection.
+	if diorama._raycast_action(pos) == &"":
+		await Engine.get_main_loop().physics_frame
 	var down := InputEventMouseButton.new()
 	down.button_index = MOUSE_BUTTON_LEFT
 	down.pressed = true
@@ -192,6 +226,19 @@ func _real_click(diorama: Node3D, collider: Node3D) -> void:
 	# about not waiting for ANIMATIONS/TIMERS to settle between clicks,
 	# which this file still does not do.
 	await physics_frame
+
+
+## Round 18 Priority 9 root-cause fix -- see the identical, fuller
+## comment just above this file's own call site. Polls an actual
+## raycast against a known-present collider until it genuinely resolves,
+## instead of guessing a fixed frame count.
+func _wait_for_raycast_ready(diorama: Node3D, collider: Node3D, max_attempts: int = 30) -> void:
+	var pos: Vector2 = diorama.screen_position_for(collider.global_position)
+	for attempt in max_attempts:
+		if diorama._raycast_action(pos) != &"":
+			return
+		await Engine.get_main_loop().physics_frame
+	push_warning("_wait_for_raycast_ready: collider never became raycast-visible after %d physics frames" % max_attempts)
 
 
 func _check(label: String, cond: bool) -> void:

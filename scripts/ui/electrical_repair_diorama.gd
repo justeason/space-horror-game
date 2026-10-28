@@ -69,7 +69,37 @@ const REPLACEMENT_STAGED_PITCH_DEGREES: float = -20.0
 ## backup and ground, so a repair config can involve a genuinely
 ## different SUBSET of this one fixed panel instead of only ever
 ## varying which of the same three wires is at fault.
-const ROLES: Array[StringName] = [&"supply", &"return", &"service", &"backup", &"ground"]
+## Round 18 Priority 2: expanded from 5 to 10 -- see
+## electrical_panel.gd's own WIRE_ROLES doc comment for the full
+## rationale. The first 5 are the original, hand-authored ROW A
+## (terminal y=-0.22); the last 5 (_ROW_B_ROLES) are a NEW, physically
+## lower second row (terminal y=-0.48) built PROCEDURALLY in _ready()
+## (see _build_row_b()) rather than hand-authored in the .tscn --
+## hand-writing ~10 nodes per wire/terminal x5 wires in a text scene
+## file is impractical to do reliably; building them from the same
+## data this script already uses for ROW A (_WIRE_CURVE_POINTS,
+## _HEALTHY_WIRE_COLOR, ...) guarantees the two rows share one
+## construction path and can't drift apart from authoring mistakes.
+const ROLES: Array[StringName] = [
+	&"supply", &"return", &"service", &"backup", &"ground",
+	&"telemetry", &"coolant", &"sensor_feed", &"auxiliary", &"relay",
+]
+const _ROW_B_ROLES: Array[StringName] = [&"telemetry", &"coolant", &"sensor_feed", &"auxiliary", &"relay"]
+## Row B terminal x positions mirror row A's exactly (same -1.0..1.0
+## spread, same 0.5 spacing -- the exact spacing test_wire_geometry.gd
+## already proves gives non-overlapping click hitboxes for row A, reused
+## here rather than re-deriving a new spacing).
+const _ROW_B_X: Dictionary = {
+	&"telemetry": -1.0, &"coolant": -0.5, &"sensor_feed": 0.0, &"auxiliary": 0.5, &"relay": 1.0,
+}
+## Row B sits physically BELOW row A on the same panel (a believable
+## two-row terminal strip, not a wider single row) -- wire roots start
+## lower (0.16 vs row A's 0.42) and their curves land on a
+## correspondingly lower terminal row (world y -0.48 vs row A's -0.22,
+## both comfortably inside InsetPanel's existing y span -- no scene
+## resizing needed, confirmed by render).
+const _ROW_B_WIRE_ROOT_Y: float = 0.16
+const _ROW_B_TERMINAL_Y: float = -0.48
 
 ## Round 11 Workstream B3 introduced a curved, multi-segment cable
 ## path (a quadratic Bezier sampled into _WIRE_SEGMENT_COUNT straight
@@ -128,6 +158,19 @@ const _WIRE_CURVE_POINTS: Dictionary = {
 	# interfering.
 	&"backup": [Vector3(0.08, 0.05, 0.06), Vector3(0.06, -0.42, 0.06)],
 	&"ground": [Vector3(-0.08, 0.05, 0.06), Vector3(-0.06, -0.42, 0.06)],
+	# Round 18 Priority 2: row B reuses row A's exact relative curve
+	# shapes at the matching x slot (telemetry<->supply, coolant<->
+	# return, sensor_feed<->service, auxiliary<->backup, relay<->ground)
+	# -- since these are LOCAL offsets from each wire's own root, and
+	# row B's roots sit at their own lower y (_ROW_B_WIRE_ROOT_Y), this
+	# reproduces the exact same proven crossing geometry (telemetry
+	# crosses sensor_feed the same way supply crosses service -- see
+	# test_wire_geometry.gd) one row down, not a new, unverified shape.
+	&"telemetry": [Vector3(1.0, 0.05, 0.22), Vector3(0.55, -0.45, 0.26)],
+	&"coolant": [Vector3(0.12, 0.05, 0.08), Vector3(0.1, -0.42, 0.08)],
+	&"sensor_feed": [Vector3(-1.0, 0.05, 0.0), Vector3(-0.55, -0.45, 0.0)],
+	&"auxiliary": [Vector3(0.08, 0.05, 0.06), Vector3(0.06, -0.42, 0.06)],
+	&"relay": [Vector3(-0.08, 0.05, 0.06), Vector3(-0.06, -0.42, 0.06)],
 }
 
 ## Round 16/17: which pre-built ReplacementWire visual-group variant
@@ -142,6 +185,8 @@ const _FAULT_VISUAL_GROUPS: Dictionary = {
 	&"service": "VisualGroup_service",
 	&"return": "VisualGroup_return",
 	&"backup": "VisualGroup_backup",
+	&"telemetry": "VisualGroup_telemetry",
+	&"relay": "VisualGroup_relay",
 }
 ## A role's own wire mesh swaps between its normal HEALTHY color and a
 ## duller, rougher DAMAGED look depending on whether THIS attempt's
@@ -155,38 +200,35 @@ const _HEALTHY_WIRE_COLOR: Dictionary = {
 	&"service": Color(0.68, 0.56, 0.08, 1),
 	&"backup": Color(0.75, 0.4, 0.08, 1),
 	&"ground": Color(0.15, 0.55, 0.22, 1),
+	&"telemetry": Color(0.5, 0.15, 0.65, 1),
+	&"coolant": Color(0.1, 0.55, 0.6, 1),
+	&"sensor_feed": Color(0.75, 0.75, 0.78, 1),
+	&"auxiliary": Color(0.7, 0.15, 0.45, 1),
+	&"relay": Color(0.45, 0.3, 0.15, 1),
 }
 const _DAMAGED_WIRE_COLOR: Dictionary = {
 	&"return": Color(0.09, 0.16, 0.36, 1),
 	&"service": Color(0.42, 0.36, 0.08, 1),
 	&"backup": Color(0.46, 0.26, 0.07, 1),
 	&"ground": Color(0.1, 0.34, 0.15, 1),
+	&"telemetry": Color(0.3, 0.09, 0.4, 1),
+	&"coolant": Color(0.06, 0.34, 0.37, 1),
+	&"sensor_feed": Color(0.45, 0.45, 0.47, 1),
+	&"auxiliary": Color(0.42, 0.09, 0.27, 1),
+	&"relay": Color(0.27, 0.18, 0.09, 1),
 }
 const _HEALTHY_ROUGHNESS: float = 0.5
 const _DAMAGED_ROUGHNESS: float = 0.75
 
 @onready var _camera: Camera3D = $Camera3D
-@onready var _wire_nodes := {
-	&"supply": $Wires/Supply,
-	&"return": $Wires/Return,
-	&"service": $Wires/Service,
-	&"backup": $Wires/Backup,
-	&"ground": $Wires/Ground,
-}
-@onready var _wire_colliders := {
-	&"supply": $Wires/Supply/Collision,
-	&"return": $Wires/Return/Collision,
-	&"service": $Wires/Service/Collision,
-	&"backup": $Wires/Backup/Collision,
-	&"ground": $Wires/Ground/Collision,
-}
-@onready var _terminal_indicators := {
-	&"supply": $Terminals/Supply/Indicator,
-	&"return": $Terminals/Return/Indicator,
-	&"service": $Terminals/Service/Indicator,
-	&"backup": $Terminals/Backup/Indicator,
-	&"ground": $Terminals/Ground/Indicator,
-}
+## Round 18 Priority 2: no longer a literal @onready dict of $-paths --
+## row A's 5 roles still resolve from scene-authored nodes exactly as
+## before, but row B's 5 don't exist in the .tscn at all (see
+## _build_row_b()), so this is populated once, for every role uniformly,
+## at the very start of _ready() instead.
+var _wire_nodes := {}
+var _wire_colliders := {}
+var _terminal_indicators := {}
 @onready var _replacement_wire: Node3D = $ReplacementWire
 @onready var _replacement_collider: Node3D = $ReplacementWire/Collision
 @onready var _breaker_hinge: Node3D = $Breaker/Hinge
@@ -224,6 +266,23 @@ var _screw_base_z: Array = []
 
 
 func _ready() -> void:
+	# Round 18 Priority 2: populate _wire_nodes/_wire_colliders/
+	# _terminal_indicators for EVERY role before anything below reads
+	# them -- row A from the scene-authored nodes (unchanged), row B
+	# built procedurally right here (see _build_row_b()/
+	# _build_replacement_variant()), so every loop that follows (which
+	# already iterates ROLES/_FAULT_VISUAL_GROUPS generically) picks up
+	# all 10 roles uniformly without needing to know which ones are
+	# scene-authored vs procedural.
+	for role in [&"supply", &"return", &"service", &"backup", &"ground"]:
+		var root: Node3D = get_node("Wires/%s" % role.capitalize())
+		_wire_nodes[role] = root
+		_wire_colliders[role] = root.get_node("Collision")
+		_terminal_indicators[role] = get_node("Terminals/%s/Indicator" % role.capitalize())
+	_build_row_b()
+	_build_replacement_variant(&"telemetry")
+	_build_replacement_variant(&"relay")
+
 	for role in ROLES:
 		_collider_action[_wire_colliders[role]] = StringName("wire:%s" % role)
 	_collider_action[_replacement_collider] = &"replacement"
@@ -262,6 +321,183 @@ func _ready() -> void:
 		_configure_world_display_mode()
 
 
+## Round 18 Priority 2: builds all 5 of row B's wire+terminal node
+## trees from scratch, mirroring the exact node shape row A's
+## scene-authored wires already have (VisualGroup/Run+Cap+DamageScorch,
+## a sibling Collision/Shape StaticBody3D) so every OTHER function in
+## this script (sync_full_state(), _build_wire_curve(),
+## _apply_fault_role_visuals(), hover/pulse highlighting, ...) treats
+## row B identically to row A without needing a single "is this a row B
+## role" branch anywhere outside this one function. Reuses row A's own
+## Cap/Backing/Lug/Socket/Screw materials by reference (those never vary
+## per role) and builds new StandardMaterial3D instances only where a
+## role genuinely needs its own (the wire Run's color, and the
+## terminal's Indicator light -- see the Round 15 "shared indicator
+## material" bug class this project already fixed once for row A).
+func _build_row_b() -> void:
+	var ref_wire: Node3D = _wire_nodes[&"return"]
+	var cap_material: Material = ref_wire.get_node("VisualGroup/Cap").material
+	var scorch_material: Material = ref_wire.get_node("VisualGroup/DamageScorch").material
+	var shared_wire_shape: Shape3D = ref_wire.get_node("Collision/Shape").shape
+
+	var ref_terminal: Node3D = get_node("Terminals/Return")
+	var backing_material: Material = ref_terminal.get_node("Backing").material
+	var lug_material: Material = ref_terminal.get_node("Lug").material
+	var socket_material: Material = ref_terminal.get_node("Socket").material
+	var screw_material: Material = ref_terminal.get_node("Screw1").material
+	var bezel_material: Material = ref_terminal.get_node("IndicatorBezel").material
+
+	for role in _ROW_B_ROLES:
+		var x: float = _ROW_B_X[role]
+
+		var wire_root := Node3D.new()
+		wire_root.name = "Wire_%s" % role
+		wire_root.position = Vector3(x, _ROW_B_WIRE_ROOT_Y, -0.26)
+		get_node("Wires").add_child(wire_root)
+
+		var visual_group := Node3D.new()
+		visual_group.name = "VisualGroup"
+		wire_root.add_child(visual_group)
+
+		var run := CSGCylinder3D.new()
+		run.name = "Run"
+		run.radius = 0.028
+		run.height = 0.1
+		run.sides = 10
+		var wire_mat := StandardMaterial3D.new()
+		wire_mat.albedo_color = _HEALTHY_WIRE_COLOR[role]
+		wire_mat.roughness = _HEALTHY_ROUGHNESS
+		run.material = wire_mat
+		visual_group.add_child(run)
+
+		var cap := CSGBox3D.new()
+		cap.name = "Cap"
+		cap.position = Vector3(0, -0.64, 0)
+		cap.size = Vector3(0.07, 0.06, 0.06)
+		cap.material = cap_material
+		visual_group.add_child(cap)
+
+		var scorch := CSGBox3D.new()
+		scorch.name = "DamageScorch"
+		scorch.visible = false
+		scorch.size = Vector3(0.06, 0.1, 0.06)
+		scorch.material = scorch_material
+		visual_group.add_child(scorch)
+
+		var collision := StaticBody3D.new()
+		collision.name = "Collision"
+		collision.position = Vector3(0, -0.61, 0)
+		wire_root.add_child(collision)
+		var shape := CollisionShape3D.new()
+		shape.name = "Shape"
+		shape.shape = shared_wire_shape
+		collision.add_child(shape)
+
+		_wire_nodes[role] = wire_root
+		_wire_colliders[role] = collision
+
+		var terminal := Node3D.new()
+		terminal.name = "Terminal_%s" % role
+		terminal.position = Vector3(x, _ROW_B_TERMINAL_Y, -0.26)
+		get_node("Terminals").add_child(terminal)
+
+		var backing := CSGBox3D.new()
+		backing.name = "Backing"
+		backing.position = Vector3(0, 0, -0.03)
+		backing.size = Vector3(0.22, 0.16, 0.05)
+		backing.material = backing_material
+		terminal.add_child(backing)
+
+		var lug := CSGBox3D.new()
+		lug.name = "Lug"
+		lug.size = Vector3(0.14, 0.08, 0.1)
+		lug.material = lug_material
+		terminal.add_child(lug)
+
+		var socket := CSGCylinder3D.new()
+		socket.name = "Socket"
+		socket.position = Vector3(0, 0, 0.048)
+		socket.rotation_degrees = Vector3(90, 0, 0)
+		socket.radius = 0.032
+		socket.height = 0.02
+		socket.sides = 12
+		socket.material = socket_material
+		terminal.add_child(socket)
+
+		var screw1 := CSGCylinder3D.new()
+		screw1.name = "Screw1"
+		screw1.position = Vector3(-0.08, 0.05, 0.051)
+		screw1.rotation_degrees = Vector3(90, 0, 0)
+		screw1.radius = 0.012
+		screw1.height = 0.01
+		screw1.sides = 8
+		screw1.material = screw_material
+		terminal.add_child(screw1)
+
+		var screw2 := CSGCylinder3D.new()
+		screw2.name = "Screw2"
+		screw2.position = Vector3(0.08, -0.05, 0.051)
+		screw2.rotation_degrees = Vector3(90, 0, 0)
+		screw2.radius = 0.012
+		screw2.height = 0.01
+		screw2.sides = 8
+		screw2.material = screw_material
+		terminal.add_child(screw2)
+
+		var bezel := CSGBox3D.new()
+		bezel.name = "IndicatorBezel"
+		bezel.position = Vector3(0, 0.09, 0.025)
+		bezel.size = Vector3(0.05, 0.05, 0.015)
+		bezel.material = bezel_material
+		terminal.add_child(bezel)
+
+		var indicator := CSGBox3D.new()
+		indicator.name = "Indicator"
+		indicator.position = Vector3(0, 0.09, 0.034)
+		indicator.size = Vector3(0.03, 0.03, 0.012)
+		var indicator_mat := StandardMaterial3D.new()
+		indicator_mat.emission_enabled = true
+		indicator_mat.albedo_color = LIGHT_ON_COLOR
+		indicator_mat.emission = LIGHT_ON_COLOR
+		indicator.material = indicator_mat
+		terminal.add_child(indicator)
+
+		_terminal_indicators[role] = indicator
+
+
+## Builds one more ReplacementWire visual-group variant for a row B
+## fault role (see _FAULT_VISUAL_GROUPS), the same procedural
+## equivalent of the 3 hand-authored variants (VisualGroup_service/
+## _return/_backup) already in the .tscn -- same VisualGroup/Run+Cap
+## shape _build_wire_curve() expects, built here instead of by hand for
+## the same "don't hand-write dozens of near-identical nodes" reason
+## _build_row_b() exists.
+func _build_replacement_variant(role: StringName) -> void:
+	var cap_material: Material = _replacement_wire.get_node("VisualGroup_service/Cap").material
+
+	var group := Node3D.new()
+	group.name = _FAULT_VISUAL_GROUPS[role]
+	_replacement_wire.add_child(group)
+
+	var run := CSGCylinder3D.new()
+	run.name = "Run"
+	run.radius = 0.028
+	run.height = 0.1
+	run.sides = 10
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = _HEALTHY_WIRE_COLOR[role]
+	mat.roughness = _HEALTHY_ROUGHNESS
+	run.material = mat
+	group.add_child(run)
+
+	var cap := CSGBox3D.new()
+	cap.name = "Cap"
+	cap.position = Vector3(0, -0.64, 0)
+	cap.size = Vector3(0.07, 0.06, 0.06)
+	cap.material = cap_material
+	group.add_child(cap)
+
+
 ## See `world_display_mode`'s own doc comment above. Frees this
 ## instance's own camera/lights (the real world already provides both
 ## for a child of EngineeringCabinet1) and strips every StaticBody3D's
@@ -287,10 +523,19 @@ func _configure_world_display_mode() -> void:
 		var node: Node = get_node_or_null(backdrop_name)
 		if node != null:
 			node.visible = false
-	for body in [
-		_wire_colliders[&"supply"], _wire_colliders[&"return"], _wire_colliders[&"service"],
-		_replacement_collider, _breaker_collider,
-	] + _screw_colliders:
+	# Round 18 Priority 2 fix: this used to hardcode only the original 3
+	# roles (supply/return/service) -- backup/ground (added Round 17) and
+	# every Round 18 role were silently left on the default collision
+	# layer/mask in the world-display (non-interactive) twin, a real bug
+	# (those colliders could in principle be hit by something other than
+	# this diorama's own raycast query while sitting inside the cabinet)
+	# that simply never surfaced because nothing happened to probe it.
+	# Looping over ROLES generically means no future role addition can
+	# reintroduce this gap.
+	var bodies: Array = [_replacement_collider, _breaker_collider] + _screw_colliders
+	for role in ROLES:
+		bodies.append(_wire_colliders[role])
+	for body in bodies:
 		body.collision_layer = 0
 		body.collision_mask = 0
 

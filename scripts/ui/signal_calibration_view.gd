@@ -133,18 +133,68 @@ func _sync_diorama() -> void:
 		_diorama.set_readout_text("")
 
 
-func _refresh() -> void:
+## Round 18 Priority 4: an understandable named progression instead of
+## a single "SIGNAL ACQUIRED" label covering everything from "just
+## started" to "about to lock" -- the brief's own explicit SEARCHING ->
+## SIGNAL ACQUIRED -> FINE TUNING -> STABILIZING -> SIGNAL LOCKED
+## stages. Each threshold is phrased in terms of frequency_accuracy()/
+## gain_accuracy() specifically (not just the combined signal_quality())
+## so the distinction the brief also asks for -- "frequency accuracy
+## vs. gain/strength" -- is what actually DRIVES which state shows, not
+## merely two numbers printed side by side.
+enum _TuneState { SEARCHING, ACQUIRED, FINE_TUNING, STABILIZING, LOCKED }
+const _AXIS_OK_THRESHOLD: float = 0.5
+
+const _STATE_COLOR := {
+	_TuneState.SEARCHING: Color(0.85, 0.55, 0.3, 1),
+	_TuneState.ACQUIRED: Color(0.85, 0.78, 0.35, 1),
+	_TuneState.FINE_TUNING: Color(0.7, 0.85, 0.4, 1),
+	_TuneState.STABILIZING: Color(0.45, 0.85, 0.95, 1),
+	_TuneState.LOCKED: Color(0.4, 0.95, 0.55, 1),
+}
+
+
+func _current_state() -> _TuneState:
 	if _done:
+		return _TuneState.LOCKED
+	var quality: float = _station.signal_quality()
+	if quality >= _station.quality_threshold():
+		return _TuneState.STABILIZING
+	var freq_ok: bool = _station.frequency_accuracy() >= _AXIS_OK_THRESHOLD
+	var gain_ok: bool = _station.gain_accuracy() >= _AXIS_OK_THRESHOLD
+	if freq_ok and gain_ok:
+		return _TuneState.FINE_TUNING
+	if freq_ok or gain_ok:
+		return _TuneState.ACQUIRED
+	return _TuneState.SEARCHING
+
+
+func _refresh() -> void:
+	var state: _TuneState = _current_state()
+	_status_label.modulate = _STATE_COLOR[state]
+
+	if state == _TuneState.LOCKED:
 		_status_label.text = "SIGNAL LOCKED"
 		_controls_label.text = "[Enter] Close"
 		return
 
-	_status_label.text = "Tune the signal clean, then hold it steady."
 	_controls_label.text = "[←/→] Frequency   [↑/↓] Gain   (or click a dial's left/right half)"
-	var quality: float = _station.signal_quality()
-	var threshold: float = _station.quality_threshold()
-	if quality >= threshold:
-		var progress: float = _station.sustain_progress()
-		_status_label.text = "SIGNAL ACQUIRED — holding %d%%" % int(progress * 100.0)
-	elif _station.noise_level() > 0.5:
-		_status_label.text = "Strong static — lower GAIN or re-tune FREQUENCY."
+	var freq_ok: bool = _station.frequency_accuracy() >= _AXIS_OK_THRESHOLD
+	var gain_ok: bool = _station.gain_accuracy() >= _AXIS_OK_THRESHOLD
+	match state:
+		_TuneState.SEARCHING:
+			_status_label.text = "SEARCHING — sweep FREQUENCY and GAIN to find the carrier."
+		_TuneState.ACQUIRED:
+			_status_label.text = (
+				"SIGNAL ACQUIRED — frequency is close, now bring GAIN into range."
+				if freq_ok else
+				"SIGNAL ACQUIRED — gain is close, now sweep FREQUENCY to find the carrier."
+			)
+		_TuneState.FINE_TUNING:
+			_status_label.text = "FINE TUNING — both dials are close. Narrow in until the signal reads clean."
+		_TuneState.STABILIZING:
+			var progress: float = _station.sustain_progress()
+			_status_label.text = "STABILIZING — hold steady… %d%%" % int(progress * 100.0)
+
+	if state != _TuneState.STABILIZING and _station.noise_level() > 0.5:
+		_status_label.text += "  (strong static — lower GAIN or re-tune FREQUENCY)"

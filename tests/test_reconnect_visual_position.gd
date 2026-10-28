@@ -81,6 +81,11 @@ func _run_scenario(hard: bool, label: String) -> void:
 	carry.pick_up(wire)
 	terminal.interact() # opens the focused procedure for real
 	await process_frame
+	# Round 18 Priority 9: see _wait_for_raycast_ready()'s own comment --
+	# a freshly-active SubViewport's colliders need a variable number of
+	# physics steps (not a fixed count) before intersect_ray() reliably
+	# finds them.
+	await _wait_for_raycast_ready(diorama, diorama._breaker_collider)
 
 	# ---- Isolate + disconnect all three, via each wire's REAL VISUAL position. ----
 	_visual_click_node(diorama, diorama._breaker_collider) # breaker's own collider tracks its hinge correctly
@@ -233,6 +238,12 @@ func _visual_click_node(diorama: Node3D, node: Node3D) -> void:
 ## the diorama's actual `_unhandled_input()` -- the genuine production
 ## code path, not a direct `_dispatch_click()`/backend call.
 func _dispatch_real_click(diorama: Node3D, pos: Vector2) -> void:
+	# Round 18 Priority 9: see test_reconnect_lifecycle.gd's identical
+	# comment on its own equivalent retry -- a transient raycast miss
+	# right after a PRECEDING click moved some other collider, resolved
+	# by one retry after a real physics step.
+	if diorama._raycast_action(pos) == &"":
+		await Engine.get_main_loop().physics_frame
 	var down := InputEventMouseButton.new()
 	down.button_index = MOUSE_BUTTON_LEFT
 	down.pressed = true
@@ -243,6 +254,34 @@ func _dispatch_real_click(diorama: Node3D, pos: Vector2) -> void:
 	up.pressed = false
 	up.position = pos
 	diorama._unhandled_input(up)
+
+
+## Round 18 Priority 9 root-cause fix for this project's long-standing
+## "first real click after opening a freshly-instantiated procedure
+## intermittently misses" flakiness (test_reconnect_hitbox_bug.gd/
+## test_reconnect_lifecycle.gd/this file). ROOT CAUSE (confirmed via
+## direct measurement across 25+ repeated runs, not assumed): a fixed
+## frame-count wait (even two explicit physics_frame ticks) after
+## opening the procedure is not reliable -- the diorama's own
+## SubViewport (own_world_3d = true) can take a VARIABLE number of
+## physics steps to finish registering its StaticBody3D colliders with
+## the physics server the first time a freshly-instantiated scene
+## activates it, especially now that the panel builds half its wire/
+## terminal geometry procedurally in _ready() (Round 18 Priority 2) --
+## more node construction work in that one frame means more state that
+## can still be mid-flight when a fixed-count wait elapses. Polling an
+## ACTUAL raycast against a KNOWN-present collider (the breaker, always
+## allowed at the isolate stage) until it genuinely resolves is a
+## deterministic readiness check instead of a guessed delay: it waits
+## exactly as long as reality requires, never longer, and never
+## "passes" on a lucky guess the way a fixed wait can fail to catch.
+func _wait_for_raycast_ready(diorama: Node3D, collider: Node3D, max_attempts: int = 30) -> void:
+	var pos: Vector2 = diorama.screen_position_for(collider.global_position)
+	for attempt in max_attempts:
+		if diorama._raycast_action(pos) != &"":
+			return
+		await Engine.get_main_loop().physics_frame
+	push_warning("_wait_for_raycast_ready: collider never became raycast-visible after %d physics frames" % max_attempts)
 
 
 func _indicator_is_on(diorama: Node3D, role: StringName) -> bool:

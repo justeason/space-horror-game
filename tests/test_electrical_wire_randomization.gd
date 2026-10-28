@@ -26,6 +26,8 @@ func _init() -> void:
 	await _test_alternate_config_via_real_clicks()
 	await _test_config_locked_across_reentry_and_wrong_clicks()
 	await _test_backup_circuit_config_via_real_clicks()
+	await _test_telemetry_config_via_real_clicks()
+	await _test_relay_config_via_real_clicks()
 
 	print("")
 	if _ok: print("ALL TESTS PASSED")
@@ -300,6 +302,143 @@ func _test_backup_circuit_config_via_real_clicks() -> void:
 	await physics_frame
 
 
+## Round 18 Priority 2 coverage: the new DENSE 10-wire panel's second
+## row (telemetry/coolant/sensor_feed/auxiliary/relay) is genuinely
+## solvable end to end via real raycast clicks despite the row's own
+## crossing geometry (telemetry<->sensor_feed reuses row A's proven
+## supply<->service crossing shape -- see electrical_repair_diorama.gd's
+## _WIRE_CURVE_POINTS doc comment) -- not just reachable through direct
+## backend calls, and every row A wire remains correctly INERT-but-
+## clickable (irrelevant-circuit rejection) during this attempt.
+func _test_telemetry_config_via_real_clicks() -> void:
+	var main: Node = await _make_main()
+	var s: Dictionary = await _setup(main, &"telemetry")
+	var panel: Node = s["panel"]
+	var wire: Node = s["wire"]
+	var diorama: Node3D = s["diorama"]
+	var day_plan: Node = s["day_plan"]
+	var view: Node = s["view"]
+
+	_check("[telemetry] fault role is telemetry (Purple)", panel.fault_role() == &"telemetry")
+	_check("[telemetry] fault color name is Purple", panel.fault_color_name() == "Purple")
+	_check("[telemetry] relevant subset is [coolant, telemetry, sensor_feed]", panel.relevant_roles() == [&"coolant", &"telemetry", &"sensor_feed"])
+	_check("[telemetry] supply (row A) is NOT part of this attempt's relevant circuit", not panel.is_relevant(&"supply"))
+	_check("[telemetry] relay (row B, other config) is NOT part of this attempt's relevant circuit", not panel.is_relevant(&"relay"))
+	_check("[telemetry] carried wire recolored to match Purple", wire.get_node("CoilLoopA").material.albedo_color.is_equal_approx(Color(0.5, 0.15, 0.65, 1)))
+
+	panel.toggle_isolation()
+	_check("[telemetry] isolated", panel.is_isolated())
+
+	var reject: Dictionary = panel.disconnect_wire(&"relay")
+	_check("[telemetry] row A/other-row-B wire click rejected with the distinct not-relevant message", reject.get("message", "").findn("not part of the flagged circuit") != -1)
+
+	# toggle_isolation() above was a direct panel call, bypassing the
+	# view -- its own _allowed/diorama set_allowed() bookkeeping (still
+	# stuck at the ISOLATE stage's [&"breaker"] only) must be resynced
+	# before any REAL click can resolve to a wire action (see
+	# electrical_repair_view.gd's own _refresh()); the existing [backup]
+	# test above avoids this by using direct disconnect_wire() calls
+	# instead of real clicks for its own disconnect phase -- this test
+	# deliberately exercises the REAL-CLICK path through disconnect too,
+	# since that's the actual new surface Priority 2 adds (row B must be
+	# genuinely clickable, not just reachable through the backend).
+	view._sync_diorama_full()
+	view._refresh()
+	await physics_frame
+
+	await _click_wire(diorama, &"coolant")
+	await _click_wire(diorama, &"sensor_feed")
+	await _click_wire(diorama, &"telemetry")
+	_check("[telemetry] disconnect order: coolant, sensor_feed, telemetry (fault last)", panel.disconnected_roles() == [&"coolant", &"sensor_feed", &"telemetry"])
+	_check("[telemetry] all three disconnected -> advanced to replace", panel.procedure_stage() == &"replace")
+	view._sync_diorama_full()
+	view._refresh()
+	await physics_frame
+
+	var telemetry_mat: StandardMaterial3D = diorama._wire_nodes[&"telemetry"].get_node("VisualGroup/Run").material
+	var coolant_mat: StandardMaterial3D = diorama._wire_nodes[&"coolant"].get_node("VisualGroup/Run").material
+	_check("[telemetry] telemetry wire mesh shows the DAMAGED look", telemetry_mat.albedo_color.is_equal_approx(Color(0.3, 0.09, 0.4, 1)))
+	_check("[telemetry] coolant wire mesh stays HEALTHY-colored", coolant_mat.albedo_color.is_equal_approx(Color(0.1, 0.55, 0.6, 1)))
+
+	await _click_wire(diorama, &"telemetry")
+	await _wait(0.35)
+	await _click_replacement(diorama)
+	_check("[telemetry] replacement installed -> advanced to reconnect", panel.procedure_stage() == &"reconnect")
+	_check("[telemetry] replacement wire uses the pre-built TELEMETRY/Purple variant", diorama._active_replacement_visual_group().name == "VisualGroup_telemetry")
+
+	await _click_replacement(diorama)
+	await _click_wire(diorama, &"sensor_feed")
+	await _click_wire(diorama, &"coolant")
+	_check("[telemetry] reconnect order: telemetry(replacement), sensor_feed, coolant -> advanced to restore", panel.procedure_stage() == &"restore")
+
+	await _wait(0.4)
+	await _click_breaker(diorama)
+	_check("[telemetry] repair completes correctly with the new dense-panel row B config", panel.is_repaired())
+	_check("[telemetry] e05 marked done", day_plan.is_task_done(&"e05"))
+
+	main.get_node("FocusedInteractionState").end()
+	await process_frame
+	main.queue_free()
+	await create_timer(0.2).timeout
+	await physics_frame
+
+
+## Round 18 Priority 2: the SECOND row B config (relay/sensor_feed/
+## auxiliary), covering the row's two SIMPLE non-crossing wires
+## (auxiliary/relay, reusing backup/ground's proven shape) rather than
+## the crossing pair the telemetry test above already covers --
+## between the two tests, every one of row B's 5 roles gets exercised
+## via real clicks at least once.
+func _test_relay_config_via_real_clicks() -> void:
+	var main: Node = await _make_main()
+	var s: Dictionary = await _setup(main, &"relay")
+	var panel: Node = s["panel"]
+	var wire: Node = s["wire"]
+	var diorama: Node3D = s["diorama"]
+	var day_plan: Node = s["day_plan"]
+	var view: Node = s["view"]
+
+	_check("[relay] fault role is relay (Brown)", panel.fault_role() == &"relay")
+	_check("[relay] fault color name is Brown", panel.fault_color_name() == "Brown")
+	_check("[relay] relevant subset is [sensor_feed, auxiliary, relay]", panel.relevant_roles() == [&"sensor_feed", &"auxiliary", &"relay"])
+	_check("[relay] carried wire recolored to match Brown", wire.get_node("CoilLoopA").material.albedo_color.is_equal_approx(Color(0.45, 0.3, 0.15, 1)))
+
+	panel.toggle_isolation()
+	# See the [telemetry] test's identical comment just above.
+	view._sync_diorama_full()
+	view._refresh()
+	await physics_frame
+	await _click_wire(diorama, &"sensor_feed")
+	await _click_wire(diorama, &"auxiliary")
+	await _click_wire(diorama, &"relay")
+	_check("[relay] disconnect order: sensor_feed, auxiliary, relay (fault last)", panel.disconnected_roles() == [&"sensor_feed", &"auxiliary", &"relay"])
+	view._sync_diorama_full()
+	view._refresh()
+	await physics_frame
+
+	await _click_wire(diorama, &"relay")
+	await _wait(0.35)
+	await _click_replacement(diorama)
+	_check("[relay] replacement installed -> advanced to reconnect", panel.procedure_stage() == &"reconnect")
+	_check("[relay] replacement wire uses the pre-built RELAY/Brown variant", diorama._active_replacement_visual_group().name == "VisualGroup_relay")
+
+	await _click_replacement(diorama)
+	await _click_wire(diorama, &"auxiliary")
+	await _click_wire(diorama, &"sensor_feed")
+	_check("[relay] reconnect order: relay(replacement), auxiliary, sensor_feed -> advanced to restore", panel.procedure_stage() == &"restore")
+
+	await _wait(0.4)
+	await _click_breaker(diorama)
+	_check("[relay] repair completes correctly", panel.is_repaired())
+	_check("[relay] e05 marked done", day_plan.is_task_done(&"e05"))
+
+	main.get_node("FocusedInteractionState").end()
+	await process_frame
+	main.queue_free()
+	await create_timer(0.2).timeout
+	await physics_frame
+
+
 func _click_wire(diorama: Node3D, role: StringName) -> void:
 	var pos: Vector2 = diorama.screen_position_for(diorama._wire_colliders[role].global_position)
 	_dispatch(diorama, pos)
@@ -323,6 +462,12 @@ func _wait(seconds: float) -> void:
 
 
 func _dispatch(diorama: Node3D, pos: Vector2) -> void:
+	# Round 18 Priority 9: see test_reconnect_lifecycle.gd's identical
+	# comment on its own equivalent retry -- a transient raycast miss
+	# right after a PRECEDING click moved some other collider, resolved
+	# by one retry after a real physics step.
+	if diorama._raycast_action(pos) == &"":
+		await Engine.get_main_loop().physics_frame
 	var down := InputEventMouseButton.new()
 	down.button_index = MOUSE_BUTTON_LEFT
 	down.pressed = true

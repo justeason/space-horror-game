@@ -34,6 +34,11 @@ const WIRE_COLOR_ONLY := {
 	&"service": "YELLOW",
 	&"backup": "ORANGE",
 	&"ground": "GREEN",
+	&"telemetry": "PURPLE",
+	&"coolant": "CYAN",
+	&"sensor_feed": "WHITE",
+	&"auxiliary": "MAGENTA",
+	&"relay": "BROWN",
 }
 
 @export var focused_state_path: NodePath

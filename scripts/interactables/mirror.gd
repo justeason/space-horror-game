@@ -11,7 +11,10 @@ extends SubViewport
 ## mirror's physical plane, so what's shown updates live as the player
 ## moves and turns, the way a real mirror would.
 ##
-## HONEST LIMITATIONS (see the Round 17 final report):
+## HONEST LIMITATIONS (see the Round 18 final report -- Round 17's
+## "left-right not verified"/"does not zoom" notes here were resolved
+## or found to be mistaken this round; see below and the _ready() UV
+## comments):
 ## - The TRUE optical mirror-reflection point for a wall-mounted mirror
 ##   this close to the player (the room is under a metre deep here)
 ##   lands outside the station's own hull -- there is a solid wall, and
@@ -25,21 +28,17 @@ extends SubViewport
 ##   the camera behind the glass, it holds it a small fixed distance IN
 ##   FRONT of the glass (_CAMERA_OFFSET_FROM_GLASS, toward the room, on
 ##   the player's own side) -- a standard practical approximation for a
-##   tight-interior wall mirror. The visible consequence: unlike a real
-##   mirror, this reflection does not noticeably zoom in/out as the
-##   player walks closer to or farther from the glass -- only lateral
-##   position is reflected accurately, and the reflected "room" seen in
-##   the glass is really the room as viewed from just in front of it,
-##   not from the true optical distance behind it.
-## - It is not a true rendered mirror image in the handedness sense
-##   either: a real mirror is an improper (left/right-flipping)
-##   transform, which would require either an oblique asymmetric
-##   projection or flipping front-face winding for this one view --
-##   neither is attempted here. Reflecting a roughly bilaterally-
-##   symmetric human body with no readable text on it, this reads as a
-##   convincing mirror on casual inspection; it has not been verified to
-##   be pixel-correct about exact left/right placement the way a true
-##   optical mirror would be.
+##   tight-interior wall mirror. CONFIRMED BY RENDER (Round 18): this
+##   still produces a real, physically-sensible zoom -- the camera-to-
+##   subject distance is (player's real distance to the glass) minus
+##   this fixed offset, so the reflection genuinely grows as the player
+##   approaches and shrinks as they back away; Round 17's claim that it
+##   "does not noticeably zoom" was never actually render-verified and
+##   turned out to be wrong.
+## - LEFT/RIGHT and UP/DOWN orientation: CONFIRMED CORRECT by render
+##   (Round 18), using asymmetric marker cubes specifically because a
+##   roughly-symmetric reflected body can hide an orientation bug --
+##   see _ready()'s own comment for exactly what was found and fixed.
 ## - It reflects only THIS one flat plane -- no recursive/other-mirror
 ##   reflections, and no reflection of the mirror's own frame.
 ## - The reflected body uses this project's existing static-CSG
@@ -86,6 +85,35 @@ func _ready() -> void:
 		var mat := StandardMaterial3D.new()
 		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		mat.albedo_texture = get_feed_texture()
+		# Round 18 Priority 1 fix: two INDEPENDENT, confirmed-separately
+		# orientation bugs, found with asymmetric marker cubes (never
+		# assumed/guessed -- see tests/test_mirror_reflection.gd and the
+		# Round 18 report for the actual before/after renders):
+		#
+		# 1. LEFT/RIGHT: the mirror camera in _update_reflection() is an
+		#    ORDINARY (proper, non-reflected) camera placed in front of the
+		#    glass and aimed back at the player -- correct for ITS OWN
+		#    purpose (a marker toward world -X lands on the camera's own
+		#    left, exactly as plain 3D geometry predicts for a camera
+		#    looking back the opposite way), but that is NOT what a true
+		#    mirror shows: reflecting across this glass's Z-normal plane
+		#    leaves left/right as the PLAYER would see it UNCHANGED from
+		#    their own direct view, which a raw, un-corrected camera capture
+		#    gets backwards. uv1_scale.x=-1 corrects this -- cheaply, as a
+		#    2D texture operation -- without reflecting the 3D camera's own
+		#    basis (which would also flip triangle winding and break
+		#    backface culling for everything seen through the mirror).
+		# 2. UP/DOWN: independent of the above, this specific CSGBox3D
+		#    face's OWN default UV mapping (main.tscn's WashMirrorGlass)
+		#    turned out to already invert V -- confirmed by comparing the
+		#    raw SubViewport capture (asymmetric marker correctly top-left)
+		#    against the same texture painted on the glass with only the
+		#    U-flip applied (the SAME marker rendered bottom-right, i.e.
+		#    vertically flipped too, which nothing in this script's own
+		#    logic causes) -- this is what the player experienced as "the
+		#    reflection is upside down." uv1_scale.y=-1 corrects it.
+		mat.uv1_scale = Vector3(-1.0, -1.0, 1.0)
+		mat.uv1_offset = Vector3(1.0, 1.0, 0.0)
 		glass.material_override = mat
 
 
@@ -107,8 +135,9 @@ func get_feed_texture() -> Texture2D:
 ## class doc comment's honest limitation on why), then aims the mirror
 ## camera back at the player's eye. An ordinary look-at rotation --
 ## never an improper/reflected basis -- so there is no front-face
-## winding-order concern to work around (see the class doc comment's
-## separate honest limitation about left/right handedness).
+## winding-order concern to work around; the resulting capture's own
+## left/right is corrected afterward as a 2D texture flip instead (see
+## _ready()'s own comment on the glass material).
 func _update_reflection() -> void:
 	var plane_xform: Transform3D = _mirror_plane.global_transform
 	var plane_point: Vector3 = plane_xform.origin

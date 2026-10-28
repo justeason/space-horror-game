@@ -48,7 +48,9 @@ func _init() -> void:
 	# ============================================================
 	var damping: Control = view._damping_knob
 	var damping_center: Vector2 = damping.size * 0.5
-	var setpoints_before := {&"a": view._setpoint[&"a"], &"b": view._setpoint[&"b"], &"c": view._setpoint[&"c"]}
+	var setpoints_before := {}
+	for ch in view.CHAMBERS:
+		setpoints_before[ch] = view._setpoint[ch]
 	var damping_before: float = view._damping
 	_press(view, &"damping", damping, damping_center + Vector2(0, -50))
 	_drag(view, &"damping", damping, damping_center + Vector2(50, 0))
@@ -129,7 +131,7 @@ func _init() -> void:
 	var gauge_a: Control = view._chamber_rows[&"a"]["gauge"]
 	_check("chamber A's gauge dial_value matches its setpoint", is_equal_approx(gauge_a.dial_value, 42.0))
 	_check("chamber A's gauge reading_value matches its reading", is_equal_approx(gauge_a.reading_value, 41.0))
-	_check("chamber A's gauge target_value matches its own target (40.0), not another chamber's", is_equal_approx(gauge_a.target_value, view._TARGETS[&"a"]))
+	_check("chamber A's gauge target_value matches its own target, not another chamber's", is_equal_approx(gauge_a.target_value, view._TARGETS[&"a"]))
 
 	# ============================================================
 	# 7. Status chip reflects LOW/IN RANGE/HIGH correctly per chamber.

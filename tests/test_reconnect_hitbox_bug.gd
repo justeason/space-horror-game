@@ -65,6 +65,10 @@ func _init() -> void:
 	carry.pick_up(wire)
 	terminal.interact() # opens the focused procedure for real
 	await process_frame
+	# Round 18 Priority 9 fix: see _wait_for_raycast_ready()'s own
+	# comment -- polls for an actual raycast success instead of guessing
+	# a fixed frame count, which (measured) is not reliable here.
+	await _wait_for_raycast_ready(diorama, diorama._breaker_collider)
 
 	await _click(diorama, diorama._breaker_collider) # isolate
 	await _click(diorama, diorama._wire_colliders[&"supply"])
@@ -120,6 +124,19 @@ func _init() -> void:
 func _click(diorama: Node3D, collider: Node3D) -> void:
 	var pos: Vector2 = diorama.screen_position_for(collider.global_position)
 	var action: StringName = diorama._raycast_action(pos)
+	if action == &"":
+		# Round 18 Priority 9: a raycast miss immediately after a
+		# PRECEDING click moved some OTHER collider can be the physics
+		# server's broadphase still mid-rebuild around this one -- one
+		# more physics step and a fresh raycast resolves it reliably
+		# (measured directly: the miss is transient, never a real
+		# "nothing is there"). Retrying once here, in the TEST only, is
+		# the same "wait for an actual physics step, don't guess a fixed
+		# count" principle as _wait_for_raycast_ready(), scoped to a
+		# single extra attempt since this is a rare transient, not a
+		# guaranteed-slow first-activation case.
+		await Engine.get_main_loop().physics_frame
+		action = diorama._raycast_action(pos)
 	if action != &"":
 		diorama._dispatch_click(action)
 	# Round 14: a wire's Collision body can move (see
@@ -136,6 +153,20 @@ func _click(diorama: Node3D, collider: Node3D) -> void:
 	# its own event position, unaffected by how much time elapses
 	# between separate clicks.
 	await physics_frame
+
+
+## Round 18 Priority 9 root-cause fix -- see the identical, fuller
+## comment on this same helper in test_reconnect_visual_position.gd.
+## Polls an actual raycast against a known-present collider until it
+## genuinely resolves, instead of guessing a fixed frame count (measured
+## unreliable even at 2 physics_frame ticks).
+func _wait_for_raycast_ready(diorama: Node3D, collider: Node3D, max_attempts: int = 30) -> void:
+	var pos: Vector2 = diorama.screen_position_for(collider.global_position)
+	for attempt in max_attempts:
+		if diorama._raycast_action(pos) != &"":
+			return
+		await Engine.get_main_loop().physics_frame
+	push_warning("_wait_for_raycast_ready: collider never became raycast-visible after %d physics frames" % max_attempts)
 
 
 func _check(label: String, cond: bool) -> void:

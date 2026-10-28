@@ -106,13 +106,26 @@ func _lock_active_difficulty() -> void:
 ## restricts this canonical order down to THIS attempt's own relevant
 ## subset (_relevant_roles) and reshuffles around whichever role is at
 ## fault.
-const WIRE_ROLES: Array[StringName] = [&"supply", &"return", &"service", &"backup", &"ground"]
+## Round 18 Priority 2: expanded from 5 to 10 -- a believable dense
+## terminal strip (two rows of five on the physical panel -- see
+## electrical_repair_diorama.gd's ROW_A/ROW_B split) instead of one
+## sparse row. Every new role is still a plausible shipboard circuit
+## name, not a generic placeholder.
+const WIRE_ROLES: Array[StringName] = [
+	&"supply", &"return", &"service", &"backup", &"ground",
+	&"telemetry", &"coolant", &"sensor_feed", &"auxiliary", &"relay",
+]
 const WIRE_COLOR_NAMES := {
 	&"supply": "Red",
 	&"return": "Blue",
 	&"service": "Yellow",
 	&"backup": "Orange",
 	&"ground": "Green",
+	&"telemetry": "Purple",
+	&"coolant": "Cyan",
+	&"sensor_feed": "White",
+	&"auxiliary": "Magenta",
+	&"relay": "Brown",
 }
 ## Matches electrical_repair_diorama.gd's own _HEALTHY_WIRE_COLOR --
 ## used only to recolor the ONE carried spare-wire prop (wire_component.gd)
@@ -124,32 +137,43 @@ const WIRE_COLORS := {
 	&"service": Color(0.68, 0.56, 0.08, 1),
 	&"backup": Color(0.75, 0.4, 0.08, 1),
 	&"ground": Color(0.15, 0.55, 0.22, 1),
+	&"telemetry": Color(0.5, 0.15, 0.65, 1),
+	&"coolant": Color(0.1, 0.55, 0.6, 1),
+	&"sensor_feed": Color(0.75, 0.75, 0.78, 1),
+	&"auxiliary": Color(0.7, 0.15, 0.45, 1),
+	&"relay": Color(0.45, 0.3, 0.15, 1),
 }
 const SCREW_COUNT: int = 4
 const SCREW_TURNS_TO_REMOVE: int = 3
 
-## Round 17 Priority 1 rework (building on Round 16 Priority 3): "the
-## randomization should be logically grounded in the same physical
-## panel, not look like the ship itself changed arbitrarily." The panel
-## now always shows all 5 WIRE_ROLES, physically present every attempt
-## -- what varies between configs is WHICH 3-wire SUBSET (`relevant`)
-## is actually involved in a given repair, plus which member of that
-## subset is at fault (`fault`, disconnected last/replaced/reconnected
-## first). Wires outside `relevant` are never touched: clicking one
-## during DISCONNECT is accepted by the raycast (so the player can
-## genuinely inspect/try any of the 5, not have 2 silently inert
-## colliders) but rejected by disconnect_wire() with an explicit
-## "not part of the flagged circuit" message, distinct from a plain
-## wrong-order rejection -- see that function's own comment. Every
+## Round 17 Priority 1 rework (building on Round 16 Priority 3), EXPANDED
+## Round 18 Priority 2: "the randomization should be logically grounded
+## in the same physical panel, not look like the ship itself changed
+## arbitrarily." The panel always shows all 10 WIRE_ROLES, physically
+## present every attempt -- what varies between configs is WHICH 3-wire
+## SUBSET (`relevant`) is actually involved in a given repair, plus
+## which member of that subset is at fault (`fault`, disconnected last/
+## replaced/reconnected first). Wires outside `relevant` are never
+## touched: clicking one during DISCONNECT is accepted by the raycast
+## (so the player can genuinely inspect/try any of the 10, not have 7
+## silently inert colliders) but rejected by disconnect_wire() with an
+## explicit "not part of the flagged circuit" message, distinct from a
+## plain wrong-order rejection -- see that function's own comment. Every
 ## field besides `relevant`/`fault` is still derived (never hand-
 ## authored per config), so no inconsistent/impossible configuration
 ## can be authored: _disconnect_order() restricts WIRE_ROLES' own
 ## canonical order down to `relevant`, fault appended last. `label` is
 ## purely for the final report/debugging, never shown to the player.
+## Round 18 adds two more configs drawn from the new second row
+## (telemetry/coolant/sensor_feed/auxiliary/relay), doubling the total
+## from 3 to 5 -- a genuinely different relevant-subset region of the
+## panel, not just a different fault within the same 3 wires.
 const _REPAIR_CONFIGS: Array[Dictionary] = [
 	{"label": "standard_service_fault", "relevant": [&"supply", &"return", &"service"], "fault": &"service"},
 	{"label": "alternate_return_fault", "relevant": [&"supply", &"return", &"service"], "fault": &"return"},
 	{"label": "backup_circuit_fault", "relevant": [&"return", &"backup", &"ground"], "fault": &"backup"},
+	{"label": "telemetry_fault", "relevant": [&"coolant", &"telemetry", &"sensor_feed"], "fault": &"telemetry"},
+	{"label": "relay_fault", "relevant": [&"sensor_feed", &"auxiliary", &"relay"], "fault": &"relay"},
 ]
 
 @export var day_plan_path: NodePath

@@ -192,13 +192,13 @@ mouse_filter = 2
 
 [node name="TitleLabel" type="Label" parent="HUD/ElectricalRepairView/Panel/VBox"]
 theme_override_colors/font_color = Color(0.6, 0.64, 0.6, 1)
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 20
 text = "ELECTRICAL REPAIR"
 mouse_filter = 2
 
 [node name="StageLabel" type="Label" parent="HUD/ElectricalRepairView/Panel/VBox"]
 theme_override_colors/font_color = Color(0.88, 0.94, 0.9, 1)
-theme_override_font_sizes/font_size = 28
+theme_override_font_sizes/font_size = 36
 text = "STAGE"
 mouse_filter = 2
 
@@ -218,13 +218,13 @@ size = Vector2i(760, 420)
 
 [node name="StatusLabel" type="Label" parent="HUD/ElectricalRepairView/Panel/VBox"]
 theme_override_colors/font_color = Color(0.85, 0.82, 0.6, 1)
-theme_override_font_sizes/font_size = 28
+theme_override_font_sizes/font_size = 36
 autowrap_mode = 2
 mouse_filter = 2
 
 [node name="ControlsLabel" type="Label" parent="HUD/ElectricalRepairView/Panel/VBox"]
 theme_override_colors/font_color = Color(0.7, 0.72, 0.7, 0.9)
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 26
 mouse_filter = 2
 
 [node name="SensorCalibrationView" type="Control" parent="HUD"]
@@ -262,18 +262,18 @@ mouse_filter = 2
 
 [node name="TitleLabel" type="Label" parent="HUD/SensorCalibrationView/Panel/VBox"]
 theme_override_colors/font_color = Color(0.6, 0.64, 0.64, 1)
-theme_override_font_sizes/font_size = 16
-text = "ENVIRONMENTAL PRESSURE CALIBRATION — THREE-CHAMBER SYSTEM"
+theme_override_font_sizes/font_size = 20
+text = "ENVIRONMENTAL PRESSURE CALIBRATION — SIX-CHAMBER SYSTEM"
 mouse_filter = 2
 
 [node name="StatusLabel" type="Label" parent="HUD/SensorCalibrationView/Panel/VBox"]
 theme_override_colors/font_color = Color(0.88, 0.94, 0.9, 1)
-theme_override_font_sizes/font_size = 28
+theme_override_font_sizes/font_size = 36
 autowrap_mode = 2
 mouse_filter = 2
 
 [node name="ChamberRow" type="HBoxContainer" parent="HUD/SensorCalibrationView/Panel/VBox"]
-custom_minimum_size = Vector2(0, 330)
+custom_minimum_size = Vector2(0, 290)
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 18
@@ -307,7 +307,7 @@ theme_override_font_sizes/font_size = 17
 mouse_filter = 2
 
 [node name="GaugeStack" type="Control" parent="HUD/SensorCalibrationView/Panel/VBox/ChamberRow/ChamberA/Inner"]
-custom_minimum_size = Vector2(0, 150)
+custom_minimum_size = Vector2(0, 130)
 layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
@@ -369,7 +369,7 @@ theme_override_font_sizes/font_size = 17
 mouse_filter = 2
 
 [node name="GaugeStack" type="Control" parent="HUD/SensorCalibrationView/Panel/VBox/ChamberRow/ChamberB/Inner"]
-custom_minimum_size = Vector2(0, 150)
+custom_minimum_size = Vector2(0, 130)
 layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
@@ -431,7 +431,7 @@ theme_override_font_sizes/font_size = 17
 mouse_filter = 2
 
 [node name="GaugeStack" type="Control" parent="HUD/SensorCalibrationView/Panel/VBox/ChamberRow/ChamberC/Inner"]
-custom_minimum_size = Vector2(0, 150)
+custom_minimum_size = Vector2(0, 130)
 layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
@@ -489,7 +489,7 @@ layout_mode = 2
 size_flags_vertical = 4
 theme_override_colors/font_color = Color(0.7, 0.72, 0.7, 1)
 theme_override_font_sizes/font_size = 17
-text = "SHARED DAMPING — affects all three chambers"
+text = "SHARED DAMPING — affects all six chambers"
 mouse_filter = 2
 
 [node name="StabilityLabel" type="Label" parent="HUD/SensorCalibrationView/Panel/VBox"]
@@ -499,13 +499,13 @@ mouse_filter = 2
 
 [node name="ControlsLabel" type="Label" parent="HUD/SensorCalibrationView/Panel/VBox"]
 theme_override_colors/font_color = Color(0.7, 0.72, 0.7, 0.9)
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 26
 autowrap_mode = 2
 mouse_filter = 2
 
 [node name="HintLabel" type="Label" parent="HUD/SensorCalibrationView/Panel/VBox"]
 theme_override_colors/font_color = Color(0.85, 0.78, 0.55, 1)
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 20
 autowrap_mode = 2
 mouse_filter = 2
 
@@ -544,13 +544,13 @@ mouse_filter = 2
 
 [node name="TitleLabel" type="Label" parent="HUD/ValveRoutingView/Panel/VBox"]
 theme_override_colors/font_color = Color(0.6, 0.64, 0.64, 1)
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 20
 text = "COOLANT LOOP — VALVE ROUTING MANIFOLD"
 mouse_filter = 2
 
 [node name="StatusLabel" type="Label" parent="HUD/ValveRoutingView/Panel/VBox"]
 theme_override_colors/font_color = Color(0.88, 0.94, 0.9, 1)
-theme_override_font_sizes/font_size = 28
+theme_override_font_sizes/font_size = 36
 autowrap_mode = 2
 mouse_filter = 2
 
@@ -575,7 +575,7 @@ mouse_filter = 2
 
 [node name="ControlsLabel" type="Label" parent="HUD/ValveRoutingView/Panel/VBox"]
 theme_override_colors/font_color = Color(0.7, 0.72, 0.7, 0.9)
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 26
 autowrap_mode = 2
 mouse_filter = 2
 
@@ -661,13 +661,13 @@ mouse_filter = 2
 
 [node name="TitleLabel" type="Label" parent="HUD/FilterHousingView/Panel/VBox"]
 theme_override_colors/font_color = Color(0.6, 0.64, 0.64, 1)
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 20
 text = "LIFE SUPPORT — FILTER HOUSING SERVICE"
 mouse_filter = 2
 
 [node name="StageLabel" type="Label" parent="HUD/FilterHousingView/Panel/VBox"]
 theme_override_colors/font_color = Color(0.88, 0.94, 0.9, 1)
-theme_override_font_sizes/font_size = 28
+theme_override_font_sizes/font_size = 36
 autowrap_mode = 2
 mouse_filter = 2
 
@@ -687,13 +687,13 @@ size = Vector2i(980, 460)
 
 [node name="StatusLabel" type="Label" parent="HUD/FilterHousingView/Panel/VBox"]
 theme_override_colors/font_color = Color(0.85, 0.6, 0.3, 1)
-theme_override_font_sizes/font_size = 28
+theme_override_font_sizes/font_size = 36
 autowrap_mode = 2
 mouse_filter = 2
 
 [node name="ControlsLabel" type="Label" parent="HUD/FilterHousingView/Panel/VBox"]
 theme_override_colors/font_color = Color(0.7, 0.72, 0.7, 0.9)
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 26
 autowrap_mode = 2
 mouse_filter = 2
 
@@ -732,13 +732,13 @@ mouse_filter = 2
 
 [node name="TitleLabel" type="Label" parent="HUD/CircuitTracerView/Panel/VBox"]
 theme_override_colors/font_color = Color(0.6, 0.64, 0.64, 1)
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 20
 text = "ENGINEERING — DIAGNOSTIC BENCH"
 mouse_filter = 2
 
 [node name="StatusLabel" type="Label" parent="HUD/CircuitTracerView/Panel/VBox"]
 theme_override_colors/font_color = Color(0.88, 0.94, 0.9, 1)
-theme_override_font_sizes/font_size = 28
+theme_override_font_sizes/font_size = 36
 autowrap_mode = 2
 mouse_filter = 2
 
@@ -758,7 +758,7 @@ size = Vector2i(980, 460)
 
 [node name="ControlsLabel" type="Label" parent="HUD/CircuitTracerView/Panel/VBox"]
 theme_override_colors/font_color = Color(0.7, 0.72, 0.7, 0.9)
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 26
 autowrap_mode = 2
 mouse_filter = 2
 
@@ -803,13 +803,13 @@ mouse_filter = 2
 
 [node name="TitleLabel" type="Label" parent="HUD/SignalCalibrationView/Panel/VBox"]
 theme_override_colors/font_color = Color(0.6, 0.64, 0.64, 1)
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 20
 text = "COMMUNICATIONS — SIGNAL CALIBRATION"
 mouse_filter = 2
 
 [node name="StatusLabel" type="Label" parent="HUD/SignalCalibrationView/Panel/VBox"]
 theme_override_colors/font_color = Color(0.88, 0.94, 0.9, 1)
-theme_override_font_sizes/font_size = 28
+theme_override_font_sizes/font_size = 36
 autowrap_mode = 2
 mouse_filter = 2
 
@@ -829,7 +829,7 @@ size = Vector2i(980, 460)
 
 [node name="ControlsLabel" type="Label" parent="HUD/SignalCalibrationView/Panel/VBox"]
 theme_override_colors/font_color = Color(0.7, 0.72, 0.7, 0.9)
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 26
 autowrap_mode = 2
 mouse_filter = 2
 

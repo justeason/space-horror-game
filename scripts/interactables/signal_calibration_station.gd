@@ -208,13 +208,18 @@ func sustain_progress() -> float:
 	return clampf(_sustained_time / sustain_seconds(), 0.0, 1.0)
 
 
-func _base_signal() -> float:
+## Round 18 Priority 4: PUBLIC (was _base_signal()) so the view can show
+## frequency accuracy and gain/strength accuracy as two genuinely
+## distinct readouts instead of only the combined signal_quality() --
+## the brief's own explicit "clearly distinguish frequency accuracy from
+## gain/strength" requirement.
+func frequency_accuracy() -> float:
 	_ensure_profile()
 	var distance: float = absf(_frequency - _target_freq)
 	return clampf(1.0 - distance / _freq_falloff, 0.0, 1.0)
 
 
-func _gain_factor() -> float:
+func gain_accuracy() -> float:
 	_ensure_profile()
 	var distance: float = absf(_gain - _target_gain)
 	return clampf(1.0 - distance / _gain_falloff, 0.0, 1.0)
@@ -225,7 +230,7 @@ func _gain_factor() -> float:
 ## (a genuine two-parameter tuning problem, not "turn one knob until a
 ## number reaches a target").
 func signal_quality() -> float:
-	return _base_signal() * _gain_factor()
+	return frequency_accuracy() * gain_accuracy()
 
 
 ## 0..1 -- how much visible static/noise the waveform should show.
@@ -234,7 +239,7 @@ func signal_quality() -> float:
 ## frequency is well-tuned.
 func noise_level() -> float:
 	_ensure_profile()
-	return clampf(_gain * (1.0 - _base_signal()) * _noise_scale, 0.0, 1.0)
+	return clampf(_gain * (1.0 - frequency_accuracy()) * _noise_scale, 0.0, 1.0)
 
 
 func nudge_frequency(direction: int) -> Dictionary:

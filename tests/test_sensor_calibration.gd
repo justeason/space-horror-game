@@ -32,23 +32,24 @@ func _init() -> void:
 	_check("prompt invites calibration before completion", station.get_interact_prompt().findn("Calibrate") != -1)
 
 	# ============================================================
-	# 1. Opening the station alone never completes the task. Round 16
-	# Priority 8: HOW MANY chambers start away from their own target is
-	# now this STATION's own exported active_fault_count() -- a work-
-	# order-scenario property, genuinely independent of difficulty (see
-	# sensor_calibration_station.gd's class doc comment for the full
-	# reasoning, and test_sensor_calibration_difficulty.gd for the
-	# confirmation that this count stays IDENTICAL across EASY/NORMAL/
-	# HARD). Real work is still required, but only from the active
-	# (faulty) chambers this work order actually specifies; the rest
+	# 1. Opening the station alone never completes the task. Round 18
+	# Priority 3: HOW MANY of this station's 6 chambers start away from
+	# their own target is now RANDOMIZED within the current difficulty's
+	# own range each attempt (see sensor_calibration_view.gd's class doc
+	# comment and test_sensor_calibration_difficulty.gd for per-
+	# difficulty range coverage) -- debug_force_active_count() pins an
+	# exact value here so this test can assert deterministically which
+	# chambers started active vs. already-solved. Real work is still
+	# required, but only from the active (faulty) chambers; the rest
 	# start already solved.
 	# ============================================================
+	var fault_count: int = 3
+	calib_view.debug_force_active_count(fault_count)
 	station.interact()
 	await process_frame
 	_check("focused session active for the calibration station", focused.is_active())
 	_check("calibration view visible", calib_view.visible)
 	_check("opening alone does not complete l07", not day_plan.is_task_done(&"l07"))
-	var fault_count: int = station.active_fault_count()
 	var active_chambers: Array = calib_view.CHAMBERS.slice(0, fault_count)
 	for ch in calib_view.CHAMBERS:
 		if ch in active_chambers:
@@ -58,16 +59,36 @@ func _init() -> void:
 
 	# ============================================================
 	# 2. COUPLING IS REAL: adjusting chamber A's regulator measurably
-	# shifts chamber B's and C's READINGS too, not just A's own -- the
-	# actual new mechanic, verified as real simulated behavior (not a
-	# label claiming it).
+	# shifts chamber B's READING too, not just A's own -- the actual new
+	# mechanic, verified as real simulated behavior (not a label claiming
+	# it). Round 18 Priority 3: coupling is now NEIGHBOR-ONLY (chamber i
+	# only leaks into i-1/i+1 -- see sensor_calibration_view.gd's
+	# _build_neighbor_coupling() doc comment for why), so A (index 0)
+	# measurably affects its one neighbor B, but NOT the non-adjacent
+	# chambers C/D/E/F -- confirming the coupling is real AND correctly
+	# scoped to neighbors, not accidentally still all-to-all.
 	# ============================================================
 	var b_before: float = calib_view._reading[&"b"]
-	var c_before: float = calib_view._reading[&"c"]
 	await _hold(KEY_2, 1.0) # chamber A regulator, increase
 	await create_timer(0.5).timeout # let the coupled springs respond
-	_check("raising chamber A's regulator also measurably shifts chamber B's reading", not is_equal_approx(calib_view._reading[&"b"], b_before))
-	_check("raising chamber A's regulator also measurably shifts chamber C's reading", not is_equal_approx(calib_view._reading[&"c"], c_before))
+	_check("raising chamber A's regulator also measurably shifts chamber B's reading (its one neighbor)", not is_equal_approx(calib_view._reading[&"b"], b_before))
+	# Round 18 Priority 3: coupling is NEIGHBOR-ONLY (see
+	# sensor_calibration_view.gd's _build_neighbor_coupling() doc
+	# comment) -- checked directly on the coupling MATRIX's structure
+	# (A's row has zero weight at every non-adjacent column) rather than
+	# by comparing simulated reading drift, since an inactive chamber's
+	# reading can drift by its OWN unrelated amount even with A
+	# untouched (a chamber's neighbors don't individually start at a
+	# locally-blended equilibrium -- confirmed directly: chamber F,
+	# nowhere near A, drifted MORE than B did in a direct measurement,
+	# which is expected given this effect and does not indicate any
+	# actual A->F coupling exists) -- a matrix-structure check isolates
+	# exactly the property being tested instead of being confounded by
+	# that separate, expected simulation behavior.
+	var a_row: Array = calib_view._coupling[0]
+	_check("chamber A's coupling row has a real (nonzero) weight toward its neighbor B", a_row[1] > 0.0)
+	for col in range(2, calib_view.CHAMBERS.size()):
+		_check("chamber A's coupling row has ZERO weight toward non-neighbor %s (coupling is neighbor-only)" % calib_view.CHAMBERS[col], is_zero_approx(a_row[col]))
 
 	# ============================================================
 	# 3. The solved equilibrium (view's own _solve_equilibrium(), the

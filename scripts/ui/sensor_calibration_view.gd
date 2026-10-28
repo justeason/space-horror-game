@@ -75,13 +75,41 @@ const GameSettings = preload("res://scripts/station/game_settings.gd")
 @export var focused_state_path: NodePath
 @export var sfx_path: NodePath
 
-const CHAMBERS: Array[StringName] = [&"a", &"b", &"c"]
-const CHAMBER_LABELS := {&"a": "CHAMBER A", &"b": "CHAMBER B", &"c": "CHAMBER C"}
+## Round 18 Priority 3: expanded from 3 to 6 chambers -- the "FUTURE
+## 4-6 CHAMBER EXPANSION SEAM" this file's own class doc comment already
+## flagged as the one deliberately-deferred piece from Round 14. 6 (not
+## the full 8-12 the brief's own targets mention) was chosen because the
+## brief's OWN required-calibration-count table tops out at "HARD: 5-6
+## chambers requiring calibration" -- a 6-chamber total satisfies every
+## row of that table exactly (EASY 1-2 of 6, NORMAL 3-4 of 6, HARD 5-6
+## of 6, see _REQUIRED_RANGE_BY_DIFFICULTY) without needing a chamber
+## count the table itself never actually requires being fully active.
+const CHAMBERS: Array[StringName] = [&"a", &"b", &"c", &"d", &"e", &"f"]
+const CHAMBER_LABELS := {
+	&"a": "CHAMBER A", &"b": "CHAMBER B", &"c": "CHAMBER C",
+	&"d": "CHAMBER D", &"e": "CHAMBER E", &"f": "CHAMBER F",
+}
 
 ## The ONE fixed target pressure per chamber, shared across every
 ## difficulty (see class doc comment for why this stays constant while
 ## only the coupling matrix/tolerance/duration vary).
-const _TARGETS := {&"a": 40.0, &"b": 58.0, &"c": 65.0}
+## A smooth, mostly-monotonic ramp (up then down) across the 6 chambers,
+## not an arbitrary zigzag -- target CHOICE matters for a neighbor-
+## coupled chain: a target vector with sharp swings between ADJACENT
+## chambers forces the equilibrium solver to an overshoot (the coupling
+## pulls each chamber toward its neighbors' very different setpoints, so
+## reaching a sharp local peak/valley needs an even MORE extreme
+## setpoint to compensate) that can land outside the physical [0,100]
+## gauge range at HARD's stronger coupling -- confirmed directly: an
+## earlier, more jagged target vector solved fine at EASY/NORMAL but
+## produced an UNREACHABLE (out-of-range, even negative) HARD solution.
+## This vector was verified solvable in-range at every difficulty via
+## the actual solver (see tests/test_sensor_calibration_coupling.gd),
+## not merely chosen to look smooth. f's target deliberately avoids
+## exactly 50.0 (START_VALUE) -- any chamber target equal to the shared
+## starting value would start trivially "in range" even while nominally
+## active, undermining "real work required" for that one chamber.
+const _TARGETS := {&"a": 33.0, &"b": 43.0, &"c": 62.0, &"d": 68.0, &"e": 59.0, &"f": 38.0}
 const START_VALUE: float = 50.0 # every chamber's setpoint AND reading start here -- away from every target, real work required
 const START_DAMPING: float = 1.4 # deliberately underdamped -- untouched, it will oscillate
 const COARSE_RATE: float = 22.0 # units/sec, regulator keys/knob
@@ -98,11 +126,18 @@ const GAUGE_MAX: float = 100.0
 const DIRECTION_DEADBAND: float = 0.01
 const MAX_PHYSICS_STEP: float = 0.05 # clamp delta for the spring integration -- numeric stability at low frame rates
 
-## Keyboard fallback per chamber: [decrease, increase].
+## Keyboard fallback per chamber: [decrease, increase]. D/E/F continue
+## the SAME number-key-pair convention A/B/C already use (not a scheme
+## redesign) -- preserves every existing A/B/C keybinding and test
+## unchanged while extending the identical pattern for the 3 new
+## chambers.
 const _CHAMBER_KEYS := {
 	&"a": [KEY_1, KEY_2],
 	&"b": [KEY_3, KEY_4],
 	&"c": [KEY_5, KEY_6],
+	&"d": [KEY_7, KEY_8],
+	&"e": [KEY_9, KEY_0],
+	&"f": [KEY_MINUS, KEY_EQUAL],
 }
 
 ## Row-normalized (each row sums to EXACTLY 1.0) 3x3 coupling matrices,
@@ -113,23 +148,79 @@ const _CHAMBER_KEYS := {
 ## changes. Row-sum = 1.0 is what guarantees a reachable equilibrium
 ## exists for any target vector -- see _solve_equilibrium()'s doc
 ## comment.
-const _COUPLING_BY_DIFFICULTY := {
-	GameSettings.Difficulty.EASY: [
-		[0.85, 0.10, 0.05],
-		[0.08, 0.84, 0.08],
-		[0.05, 0.10, 0.85],
-	],
-	GameSettings.Difficulty.NORMAL: [
-		[0.70, 0.20, 0.10],
-		[0.15, 0.65, 0.20],
-		[0.05, 0.25, 0.70],
-	],
-	GameSettings.Difficulty.HARD: [
-		[0.55, 0.30, 0.15],
-		[0.25, 0.50, 0.25],
-		[0.15, 0.35, 0.50],
-	],
+## Round 18 Priority 3: replaces 3 hand-authored 3x3 matrices with a
+## GENERATED NEIGHBOR-ONLY coupling structure (per the brief's own
+## "consider modest interactions between NEIGHBORING chambers" --
+## chamber i's regulator now only leaks into i-1/i+1, physically
+## plausible for pipes/chambers in a row, not an arbitrary dense NxN
+## matrix that would need N^2 hand-tuned values per difficulty). Each
+## row still sums to EXACTLY 1.0 (same reachable-equilibrium guarantee
+## _solve_equilibrium()'s own doc comment explains -- row-normalization
+## generalizes to any N, verified for N=6 by
+## tests/test_sensor_calibration_coupling.gd the same way it was for
+## N=3), built by _build_neighbor_coupling() below instead of hand-
+## listed, so the three difficulties can't accidentally drift out of
+## that invariant.
+const _NEIGHBOR_WEIGHT_BY_DIFFICULTY := {
+	GameSettings.Difficulty.EASY: 0.055,
+	GameSettings.Difficulty.NORMAL: 0.13,
+	GameSettings.Difficulty.HARD: 0.21,
 }
+
+
+## Builds an NxN row-normalized "tridiagonal" coupling matrix: row i's
+## weight toward each existing neighbor (i-1, i+1) is `neighbor_weight`;
+## the remainder (1.0 minus however many real neighbors this row has,
+## times neighbor_weight) is the diagonal -- endpoint chambers (only one
+## real neighbor) end up with a slightly stronger diagonal than middle
+## chambers (two neighbors), which is physically sensible (an end
+## chamber is less exposed) and never needs special-casing beyond
+## "a neighbor only exists if the index is in range".
+static func _build_neighbor_coupling(n: int, neighbor_weight: float) -> Array:
+	var matrix: Array = []
+	for i in n:
+		var row: Array = []
+		for j in n:
+			row.append(0.0)
+		var neighbor_count: int = 0
+		if i > 0:
+			row[i - 1] = neighbor_weight
+			neighbor_count += 1
+		if i < n - 1:
+			row[i + 1] = neighbor_weight
+			neighbor_count += 1
+		row[i] = 1.0 - neighbor_weight * neighbor_count
+		matrix.append(row)
+	return matrix
+
+
+static func _coupling_for_difficulty(difficulty: int) -> Array:
+	var weight: float = _NEIGHBOR_WEIGHT_BY_DIFFICULTY.get(difficulty, _NEIGHBOR_WEIGHT_BY_DIFFICULTY[GameSettings.Difficulty.NORMAL])
+	return _build_neighbor_coupling(CHAMBERS.size(), weight)
+
+
+## Round 18 Priority 3's own explicit per-difficulty target table:
+## EASY 1-2, NORMAL 3-4, HARD 5-6 of this station's 6 total chambers.
+const _REQUIRED_RANGE_BY_DIFFICULTY := {
+	GameSettings.Difficulty.EASY: [1, 2],
+	GameSettings.Difficulty.NORMAL: [3, 4],
+	GameSettings.Difficulty.HARD: [5, 6],
+}
+
+
+func _random_required_count(difficulty: int) -> int:
+	var range_pair: Array = _REQUIRED_RANGE_BY_DIFFICULTY.get(difficulty, [3, 4])
+	return randi_range(range_pair[0], range_pair[1])
+
+
+## Test-only: forces the required-calibration count instead of a random
+## pick within the difficulty's range, for deterministic regression
+## coverage. Must be called before open_station() (which reads this
+## once and does not re-check it mid-attempt), same "test-only forced
+## value, read once" contract as every other debug_force_*() hook in
+## this project (e.g. electrical_panel.gd's debug_force_fault_role()).
+func debug_force_active_count(count: int) -> void:
+	_debug_forced_count = count
 const _TOLERANCE_BY_DIFFICULTY := {
 	GameSettings.Difficulty.EASY: 6.0,
 	GameSettings.Difficulty.NORMAL: 4.0,
@@ -157,24 +248,20 @@ const _STABILITY_DURATION_BY_DIFFICULTY := {
 ## therefore ALREADY shows which chambers need attention for free, with
 ## no extra UI state to introduce.
 ##
-## FUTURE 4-6 CHAMBER EXPANSION SEAM: _step_springs() and the win-check
-## loop already iterate generically over CHAMBERS.size(), so adding
-## chambers there needs no changes. The one piece NOT yet N-agnostic is
-## _solve_equilibrium()'s hand-expanded 3x3 Cramer's-rule determinant --
-## extending CHAMBERS/the coupling matrices/_TARGETS past 3 entries would
-## need that solver generalized to NxN (e.g. Gaussian elimination) before
-## a verification test like test_sensor_calibration_coupling.gd could
-## confirm a 4-6 chamber matrix's equilibrium the same way. Not done this
-## round per the brief's own "even if not fully shipped" allowance --
-## flagged here precisely so a future round does not have to rediscover
-## this seam by trial and error.
-## Round 16 Priority 8: fault count now comes from the station's own
-## exported active_fault_count() (a work-order-scenario property), not
-## from global difficulty -- see sensor_calibration_station.gd's class
-## doc comment for the full reasoning. This dict is gone; difficulty
-## still independently controls _coupling/_tolerance/_stability_duration
-## below, which legitimately ARE difficulty concerns (how forgiving the
-## attempt is), unlike fault count (how many problems exist at all).
+## Round 18 Priority 3 (supersedes both paragraphs above): the "FUTURE
+## 4-6 CHAMBER EXPANSION SEAM" is now built -- _solve_equilibrium() is a
+## general NxN Gaussian-elimination solver, CHAMBERS has 6 entries, and
+## the coupling matrix is GENERATED per difficulty (_build_neighbor_coupling())
+## instead of hand-authored. The brief's OWN explicit instruction this
+## round ("make difficulty depend on the existing global EASY/NORMAL/
+## HARD setting... EASY 1-2, NORMAL 3-4, HARD 5-6 chambers requiring
+## calibration") supersedes Round 16 Priority 8's choice to make fault
+## count a station/work-order property independent of difficulty --
+## required count is now RANDOMIZED within the difficulty's own range
+## each time the station opens (see open_station()), not a fixed
+## station export; sensor_calibration_station.gd's active_fault_count()
+## is no longer read here (kept on that script, now unused by this view,
+## rather than deleted -- see that script's own updated comment).
 
 @onready var _focused_state: Node = get_node(focused_state_path)
 @onready var _sfx: Node = get_node_or_null(sfx_path)
@@ -184,40 +271,22 @@ const _STABILITY_DURATION_BY_DIFFICULTY := {
 @onready var _controls_label: Label = $Panel/VBox/ControlsLabel
 @onready var _hint_label: Label = $Panel/VBox/HintLabel
 
-@onready var _chamber_rows := {
-	&"a": {
-		"reading_label": $Panel/VBox/ChamberRow/ChamberA/Inner/ReadingLabel,
-		"gauge": $Panel/VBox/ChamberRow/ChamberA/Inner/GaugeStack/Gauge,
-		"cylgauge": $Panel/VBox/ChamberRow/ChamberA/Inner/GaugeStack/CylinderGauge,
-		"knob": $Panel/VBox/ChamberRow/ChamberA/Inner/Knob,
-		"pointer": $Panel/VBox/ChamberRow/ChamberA/Inner/Knob/Pointer,
-		"status": $Panel/VBox/ChamberRow/ChamberA/Inner/StatusChip,
-	},
-	&"b": {
-		"reading_label": $Panel/VBox/ChamberRow/ChamberB/Inner/ReadingLabel,
-		"gauge": $Panel/VBox/ChamberRow/ChamberB/Inner/GaugeStack/Gauge,
-		"cylgauge": $Panel/VBox/ChamberRow/ChamberB/Inner/GaugeStack/CylinderGauge,
-		"knob": $Panel/VBox/ChamberRow/ChamberB/Inner/Knob,
-		"pointer": $Panel/VBox/ChamberRow/ChamberB/Inner/Knob/Pointer,
-		"status": $Panel/VBox/ChamberRow/ChamberB/Inner/StatusChip,
-	},
-	&"c": {
-		"reading_label": $Panel/VBox/ChamberRow/ChamberC/Inner/ReadingLabel,
-		"gauge": $Panel/VBox/ChamberRow/ChamberC/Inner/GaugeStack/Gauge,
-		"cylgauge": $Panel/VBox/ChamberRow/ChamberC/Inner/GaugeStack/CylinderGauge,
-		"knob": $Panel/VBox/ChamberRow/ChamberC/Inner/Knob,
-		"pointer": $Panel/VBox/ChamberRow/ChamberC/Inner/Knob/Pointer,
-		"status": $Panel/VBox/ChamberRow/ChamberC/Inner/StatusChip,
-	},
-}
+## Round 18 Priority 3: A/B/C still resolve from scene-authored nodes;
+## D/E/F don't exist in the .tscn (hand-writing 3 more ~6-node chamber
+## panels in a text scene file is impractical to do reliably) -- see
+## _build_chamber_d_to_f(), called from _ready(), which builds them
+## procedurally with the EXACT same node shape as A/B/C so every other
+## function here (which already indexes this dict generically by role)
+## treats all 6 chambers identically.
+var _chamber_rows := {}
 @onready var _damping_knob: Control = $Panel/VBox/SharedControls/DampingKnob
 @onready var _damping_pointer: Control = $Panel/VBox/SharedControls/DampingKnob/Pointer
 
 var _station: Node = null
-var _setpoint := {&"a": START_VALUE, &"b": START_VALUE, &"c": START_VALUE}
-var _reading := {&"a": START_VALUE, &"b": START_VALUE, &"c": START_VALUE}
-var _velocity := {&"a": 0.0, &"b": 0.0, &"c": 0.0}
-var _prev_gap := {&"a": -1.0, &"b": -1.0, &"c": -1.0}
+var _setpoint := {}
+var _reading := {}
+var _velocity := {}
+var _prev_gap := {}
 var _damping: float = START_DAMPING
 var _stability_timer: float = 0.0
 var _done: bool = false
@@ -225,6 +294,9 @@ var _tolerance: float = 4.0
 var _stability_duration: float = 1.8
 var _coupling: Array = []
 var _active_fault_count: int = 3
+## Round 18 Priority 3: debug/test-only override for the randomized
+## required-calibration count -- see open_station()'s own comment.
+var _debug_forced_count: int = -1
 
 var _dragging_control: StringName = &""
 var _drag_prev_angle: float = 0.0
@@ -238,10 +310,111 @@ const _FIRST_USE_HINT_DURATION: float = 9.0
 
 func _ready() -> void:
 	visible = false
+	for ch in [&"a", &"b", &"c"]:
+		_chamber_rows[ch] = {
+			"reading_label": get_node("Panel/VBox/ChamberRow/Chamber%s/Inner/ReadingLabel" % ch.to_upper()),
+			"gauge": get_node("Panel/VBox/ChamberRow/Chamber%s/Inner/GaugeStack/Gauge" % ch.to_upper()),
+			"cylgauge": get_node("Panel/VBox/ChamberRow/Chamber%s/Inner/GaugeStack/CylinderGauge" % ch.to_upper()),
+			"knob": get_node("Panel/VBox/ChamberRow/Chamber%s/Inner/Knob" % ch.to_upper()),
+			"pointer": get_node("Panel/VBox/ChamberRow/Chamber%s/Inner/Knob/Pointer" % ch.to_upper()),
+			"status": get_node("Panel/VBox/ChamberRow/Chamber%s/Inner/StatusChip" % ch.to_upper()),
+		}
+	_build_chamber_d_to_f()
+	for ch in CHAMBERS:
+		_setpoint[ch] = START_VALUE
+		_reading[ch] = START_VALUE
+		_velocity[ch] = 0.0
+		_prev_gap[ch] = -1.0
 	for ch in CHAMBERS:
 		var knob: Control = _chamber_rows[ch]["knob"]
 		knob.gui_input.connect(_on_knob_gui_input.bind(ch, knob))
 	_damping_knob.gui_input.connect(_on_knob_gui_input.bind(&"damping", _damping_knob))
+
+
+## Builds chambers D/E/F with the exact same Panel/Inner/ReadingLabel/
+## StatusChip/GaugeStack(Gauge+CylinderGauge)/Knob(Pointer) node shape
+## A/B/C already have in the .tscn (see that scene's own ChamberA block)
+## so sync/_refresh()/hover code never needs a "which chambers are
+## procedural" branch.
+func _build_chamber_d_to_f() -> void:
+	var row: HBoxContainer = get_node("Panel/VBox/ChamberRow")
+	var template_reading: Label = get_node("Panel/VBox/ChamberRow/ChamberA/Inner/ReadingLabel")
+	var template_status: Label = get_node("Panel/VBox/ChamberRow/ChamberA/Inner/StatusChip")
+	var template_pointer: ColorRect = get_node("Panel/VBox/ChamberRow/ChamberA/Inner/Knob/Pointer")
+
+	for ch in [&"d", &"e", &"f"]:
+		var panel := Panel.new()
+		panel.name = "Chamber%s" % ch.to_upper()
+		panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		row.add_child(panel)
+
+		var inner := VBoxContainer.new()
+		inner.name = "Inner"
+		inner.set_anchors_preset(Control.PRESET_FULL_RECT)
+		inner.offset_left = 10.0
+		inner.offset_top = 10.0
+		inner.offset_right = -10.0
+		inner.offset_bottom = -10.0
+		inner.add_theme_constant_override("separation", 6)
+		panel.add_child(inner)
+
+		var reading_label := Label.new()
+		reading_label.name = "ReadingLabel"
+		reading_label.add_theme_color_override("font_color", template_reading.get_theme_color("font_color"))
+		reading_label.add_theme_font_size_override("font_size", template_reading.get_theme_font_size("font_size"))
+		reading_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		reading_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		inner.add_child(reading_label)
+
+		var status := Label.new()
+		status.name = "StatusChip"
+		status.add_theme_font_size_override("font_size", template_status.get_theme_font_size("font_size"))
+		status.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		inner.add_child(status)
+
+		var gauge_stack := Control.new()
+		gauge_stack.name = "GaugeStack"
+		gauge_stack.custom_minimum_size = Vector2(0, 130)
+		gauge_stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		gauge_stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		inner.add_child(gauge_stack)
+
+		var gauge: Control = Control.new()
+		gauge.name = "Gauge"
+		gauge.set_script(preload("res://scripts/ui/analog_gauge.gd"))
+		gauge.set_anchors_preset(Control.PRESET_FULL_RECT)
+		gauge_stack.add_child(gauge)
+
+		var cylgauge: Control = Control.new()
+		cylgauge.name = "CylinderGauge"
+		cylgauge.visible = false
+		cylgauge.set_script(preload("res://scripts/ui/cylindrical_gauge.gd"))
+		cylgauge.set_anchors_preset(Control.PRESET_FULL_RECT)
+		gauge_stack.add_child(cylgauge)
+
+		var knob := Panel.new()
+		knob.name = "Knob"
+		knob.custom_minimum_size = Vector2(64, 64)
+		knob.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		knob.mouse_filter = Control.MOUSE_FILTER_STOP
+		inner.add_child(knob)
+
+		var pointer := ColorRect.new()
+		pointer.name = "Pointer"
+		pointer.offset_left = 29.0
+		pointer.offset_top = 6.0
+		pointer.offset_right = 35.0
+		pointer.offset_bottom = 32.0
+		pointer.pivot_offset = Vector2(3, 26)
+		pointer.color = template_pointer.color
+		pointer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		knob.add_child(pointer)
+
+		_chamber_rows[ch] = {
+			"reading_label": reading_label, "gauge": gauge, "cylgauge": cylgauge,
+			"knob": knob, "pointer": pointer, "status": status,
+		}
 
 
 ## Called by sensor_calibration_station.gd's interact().
@@ -252,16 +425,22 @@ func open_station(station: Node) -> void:
 	visible = true
 	_done = station.is_complete()
 	var difficulty: int = GameSettings.get_difficulty()
-	var fault_count: int = station.active_fault_count()
+	# Round 18 Priority 3: required-calibration count is now RANDOMIZED
+	# within the current difficulty's own range (_REQUIRED_RANGE_BY_DIFFICULTY)
+	# every time the station opens, not read from the station's own
+	# active_fault_count() export (Round 16 Priority 8's choice,
+	# superseded this round per the brief's own explicit instruction --
+	# see this file's class doc comment). _debug_forced_count overrides
+	# this for deterministic tests, same "test-only forced value" contract
+	# every other randomized system in this project already uses.
+	var fault_count: int = _debug_forced_count if _debug_forced_count != -1 else _random_required_count(difficulty)
 	var active: Array = CHAMBERS.slice(0, fault_count)
 	for ch in CHAMBERS:
-		# Round 16 Priority 8: only this WORK ORDER's active (faulty)
-		# chambers (station.active_fault_count(), independent of global
-		# difficulty -- see sensor_calibration_station.gd's class doc
-		# comment) start away from their target; the rest start already
-		# solved. Difficulty still independently scales _coupling/
-		# _tolerance/_stability_duration below (how forgiving the
-		# attempt is), never how many chambers are broken.
+		# Only this attempt's active (faulty) chambers start away from
+		# their target; the rest start already solved. Difficulty still
+		# independently scales _coupling/_tolerance/_stability_duration
+		# below (how forgiving the attempt is), never how many chambers
+		# are broken.
 		_setpoint[ch] = START_VALUE if ch in active else _TARGETS[ch]
 		_reading[ch] = START_VALUE if ch in active else _TARGETS[ch]
 		_velocity[ch] = 0.0
@@ -270,7 +449,7 @@ func open_station(station: Node) -> void:
 	_stability_timer = 0.0
 	_dragging_control = &""
 	_use_cylinder_display = false # circular dial is the default/primary style
-	_coupling = _COUPLING_BY_DIFFICULTY.get(difficulty, _COUPLING_BY_DIFFICULTY[GameSettings.Difficulty.NORMAL])
+	_coupling = _coupling_for_difficulty(difficulty)
 	_tolerance = _TOLERANCE_BY_DIFFICULTY.get(difficulty, 4.0)
 	_stability_duration = _STABILITY_DURATION_BY_DIFFICULTY.get(difficulty, 1.8)
 	_active_fault_count = fault_count
@@ -361,39 +540,61 @@ func _step_springs(delta: float) -> void:
 
 ## Solves M*S=T for the setpoint vector S that puts every chamber's
 ## READING exactly at its own target AT EQUILIBRIUM (velocity=0, so
-## effective_target[i] == reading[i] == T[i] for all i) -- Cramer's
-## rule on the fixed 3x3 system. Row-normalized M (every row sums to
-## 1.0, true of every authored matrix above) guarantees this is always
-## solvable whenever M is invertible: if M were the identity-like
-## "uncoupled" case, S=T trivially; row-normalization generalizes that
-## guarantee to any mix of coupling strengths, since M always maps the
-## all-ones vector to itself, keeping the system well-posed. Used by
-## tests/test_sensor_calibration_coupling.gd to verify, for every
-## difficulty's matrix, that a real solution exists AND lands within
-## the actual reachable regulator range [0,100] -- not merely that the
-## math is solvable in the abstract.
+## effective_target[i] == reading[i] == T[i] for all i) -- Gaussian
+## elimination with partial pivoting on the general NxN system (Round 18
+## Priority 3: generalized from Round 14's fixed 3x3 Cramer's-rule
+## version per that round's own documented "FUTURE 4-6 CHAMBER EXPANSION
+## SEAM" -- Cramer's rule's determinant expansion does not scale past a
+## handful of rows; Gaussian elimination does). Row-normalized M (every
+## row sums to 1.0, guaranteed by _build_neighbor_coupling()) guarantees
+## this is always solvable whenever M is invertible: if M were the
+## identity-like "uncoupled" case, S=T trivially; row-normalization
+## generalizes that guarantee to any mix of coupling strengths, since M
+## always maps the all-ones vector to itself, keeping the system well-
+## posed. Used by tests/test_sensor_calibration_coupling.gd to verify,
+## for every difficulty's matrix, that a real solution exists AND lands
+## within the actual reachable regulator range [0,100] -- not merely
+## that the math is solvable in the abstract.
 static func _solve_equilibrium(matrix: Array, targets: Dictionary) -> Dictionary:
-	var m: Array = matrix
-	var t: Array = [targets[&"a"], targets[&"b"], targets[&"c"]]
-	var det: float = (
-		m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
-		- m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
-		+ m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
-	)
-	if is_zero_approx(det):
-		return {}
-	var result: Array = [0.0, 0.0, 0.0]
-	for col in 3:
-		var mc: Array = [m[0].duplicate(), m[1].duplicate(), m[2].duplicate()]
-		for row in 3:
-			mc[row][col] = t[row]
-		var det_c: float = (
-			mc[0][0] * (mc[1][1] * mc[2][2] - mc[1][2] * mc[2][1])
-			- mc[0][1] * (mc[1][0] * mc[2][2] - mc[1][2] * mc[2][0])
-			+ mc[0][2] * (mc[1][0] * mc[2][1] - mc[1][1] * mc[2][0])
-		)
-		result[col] = det_c / det
-	return {&"a": result[0], &"b": result[1], &"c": result[2]}
+	var n: int = matrix.size()
+	# Augmented matrix [M | T], rows duplicated so the input is untouched.
+	var aug: Array = []
+	for i in n:
+		var row: Array = matrix[i].duplicate()
+		row.append(targets[CHAMBERS[i]])
+		aug.append(row)
+
+	for col in n:
+		# Partial pivoting: swap in the largest-magnitude remaining entry
+		# in this column so a near-zero diagonal doesn't blow up the
+		# division below -- not merely a theoretical concern once the
+		# matrix stops being hand-picked for a clean 3x3 determinant.
+		var pivot_row: int = col
+		var pivot_val: float = absf(aug[col][col])
+		for r in range(col + 1, n):
+			if absf(aug[r][col]) > pivot_val:
+				pivot_row = r
+				pivot_val = absf(aug[r][col])
+		if is_zero_approx(pivot_val):
+			return {}
+		if pivot_row != col:
+			var tmp: Array = aug[col]
+			aug[col] = aug[pivot_row]
+			aug[pivot_row] = tmp
+		var pivot: float = aug[col][col]
+		for r in n:
+			if r == col:
+				continue
+			var factor: float = aug[r][col] / pivot
+			if is_zero_approx(factor):
+				continue
+			for c in range(col, n + 1):
+				aug[r][c] -= factor * aug[col][c]
+
+	var result: Dictionary = {}
+	for i in n:
+		result[CHAMBERS[i]] = aug[i][n] / aug[i][i]
+	return result
 
 
 func _commit_success() -> void:
@@ -499,18 +700,18 @@ func _refresh() -> void:
 	_damping_pointer.rotation = deg_to_rad(((_damping - DAMPING_MIN) / (DAMPING_MAX - DAMPING_MIN)) * 280.0 - 140.0)
 
 	if _done:
-		_status_label.text = "CALIBRATED — all three chambers stable."
+		_status_label.text = "CALIBRATED — all chambers stable."
 		_controls_label.text = "[Esc] Close"
 		_stability_label.text = ""
 		_hint_label.text = ""
 		return
 
 	_status_label.text = (
-		"Bring all three chambers into range and hold them there simultaneously."
+		"Bring every chamber into range, then hold steady."
 		if _active_fault_count >= CHAMBERS.size()
-		else "%d of %d chambers are out of range — bring every chamber into range and hold them there simultaneously." % [_active_fault_count, CHAMBERS.size()]
+		else "%d of %d chambers out of range — bring them in range and hold." % [_active_fault_count, CHAMBERS.size()]
 	)
-	_controls_label.text = "A [1/2]  B [3/4]  C [5/6] (hold Shift to fine-tune)   Damping [Z/X]   [Tab] Gauge Style   [Esc] Exit (no progress lost)"
+	_controls_label.text = "A[1/2] B[3/4] C[5/6] D[7/8] E[9/0] F[-/=]  ·  Shift = fine-tune  ·  Damping[Z/X]  ·  [Tab] Style  ·  [Esc] Exit"
 	_stability_label.text = ("Stable: %.1fs / %.1fs" % [_stability_timer, _stability_duration]) if all_in_band else "Not yet stable — every chamber must be in range at once."
 	if _showing_first_use_hint:
 		var coupling_note: String = ""

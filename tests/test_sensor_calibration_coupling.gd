@@ -45,7 +45,11 @@ func _init() -> void:
 	# ============================================================
 	for diff_name in ["EASY", "NORMAL", "HARD"]:
 		var diff_val: int = GameSettings.Difficulty[diff_name]
-		var matrix: Array = view._COUPLING_BY_DIFFICULTY[diff_val]
+		# Round 18 Priority 3: _COUPLING_BY_DIFFICULTY (a hand-authored
+		# per-difficulty dict) no longer exists -- the matrix is now
+		# GENERATED per difficulty (see sensor_calibration_view.gd's
+		# _coupling_for_difficulty()/_build_neighbor_coupling()).
+		var matrix: Array = view._coupling_for_difficulty(diff_val)
 		var solution: Dictionary = view._solve_equilibrium(matrix, view._TARGETS)
 		_check("%s: a real equilibrium solution exists (matrix is invertible)" % diff_name, not solution.is_empty())
 		for ch in view.CHAMBERS:
@@ -124,7 +128,9 @@ func _init() -> void:
 	var fine_steps: int = 400 # dt=0.005
 	for i in fine_steps:
 		view._step_springs(total_time / fine_steps)
-	var fine_result: Dictionary = {&"a": view._reading[&"a"], &"b": view._reading[&"b"], &"c": view._reading[&"c"]}
+	var fine_result: Dictionary = {}
+	for ch in view.CHAMBERS:
+		fine_result[ch] = view._reading[ch]
 
 	for ch in view.CHAMBERS:
 		view._setpoint[ch] = solution[ch]
@@ -133,7 +139,9 @@ func _init() -> void:
 	var coarse_steps: int = 40 # dt=0.05, exactly MAX_PHYSICS_STEP
 	for i in coarse_steps:
 		view._step_springs(total_time / coarse_steps)
-	var coarse_result: Dictionary = {&"a": view._reading[&"a"], &"b": view._reading[&"b"], &"c": view._reading[&"c"]}
+	var coarse_result: Dictionary = {}
+	for ch in view.CHAMBERS:
+		coarse_result[ch] = view._reading[ch]
 
 	for ch in view.CHAMBERS:
 		_check(
