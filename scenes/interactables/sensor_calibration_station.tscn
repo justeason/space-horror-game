@@ -1,0 +1,63 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/interactables/sensor_calibration_station.gd" id="1_calib"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_collision"]
+size = Vector3(0.5, 0.6, 0.22)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_body"]
+albedo_color = Color(0.13, 0.16, 0.17, 1)
+roughness = 0.55
+metallic = 0.3
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_face"]
+albedo_color = Color(0.08, 0.09, 0.1, 1)
+roughness = 0.4
+metallic = 0.1
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_needle"]
+albedo_color = Color(0.55, 0.78, 0.55, 1)
+roughness = 0.3
+emission_enabled = true
+emission = Color(0.3, 0.6, 0.35, 1)
+emission_energy_multiplier = 0.6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_label"]
+albedo_color = Color(0.3, 0.31, 0.33, 1)
+roughness = 0.6
+
+[node name="SensorCalibrationStation" type="StaticBody3D"]
+script = ExtResource("1_calib")
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_collision")
+
+[node name="Body" type="CSGBox3D" parent="."]
+size = Vector3(0.5, 0.6, 0.22)
+material = SubResource("StandardMaterial3D_body")
+
+[node name="GaugeFace" type="CSGCylinder3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.08, 0.112)
+radius = 0.14
+height = 0.01
+sides = 24
+material = SubResource("StandardMaterial3D_face")
+
+[node name="GaugeNeedle" type="CSGBox3D" parent="."]
+transform = Transform3D(0.7071068, 0.7071068, 0, -0.7071068, 0.7071068, 0, 0, 0, 1, 0, 0.08, 0.118)
+size = Vector3(0.11, 0.012, 0.004)
+material = SubResource("StandardMaterial3D_needle")
+
+[node name="LabelPlate" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.18, 0.112)
+size = Vector3(0.3, 0.07, 0.006)
+material = SubResource("StandardMaterial3D_label")
+
+[node name="LabelText" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.18, 0.116)
+pixel_size = 0.001
+billboard = 0
+no_depth_test = true
+modulate = Color(0.85, 0.85, 0.82, 0.95)
+font_size = 20
+text = "ENV SENSOR CAL"

@@ -27,16 +27,40 @@ const MovementPromptScene := preload("res://scenes/movement_prompt.tscn")
 ## selected.
 @export var move_select_angle_degrees: float = 65.0
 
+## The player has no physical collision shape today — position is tweened
+## directly from node to node (see `move_to()`), so nothing here actually
+## reads these two values at runtime. They exist so corridor/room authoring
+## and navigation validation (see scripts/navigation tests and
+## scripts/dev/nav_debug_overlay.gd) have one concrete, shared definition of
+## "how much body the player needs clearance for" instead of every piece of
+## tooling guessing its own number. Treat a corridor that can't fit a
+## capsule of this radius/height as a real authoring bug, not a style
+## choice. Changing these does not change movement behavior by itself.
+@export var player_clearance_radius: float = 0.3
+@export var player_clearance_height: float = 1.0
+
 @export var starting_node: NodePath
 
 @onready var look_pivot: Node3D = $LookPivot
 @onready var footsteps: AudioStreamPlayer3D = $Footsteps
 @onready var step_timer: Timer = $StepTimer
 
+## Station-wide switch set once, permanently false, by
+## scripts/dev/global_free_move.gd at startup now that free movement is
+## the station's only active movement system. Defaults true so this
+## script is still fully self-sufficient (and the node graph/tween code
+## below remains real, runnable, testable logic — see
+## test_locked_graph.gd) if global_free_move.gd is ever removed and node
+## movement needs to be recovered. When false, clicks are ignored and
+## movement prompts stay hidden, but `current_node` and all node-graph
+## state are left untouched.
+var node_movement_enabled: bool = true
+
 var current_node: Node3D = null
 var _is_moving: bool = false
 var _bob_time: float = 0.0
 var _active_prompts: Array[Node3D] = []
+var _active_tween: Tween = null
 
 
 func _ready() -> void:
@@ -49,7 +73,27 @@ func _ready() -> void:
 	_refresh_prompts.call_deferred()
 
 
+## Gated on node_movement_enabled (see that export's own doc comment:
+## GlobalFreeMove permanently disables node-based movement station-wide
+## at startup) -- this head-bob is part of the node-walk feature and
+## was previously running UNCONDITIONALLY even with node movement
+## disabled, since _is_moving can never become true that way. Its
+## "settle back to 0" branch then ran forever, every frame, for the
+## entire game, fighting ANY other system that legitimately writes to
+## look_pivot.position -- confirmed to be the actual cause of a
+## reported "editor zoom camera drifts back out" bug: sleep_state.gd's
+## _start_editor_zoom() tweens look_pivot.position to a nonzero offset,
+## and this unrelated, permanently-dead bob-reset logic silently eroded
+## just its Y component back toward 0 every subsequent frame once the
+## tween finished. Gating the whole method on node_movement_enabled
+## (matching every other node-movement entry point in this script)
+## leaves look_pivot.position fully available to other systems when
+## node movement is disabled, and preserves the original bob/settle
+## behavior intact for the (currently unused, but still real/testable)
+## case where it is re-enabled.
 func _process(delta: float) -> void:
+	if not node_movement_enabled:
+		return
 	if _is_moving:
 		_bob_time += delta * bob_frequency
 		look_pivot.position.y = sin(_bob_time) * bob_amplitude
@@ -58,6 +102,8 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if not node_movement_enabled:
+		return
 	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -110,10 +156,36 @@ func move_to(target_node: Node3D) -> void:
 	_on_step_timer_timeout() # immediate step on departure
 
 	var tween := create_tween()
+	_active_tween = tween
 	tween.set_parallel(true)
 	tween.tween_property(self, "global_position", target_node.global_position, duration)
 	tween.tween_property(self, "global_rotation:y", target_node.global_rotation.y, duration)
 	tween.chain().tween_callback(_on_arrived.bind(target_node))
+
+
+## Prototype hook for the free-movement experiment: immediately halts any
+## in-flight node-to-node tween (killing it leaves global_position
+## exactly where it already was — it does not snap back or jump forward)
+## so free movement can take over from that exact spot without the tween
+## continuing to fight it for control of the player's position.
+func force_stop_movement() -> void:
+	if _active_tween != null and _active_tween.is_valid():
+		_active_tween.kill()
+	_active_tween = null
+	_is_moving = false
+	step_timer.stop()
+	_clear_prompts()
+
+
+## Prototype hook for the free-movement experiment: enables/disables the
+## click-to-move system without touching `current_node` or any graph
+## state, so disabling and re-enabling is always safe to call.
+func set_node_movement_enabled(value: bool) -> void:
+	node_movement_enabled = value
+	if value:
+		_refresh_prompts()
+	else:
+		_clear_prompts()
 
 
 func _on_arrived(target_node: Node3D) -> void:
@@ -128,6 +200,8 @@ func _on_step_timer_timeout() -> void:
 
 
 func _refresh_prompts() -> void:
+	if not node_movement_enabled:
+		return
 	_clear_prompts()
 	for candidate in current_node.get_movement_candidates():
 		var prompt := MovementPromptScene.instantiate()

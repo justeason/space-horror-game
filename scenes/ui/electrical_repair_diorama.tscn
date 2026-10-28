@@ -1,0 +1,695 @@
+[gd_scene load_steps=27 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/electrical_repair_diorama.gd" id="1_diorama"]
+
+[sub_resource type="BoxShape3D" id="Shape_wire"]
+size = Vector3(0.14, 0.78, 0.14)
+
+[sub_resource type="BoxShape3D" id="Shape_wire_bowed"]
+size = Vector3(0.46, 0.12, 0.18)
+
+[sub_resource type="BoxShape3D" id="Shape_screw"]
+size = Vector3(0.1, 0.1, 0.16)
+
+[sub_resource type="BoxShape3D" id="Shape_lever"]
+size = Vector3(0.1, 0.2, 0.1)
+
+[sub_resource type="BoxShape3D" id="Shape_replacement"]
+size = Vector3(0.14, 0.2, 0.14)
+
+[sub_resource type="StandardMaterial3D" id="Mat_backdrop"]
+albedo_color = Color(0.1, 0.11, 0.14, 1)
+roughness = 0.6
+metallic = 0.25
+
+[sub_resource type="StandardMaterial3D" id="Mat_terminal"]
+albedo_color = Color(0.24, 0.25, 0.27, 1)
+roughness = 0.4
+metallic = 0.6
+
+[sub_resource type="StandardMaterial3D" id="Mat_cap"]
+albedo_color = Color(0.3, 0.31, 0.33, 1)
+roughness = 0.35
+metallic = 0.65
+
+[sub_resource type="StandardMaterial3D" id="Mat_wire_supply"]
+albedo_color = Color(0.62, 0.12, 0.1, 1)
+roughness = 0.5
+
+[sub_resource type="StandardMaterial3D" id="Mat_wire_return"]
+albedo_color = Color(0.14, 0.26, 0.6, 1)
+roughness = 0.5
+
+[sub_resource type="StandardMaterial3D" id="Mat_wire_service_damaged"]
+albedo_color = Color(0.42, 0.36, 0.08, 1)
+roughness = 0.75
+
+[sub_resource type="StandardMaterial3D" id="Mat_wire_service_healthy"]
+albedo_color = Color(0.68, 0.56, 0.08, 1)
+roughness = 0.45
+
+[sub_resource type="StandardMaterial3D" id="Mat_wire_return_damaged"]
+albedo_color = Color(0.09, 0.16, 0.36, 1)
+roughness = 0.75
+
+[sub_resource type="StandardMaterial3D" id="Mat_wire_return_replacement"]
+albedo_color = Color(0.14, 0.26, 0.6, 1)
+roughness = 0.45
+
+[sub_resource type="StandardMaterial3D" id="Mat_wire_backup"]
+albedo_color = Color(0.75, 0.4, 0.08, 1)
+roughness = 0.5
+
+[sub_resource type="StandardMaterial3D" id="Mat_wire_backup_damaged"]
+albedo_color = Color(0.46, 0.26, 0.07, 1)
+roughness = 0.75
+
+[sub_resource type="StandardMaterial3D" id="Mat_wire_backup_replacement"]
+albedo_color = Color(0.75, 0.4, 0.08, 1)
+roughness = 0.45
+
+[sub_resource type="StandardMaterial3D" id="Mat_wire_ground"]
+albedo_color = Color(0.15, 0.55, 0.22, 1)
+roughness = 0.5
+
+[sub_resource type="StandardMaterial3D" id="Mat_wire_ground_damaged"]
+albedo_color = Color(0.1, 0.34, 0.15, 1)
+roughness = 0.75
+
+[sub_resource type="StandardMaterial3D" id="Mat_damage_scorch"]
+albedo_color = Color(0.05, 0.05, 0.05, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="Mat_housing"]
+albedo_color = Color(0.16, 0.17, 0.19, 1)
+roughness = 0.55
+metallic = 0.3
+
+[sub_resource type="StandardMaterial3D" id="Mat_lever"]
+albedo_color = Color(0.68, 0.14, 0.1, 1)
+roughness = 0.4
+metallic = 0.2
+
+[sub_resource type="StandardMaterial3D" id="Mat_screw"]
+albedo_color = Color(0.45, 0.46, 0.48, 1)
+roughness = 0.3
+metallic = 0.8
+
+[sub_resource type="StandardMaterial3D" id="Mat_light_off"]
+albedo_color = Color(0.2, 0.08, 0.06, 1)
+emission_enabled = true
+emission = Color(0.5, 0.1, 0.05, 1)
+emission_energy_multiplier = 0.9
+
+[sub_resource type="StandardMaterial3D" id="Mat_light_on"]
+albedo_color = Color(0.1, 0.3, 0.12, 1)
+emission_enabled = true
+emission = Color(0.2, 0.9, 0.3, 1)
+emission_energy_multiplier = 1.1
+
+[sub_resource type="StandardMaterial3D" id="Mat_light_on_return"]
+albedo_color = Color(0.1, 0.3, 0.12, 1)
+emission_enabled = true
+emission = Color(0.2, 0.9, 0.3, 1)
+emission_energy_multiplier = 1.1
+
+[sub_resource type="StandardMaterial3D" id="Mat_light_on_service"]
+albedo_color = Color(0.1, 0.3, 0.12, 1)
+emission_enabled = true
+emission = Color(0.2, 0.9, 0.3, 1)
+emission_energy_multiplier = 1.1
+
+[sub_resource type="StandardMaterial3D" id="Mat_light_on_backup"]
+albedo_color = Color(0.1, 0.3, 0.12, 1)
+emission_enabled = true
+emission = Color(0.2, 0.9, 0.3, 1)
+emission_energy_multiplier = 1.1
+
+[sub_resource type="StandardMaterial3D" id="Mat_light_on_ground"]
+albedo_color = Color(0.1, 0.3, 0.12, 1)
+emission_enabled = true
+emission = Color(0.2, 0.9, 0.3, 1)
+emission_energy_multiplier = 1.1
+
+[sub_resource type="StandardMaterial3D" id="Mat_light_on_breaker"]
+albedo_color = Color(0.1, 0.3, 0.12, 1)
+emission_enabled = true
+emission = Color(0.2, 0.9, 0.3, 1)
+emission_energy_multiplier = 1.1
+
+[node name="ElectricalRepairDiorama" type="Node3D"]
+script = ExtResource("1_diorama")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, 2.25)
+fov = 46.0
+
+[node name="KeyLight" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, 0.95, 1.6)
+light_energy = 2.6
+omni_range = 4.6
+
+[node name="FillLight" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.0, -0.4, 1.3)
+light_color = Color(0.75, 0.8, 0.9, 1)
+light_energy = 1.0
+omni_range = 4.6
+
+[node name="Backdrop" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.58)
+size = Vector3(2.9, 1.35, 0.06)
+material = SubResource("Mat_backdrop")
+
+[node name="InsetPanel" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.08, -0.29)
+size = Vector3(2.5, 0.85, 0.03)
+material = SubResource("Mat_terminal")
+
+[node name="Terminals" type="Node3D" parent="."]
+
+[node name="Supply" type="Node3D" parent="Terminals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.0, -0.22, -0.26)
+
+[node name="Backing" type="CSGBox3D" parent="Terminals/Supply"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.03)
+size = Vector3(0.22, 0.16, 0.05)
+material = SubResource("Mat_housing")
+
+[node name="Lug" type="CSGBox3D" parent="Terminals/Supply"]
+size = Vector3(0.14, 0.08, 0.1)
+material = SubResource("Mat_terminal")
+
+[node name="Socket" type="CSGCylinder3D" parent="Terminals/Supply"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.048)
+rotation_degrees = Vector3(90, 0, 0)
+radius = 0.032
+height = 0.02
+sides = 12
+material = SubResource("Mat_damage_scorch")
+
+[node name="Screw1" type="CSGCylinder3D" parent="Terminals/Supply"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.08, 0.05, 0.051)
+rotation_degrees = Vector3(90, 0, 0)
+radius = 0.012
+height = 0.01
+sides = 8
+material = SubResource("Mat_screw")
+
+[node name="Screw2" type="CSGCylinder3D" parent="Terminals/Supply"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.08, -0.05, 0.051)
+rotation_degrees = Vector3(90, 0, 0)
+radius = 0.012
+height = 0.01
+sides = 8
+material = SubResource("Mat_screw")
+
+[node name="IndicatorBezel" type="CSGBox3D" parent="Terminals/Supply"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.09, 0.025)
+size = Vector3(0.05, 0.05, 0.015)
+material = SubResource("Mat_housing")
+
+[node name="Indicator" type="CSGBox3D" parent="Terminals/Supply"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.09, 0.034)
+size = Vector3(0.03, 0.03, 0.012)
+material = SubResource("Mat_light_on")
+
+[node name="Return" type="Node3D" parent="Terminals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, -0.22, -0.26)
+
+[node name="Backing" type="CSGBox3D" parent="Terminals/Return"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.03)
+size = Vector3(0.22, 0.16, 0.05)
+material = SubResource("Mat_housing")
+
+[node name="Lug" type="CSGBox3D" parent="Terminals/Return"]
+size = Vector3(0.14, 0.08, 0.1)
+material = SubResource("Mat_terminal")
+
+[node name="Socket" type="CSGCylinder3D" parent="Terminals/Return"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.048)
+rotation_degrees = Vector3(90, 0, 0)
+radius = 0.032
+height = 0.02
+sides = 12
+material = SubResource("Mat_damage_scorch")
+
+[node name="Screw1" type="CSGCylinder3D" parent="Terminals/Return"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.08, 0.05, 0.051)
+rotation_degrees = Vector3(90, 0, 0)
+radius = 0.012
+height = 0.01
+sides = 8
+material = SubResource("Mat_screw")
+
+[node name="Screw2" type="CSGCylinder3D" parent="Terminals/Return"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.08, -0.05, 0.051)
+rotation_degrees = Vector3(90, 0, 0)
+radius = 0.012
+height = 0.01
+sides = 8
+material = SubResource("Mat_screw")
+
+[node name="IndicatorBezel" type="CSGBox3D" parent="Terminals/Return"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.09, 0.025)
+size = Vector3(0.05, 0.05, 0.015)
+material = SubResource("Mat_housing")
+
+[node name="Indicator" type="CSGBox3D" parent="Terminals/Return"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.09, 0.034)
+size = Vector3(0.03, 0.03, 0.012)
+material = SubResource("Mat_light_on_return")
+
+[node name="Service" type="Node3D" parent="Terminals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0, -0.22, -0.26)
+
+[node name="Backing" type="CSGBox3D" parent="Terminals/Service"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.03)
+size = Vector3(0.22, 0.16, 0.05)
+material = SubResource("Mat_housing")
+
+[node name="Lug" type="CSGBox3D" parent="Terminals/Service"]
+size = Vector3(0.14, 0.08, 0.1)
+material = SubResource("Mat_terminal")
+
+[node name="Socket" type="CSGCylinder3D" parent="Terminals/Service"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.048)
+rotation_degrees = Vector3(90, 0, 0)
+radius = 0.032
+height = 0.02
+sides = 12
+material = SubResource("Mat_damage_scorch")
+
+[node name="Screw1" type="CSGCylinder3D" parent="Terminals/Service"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.08, 0.05, 0.051)
+rotation_degrees = Vector3(90, 0, 0)
+radius = 0.012
+height = 0.01
+sides = 8
+material = SubResource("Mat_screw")
+
+[node name="Screw2" type="CSGCylinder3D" parent="Terminals/Service"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.08, -0.05, 0.051)
+rotation_degrees = Vector3(90, 0, 0)
+radius = 0.012
+height = 0.01
+sides = 8
+material = SubResource("Mat_screw")
+
+[node name="IndicatorBezel" type="CSGBox3D" parent="Terminals/Service"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.09, 0.025)
+size = Vector3(0.05, 0.05, 0.015)
+material = SubResource("Mat_housing")
+
+[node name="Indicator" type="CSGBox3D" parent="Terminals/Service"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.09, 0.034)
+size = Vector3(0.03, 0.03, 0.012)
+material = SubResource("Mat_light_on_service")
+
+[node name="Backup" type="Node3D" parent="Terminals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, -0.22, -0.26)
+
+[node name="Backing" type="CSGBox3D" parent="Terminals/Backup"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.03)
+size = Vector3(0.22, 0.16, 0.05)
+material = SubResource("Mat_housing")
+
+[node name="Lug" type="CSGBox3D" parent="Terminals/Backup"]
+size = Vector3(0.14, 0.08, 0.1)
+material = SubResource("Mat_terminal")
+
+[node name="Socket" type="CSGCylinder3D" parent="Terminals/Backup"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.048)
+rotation_degrees = Vector3(90, 0, 0)
+radius = 0.032
+height = 0.02
+sides = 12
+material = SubResource("Mat_damage_scorch")
+
+[node name="Screw1" type="CSGCylinder3D" parent="Terminals/Backup"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.08, 0.05, 0.051)
+rotation_degrees = Vector3(90, 0, 0)
+radius = 0.012
+height = 0.01
+sides = 8
+material = SubResource("Mat_screw")
+
+[node name="Screw2" type="CSGCylinder3D" parent="Terminals/Backup"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.08, -0.05, 0.051)
+rotation_degrees = Vector3(90, 0, 0)
+radius = 0.012
+height = 0.01
+sides = 8
+material = SubResource("Mat_screw")
+
+[node name="IndicatorBezel" type="CSGBox3D" parent="Terminals/Backup"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.09, 0.025)
+size = Vector3(0.05, 0.05, 0.015)
+material = SubResource("Mat_housing")
+
+[node name="Indicator" type="CSGBox3D" parent="Terminals/Backup"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.09, 0.034)
+size = Vector3(0.03, 0.03, 0.012)
+material = SubResource("Mat_light_on_backup")
+
+[node name="Ground" type="Node3D" parent="Terminals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.0, -0.22, -0.26)
+
+[node name="Backing" type="CSGBox3D" parent="Terminals/Ground"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.03)
+size = Vector3(0.22, 0.16, 0.05)
+material = SubResource("Mat_housing")
+
+[node name="Lug" type="CSGBox3D" parent="Terminals/Ground"]
+size = Vector3(0.14, 0.08, 0.1)
+material = SubResource("Mat_terminal")
+
+[node name="Socket" type="CSGCylinder3D" parent="Terminals/Ground"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.048)
+rotation_degrees = Vector3(90, 0, 0)
+radius = 0.032
+height = 0.02
+sides = 12
+material = SubResource("Mat_damage_scorch")
+
+[node name="Screw1" type="CSGCylinder3D" parent="Terminals/Ground"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.08, 0.05, 0.051)
+rotation_degrees = Vector3(90, 0, 0)
+radius = 0.012
+height = 0.01
+sides = 8
+material = SubResource("Mat_screw")
+
+[node name="Screw2" type="CSGCylinder3D" parent="Terminals/Ground"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.08, -0.05, 0.051)
+rotation_degrees = Vector3(90, 0, 0)
+radius = 0.012
+height = 0.01
+sides = 8
+material = SubResource("Mat_screw")
+
+[node name="IndicatorBezel" type="CSGBox3D" parent="Terminals/Ground"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.09, 0.025)
+size = Vector3(0.05, 0.05, 0.015)
+material = SubResource("Mat_housing")
+
+[node name="Indicator" type="CSGBox3D" parent="Terminals/Ground"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.09, 0.034)
+size = Vector3(0.03, 0.03, 0.012)
+material = SubResource("Mat_light_on_ground")
+
+[node name="Wires" type="Node3D" parent="."]
+
+[node name="Supply" type="Node3D" parent="Wires"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.0, 0.42, -0.26)
+
+[node name="VisualGroup" type="Node3D" parent="Wires/Supply"]
+
+[node name="Run" type="CSGCylinder3D" parent="Wires/Supply/VisualGroup"]
+radius = 0.028
+height = 0.1
+sides = 10
+material = SubResource("Mat_wire_supply")
+
+[node name="Cap" type="CSGBox3D" parent="Wires/Supply/VisualGroup"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.64, 0)
+size = Vector3(0.07, 0.06, 0.06)
+material = SubResource("Mat_cap")
+
+[node name="Collision" type="StaticBody3D" parent="Wires/Supply"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.61, 0)
+
+[node name="Shape" type="CollisionShape3D" parent="Wires/Supply/Collision"]
+shape = SubResource("Shape_wire_bowed")
+
+[node name="Return" type="Node3D" parent="Wires"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0.42, -0.26)
+
+[node name="VisualGroup" type="Node3D" parent="Wires/Return"]
+
+[node name="Run" type="CSGCylinder3D" parent="Wires/Return/VisualGroup"]
+radius = 0.028
+height = 0.1
+sides = 10
+material = SubResource("Mat_wire_return")
+
+[node name="Cap" type="CSGBox3D" parent="Wires/Return/VisualGroup"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.64, 0)
+size = Vector3(0.07, 0.06, 0.06)
+material = SubResource("Mat_cap")
+
+[node name="DamageScorch" type="CSGBox3D" parent="Wires/Return/VisualGroup"]
+visible = false
+size = Vector3(0.06, 0.1, 0.06)
+material = SubResource("Mat_damage_scorch")
+
+[node name="Collision" type="StaticBody3D" parent="Wires/Return"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.61, 0)
+
+[node name="Shape" type="CollisionShape3D" parent="Wires/Return/Collision"]
+shape = SubResource("Shape_wire_bowed")
+
+[node name="Service" type="Node3D" parent="Wires"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0, 0.42, -0.26)
+
+[node name="VisualGroup" type="Node3D" parent="Wires/Service"]
+
+[node name="Run" type="CSGCylinder3D" parent="Wires/Service/VisualGroup"]
+radius = 0.028
+height = 0.1
+sides = 10
+material = SubResource("Mat_wire_service_damaged")
+
+[node name="Cap" type="CSGBox3D" parent="Wires/Service/VisualGroup"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.64, 0)
+size = Vector3(0.07, 0.06, 0.06)
+material = SubResource("Mat_cap")
+
+[node name="DamageScorch" type="CSGBox3D" parent="Wires/Service/VisualGroup"]
+size = Vector3(0.06, 0.1, 0.06)
+material = SubResource("Mat_damage_scorch")
+
+[node name="Collision" type="StaticBody3D" parent="Wires/Service"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.61, 0)
+
+[node name="Shape" type="CollisionShape3D" parent="Wires/Service/Collision"]
+shape = SubResource("Shape_wire_bowed")
+
+[node name="Backup" type="Node3D" parent="Wires"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0.42, -0.26)
+
+[node name="VisualGroup" type="Node3D" parent="Wires/Backup"]
+
+[node name="Run" type="CSGCylinder3D" parent="Wires/Backup/VisualGroup"]
+radius = 0.028
+height = 0.1
+sides = 10
+material = SubResource("Mat_wire_backup")
+
+[node name="Cap" type="CSGBox3D" parent="Wires/Backup/VisualGroup"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.64, 0)
+size = Vector3(0.07, 0.06, 0.06)
+material = SubResource("Mat_cap")
+
+[node name="DamageScorch" type="CSGBox3D" parent="Wires/Backup/VisualGroup"]
+visible = false
+size = Vector3(0.06, 0.1, 0.06)
+material = SubResource("Mat_damage_scorch")
+
+[node name="Collision" type="StaticBody3D" parent="Wires/Backup"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.61, 0)
+
+[node name="Shape" type="CollisionShape3D" parent="Wires/Backup/Collision"]
+shape = SubResource("Shape_wire_bowed")
+
+[node name="Ground" type="Node3D" parent="Wires"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.0, 0.42, -0.26)
+
+[node name="VisualGroup" type="Node3D" parent="Wires/Ground"]
+
+[node name="Run" type="CSGCylinder3D" parent="Wires/Ground/VisualGroup"]
+radius = 0.028
+height = 0.1
+sides = 10
+material = SubResource("Mat_wire_ground")
+
+[node name="Cap" type="CSGBox3D" parent="Wires/Ground/VisualGroup"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.64, 0)
+size = Vector3(0.07, 0.06, 0.06)
+material = SubResource("Mat_cap")
+
+[node name="DamageScorch" type="CSGBox3D" parent="Wires/Ground/VisualGroup"]
+visible = false
+size = Vector3(0.06, 0.1, 0.06)
+material = SubResource("Mat_damage_scorch")
+
+[node name="Collision" type="StaticBody3D" parent="Wires/Ground"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.61, 0)
+
+[node name="Shape" type="CollisionShape3D" parent="Wires/Ground/Collision"]
+shape = SubResource("Shape_wire_bowed")
+
+[node name="ReplacementWire" type="Node3D" parent="."]
+visible = false
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0, 0.42, -0.26)
+
+[node name="VisualGroup_service" type="Node3D" parent="ReplacementWire"]
+
+[node name="Run" type="CSGCylinder3D" parent="ReplacementWire/VisualGroup_service"]
+radius = 0.028
+height = 0.1
+sides = 10
+material = SubResource("Mat_wire_service_healthy")
+
+[node name="Cap" type="CSGBox3D" parent="ReplacementWire/VisualGroup_service"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.64, 0)
+size = Vector3(0.07, 0.06, 0.06)
+material = SubResource("Mat_cap")
+
+[node name="VisualGroup_return" type="Node3D" parent="ReplacementWire"]
+visible = false
+
+[node name="Run" type="CSGCylinder3D" parent="ReplacementWire/VisualGroup_return"]
+radius = 0.028
+height = 0.1
+sides = 10
+material = SubResource("Mat_wire_return_replacement")
+
+[node name="Cap" type="CSGBox3D" parent="ReplacementWire/VisualGroup_return"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.64, 0)
+size = Vector3(0.07, 0.06, 0.06)
+material = SubResource("Mat_cap")
+
+[node name="VisualGroup_backup" type="Node3D" parent="ReplacementWire"]
+visible = false
+
+[node name="Run" type="CSGCylinder3D" parent="ReplacementWire/VisualGroup_backup"]
+radius = 0.028
+height = 0.1
+sides = 10
+material = SubResource("Mat_wire_backup_replacement")
+
+[node name="Cap" type="CSGBox3D" parent="ReplacementWire/VisualGroup_backup"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.64, 0)
+size = Vector3(0.07, 0.06, 0.06)
+material = SubResource("Mat_cap")
+
+[node name="Collision" type="StaticBody3D" parent="ReplacementWire"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.61, 0)
+
+[node name="Shape" type="CollisionShape3D" parent="ReplacementWire/Collision"]
+shape = SubResource("Shape_wire_bowed")
+
+[node name="Breaker" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.25, 0.12, -0.26)
+
+[node name="MountBracket" type="CSGBox3D" parent="Breaker"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.17, -0.03)
+size = Vector3(0.26, 0.04, 0.12)
+material = SubResource("Mat_screw")
+
+[node name="Housing" type="CSGBox3D" parent="Breaker"]
+size = Vector3(0.2, 0.3, 0.09)
+material = SubResource("Mat_housing")
+
+[node name="FaceFrame" type="CSGBox3D" parent="Breaker"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.044)
+size = Vector3(0.21, 0.31, 0.012)
+material = SubResource("Mat_damage_scorch")
+
+[node name="StatusLightBezel" type="CSGBox3D" parent="Breaker"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.22, 0.045)
+size = Vector3(0.065, 0.065, 0.018)
+material = SubResource("Mat_screw")
+
+[node name="StatusLight" type="CSGBox3D" parent="Breaker"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.22, 0.055)
+size = Vector3(0.045, 0.045, 0.014)
+material = SubResource("Mat_light_on_breaker")
+
+[node name="Hinge" type="Node3D" parent="Breaker"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0.05)
+
+[node name="PivotPin" type="CSGCylinder3D" parent="Breaker/Hinge"]
+rotation_degrees = Vector3(90, 0, 0)
+radius = 0.018
+height = 0.07
+sides = 10
+material = SubResource("Mat_screw")
+
+[node name="LeverArm" type="CSGBox3D" parent="Breaker/Hinge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.08, 0)
+size = Vector3(0.055, 0.16, 0.045)
+material = SubResource("Mat_lever")
+
+[node name="LeverCap" type="CSGBox3D" parent="Breaker/Hinge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.17, 0)
+size = Vector3(0.075, 0.03, 0.055)
+material = SubResource("Mat_lever")
+
+[node name="Collision" type="StaticBody3D" parent="Breaker/Hinge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.08, 0)
+
+[node name="Shape" type="CollisionShape3D" parent="Breaker/Hinge/Collision"]
+shape = SubResource("Shape_lever")
+
+[node name="Screws" type="Node3D" parent="."]
+
+[node name="Screw1" type="Node3D" parent="Screws"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.35, 0.58, -0.3)
+
+[node name="Head" type="CSGCylinder3D" parent="Screws/Screw1"]
+rotation_degrees = Vector3(90, 0, 0)
+radius = 0.035
+height = 0.05
+sides = 6
+material = SubResource("Mat_screw")
+
+[node name="Collision" type="StaticBody3D" parent="Screws/Screw1"]
+
+[node name="Shape" type="CollisionShape3D" parent="Screws/Screw1/Collision"]
+shape = SubResource("Shape_screw")
+
+[node name="Screw2" type="Node3D" parent="Screws"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.35, 0.58, -0.3)
+
+[node name="Head" type="CSGCylinder3D" parent="Screws/Screw2"]
+rotation_degrees = Vector3(90, 0, 0)
+radius = 0.035
+height = 0.05
+sides = 6
+material = SubResource("Mat_screw")
+
+[node name="Collision" type="StaticBody3D" parent="Screws/Screw2"]
+
+[node name="Shape" type="CollisionShape3D" parent="Screws/Screw2/Collision"]
+shape = SubResource("Shape_screw")
+
+[node name="Screw3" type="Node3D" parent="Screws"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.35, -0.58, -0.3)
+
+[node name="Head" type="CSGCylinder3D" parent="Screws/Screw3"]
+rotation_degrees = Vector3(90, 0, 0)
+radius = 0.035
+height = 0.05
+sides = 6
+material = SubResource("Mat_screw")
+
+[node name="Collision" type="StaticBody3D" parent="Screws/Screw3"]
+
+[node name="Shape" type="CollisionShape3D" parent="Screws/Screw3/Collision"]
+shape = SubResource("Shape_screw")
+
+[node name="Screw4" type="Node3D" parent="Screws"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.35, -0.58, -0.3)
+
+[node name="Head" type="CSGCylinder3D" parent="Screws/Screw4"]
+rotation_degrees = Vector3(90, 0, 0)
+radius = 0.035
+height = 0.05
+sides = 6
+material = SubResource("Mat_screw")
+
+[node name="Collision" type="StaticBody3D" parent="Screws/Screw4"]
+
+[node name="Shape" type="CollisionShape3D" parent="Screws/Screw4/Collision"]
+shape = SubResource("Shape_screw")

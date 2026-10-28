@@ -1,0 +1,546 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/player/player_body.gd" id="1_body"]
+
+[sub_resource type="StandardMaterial3D" id="Mat_uniform"]
+albedo_color = Color(0.23, 0.25, 0.27, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="Mat_dark"]
+albedo_color = Color(0.11, 0.11, 0.12, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="Mat_accent"]
+albedo_color = Color(0.45, 0.32, 0.12, 1)
+roughness = 0.6
+
+[sub_resource type="StandardMaterial3D" id="Mat_watch_metal"]
+albedo_color = Color(0.58, 0.59, 0.62, 1)
+roughness = 0.3
+metallic = 0.75
+
+[node name="PlayerBody" type="Node3D"]
+script = ExtResource("1_body")
+
+[node name="StandingPose" type="CSGCombiner3D" parent="."]
+
+[node name="ShoulderL" type="CSGSphere3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 0.67, 0, 0, 0, 1.11, -0.17, -0.33, -0.05)
+radius = 0.09
+material = SubResource("Mat_uniform")
+
+[node name="ShoulderR" type="CSGSphere3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 0.67, 0, 0, 0, 1.11, 0.17, -0.33, -0.05)
+radius = 0.09
+material = SubResource("Mat_uniform")
+
+[node name="Chest" type="CSGCylinder3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, -0.07)
+radius = 0.165
+height = 0.32
+sides = 14
+material = SubResource("Mat_uniform")
+
+[node name="ChestPocket" type="CSGBox3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.08, -0.46, -0.2)
+size = Vector3(0.1, 0.1, 0.02)
+material = SubResource("Mat_dark")
+
+[node name="AccentStripe" type="CSGBox3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.38, -0.2)
+size = Vector3(0.24, 0.03, 0.01)
+material = SubResource("Mat_accent")
+
+[node name="Waist" type="CSGCylinder3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.75, -0.1)
+radius = 0.125
+height = 0.22
+sides = 14
+material = SubResource("Mat_uniform")
+
+[node name="Belt" type="CSGBox3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.78, -0.1)
+size = Vector3(0.28, 0.06, 0.18)
+material = SubResource("Mat_dark")
+
+[node name="Hips" type="CSGCylinder3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.86, -0.1)
+radius = 0.15
+height = 0.16
+sides = 14
+material = SubResource("Mat_uniform")
+
+[node name="HipCapL" type="CSGSphere3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.1, -0.95, -0.13)
+radius = 0.1
+material = SubResource("Mat_uniform")
+
+[node name="HipCapR" type="CSGSphere3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1, -0.95, -0.13)
+radius = 0.1
+material = SubResource("Mat_uniform")
+
+[node name="ShoulderCapL" type="CSGSphere3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.24, -0.46, -0.04)
+radius = 0.055
+material = SubResource("Mat_uniform")
+
+[node name="ShoulderCapR" type="CSGSphere3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.24, -0.46, -0.04)
+radius = 0.055
+material = SubResource("Mat_uniform")
+
+[node name="UpperArmL" type="CSGCylinder3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.24, -0.58, -0.04)
+radius = 0.05
+height = 0.26
+sides = 10
+material = SubResource("Mat_uniform")
+
+[node name="UpperArmR" type="CSGCylinder3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.24, -0.58, -0.04)
+radius = 0.05
+height = 0.26
+sides = 10
+material = SubResource("Mat_uniform")
+
+[node name="ElbowL" type="CSGSphere3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.245, -0.705, -0.08)
+radius = 0.045
+material = SubResource("Mat_uniform")
+
+[node name="ElbowR" type="CSGSphere3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.245, -0.705, -0.08)
+radius = 0.045
+material = SubResource("Mat_uniform")
+
+[node name="LowerArmL" type="CSGCylinder3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.25, -0.83, -0.12)
+radius = 0.04
+height = 0.24
+sides = 10
+material = SubResource("Mat_uniform")
+
+[node name="LowerArmR" type="CSGCylinder3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.25, -0.83, -0.12)
+radius = 0.04
+height = 0.24
+sides = 10
+material = SubResource("Mat_uniform")
+
+[node name="HandL" type="CSGSphere3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 0.85, 0, 0, 0, 1.3, -0.255, -0.98, -0.2)
+radius = 0.05
+material = SubResource("Mat_dark")
+
+[node name="HandR" type="CSGSphere3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 0.85, 0, 0, 0, 1.3, 0.255, -0.98, -0.2)
+radius = 0.05
+material = SubResource("Mat_dark")
+
+[node name="UpperLegL" type="CSGCylinder3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.1, -1.04, -0.16)
+radius = 0.09
+height = 0.36
+sides = 14
+material = SubResource("Mat_uniform")
+
+[node name="UpperLegR" type="CSGCylinder3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1, -1.04, -0.16)
+radius = 0.09
+height = 0.36
+sides = 14
+material = SubResource("Mat_uniform")
+
+[node name="KneeL" type="CSGSphere3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.1, -1.2, -0.22)
+radius = 0.078
+material = SubResource("Mat_uniform")
+
+[node name="KneeR" type="CSGSphere3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1, -1.2, -0.22)
+radius = 0.078
+material = SubResource("Mat_uniform")
+
+[node name="LowerLegL" type="CSGCylinder3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.1, -1.36, -0.28)
+radius = 0.06
+height = 0.32
+sides = 14
+material = SubResource("Mat_uniform")
+
+[node name="LowerLegR" type="CSGCylinder3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1, -1.36, -0.28)
+radius = 0.06
+height = 0.32
+sides = 14
+material = SubResource("Mat_uniform")
+
+[node name="AnkleL" type="CSGSphere3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.1, -1.52, -0.36)
+radius = 0.052
+material = SubResource("Mat_uniform")
+
+[node name="AnkleR" type="CSGSphere3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1, -1.52, -0.36)
+radius = 0.052
+material = SubResource("Mat_uniform")
+
+[node name="FootL" type="CSGBox3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.1, -1.56, -0.42)
+size = Vector3(0.11, 0.08, 0.24)
+material = SubResource("Mat_dark")
+
+[node name="FootR" type="CSGBox3D" parent="StandingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1, -1.56, -0.42)
+size = Vector3(0.11, 0.08, 0.24)
+material = SubResource("Mat_dark")
+
+[node name="SittingPose" type="CSGCombiner3D" parent="."]
+visible = false
+
+[node name="ShoulderL" type="CSGSphere3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 0.67, 0, 0, 0, 1.11, -0.17, -0.2206, 0.2101)
+radius = 0.078
+material = SubResource("Mat_uniform")
+
+[node name="ShoulderR" type="CSGSphere3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 0.67, 0, 0, 0, 1.11, 0.17, -0.2206, 0.2101)
+radius = 0.078
+material = SubResource("Mat_uniform")
+
+[node name="Chest" type="CSGCylinder3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 0.7071, -0.7071, 0, 0.7071, 0.7071, 0, -0.3267, 0.0758)
+radius = 0.144
+height = 0.32
+sides = 14
+material = SubResource("Mat_uniform")
+
+[node name="ChestPocket" type="CSGBox3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.08, -0.2444, -0.0022)
+size = Vector3(0.1, 0.1, 0.02)
+material = SubResource("Mat_dark")
+
+[node name="AccentStripe" type="CSGBox3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1667, 0.0758)
+size = Vector3(0.24, 0.03, 0.01)
+material = SubResource("Mat_accent")
+
+[node name="Waist" type="CSGCylinder3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 0.7071, -0.7071, 0, 0.7071, 0.7071, 0, -0.4822, -0.1222)
+radius = 0.109
+height = 0.22
+sides = 14
+material = SubResource("Mat_uniform")
+
+[node name="Hips" type="CSGCylinder3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.56, -0.2)
+radius = 0.15
+height = 0.16
+sides = 14
+material = SubResource("Mat_uniform")
+
+[node name="HipCapL" type="CSGSphere3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.1, -0.5375, -0.28)
+radius = 0.095
+material = SubResource("Mat_uniform")
+
+[node name="HipCapR" type="CSGSphere3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1, -0.5375, -0.28)
+radius = 0.095
+material = SubResource("Mat_uniform")
+
+[node name="ShoulderCapL" type="CSGSphere3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.24, -0.3125, 0.1253)
+radius = 0.048
+material = SubResource("Mat_uniform")
+
+[node name="ShoulderCapR" type="CSGSphere3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.24, -0.3125, 0.1253)
+radius = 0.048
+material = SubResource("Mat_uniform")
+
+[node name="UpperArmL" type="CSGCylinder3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 0.7071, -0.7071, 0, 0.7071, 0.7071, -0.24, -0.4044, 0.0404)
+radius = 0.044
+height = 0.26
+sides = 10
+material = SubResource("Mat_uniform")
+
+[node name="UpperArmR" type="CSGCylinder3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 0.7071, -0.7071, 0, 0.7071, 0.7071, 0.24, -0.4044, 0.0404)
+radius = 0.044
+height = 0.26
+sides = 10
+material = SubResource("Mat_uniform")
+
+[node name="ElbowL" type="CSGSphere3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.24, -0.4168, -0.071)
+radius = 0.04
+material = SubResource("Mat_uniform")
+
+[node name="ElbowR" type="CSGSphere3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.24, -0.4168, -0.071)
+radius = 0.04
+material = SubResource("Mat_uniform")
+
+[node name="LowerArmL" type="CSGCylinder3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 0.4568, 0.8895, 0, -0.8895, 0.4568, -0.24, -0.4292, -0.1823)
+radius = 0.035
+height = 0.294
+sides = 10
+material = SubResource("Mat_uniform")
+
+[node name="LowerArmR" type="CSGCylinder3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 0.4568, 0.8895, 0, -0.8895, 0.4568, 0.24, -0.4292, -0.1823)
+radius = 0.035
+height = 0.294
+sides = 10
+material = SubResource("Mat_uniform")
+
+[node name="HandL" type="CSGSphere3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 0.85, 0, 0, 0, 1.3, -0.24, -0.362, -0.3131)
+radius = 0.044
+material = SubResource("Mat_dark")
+
+[node name="HandR" type="CSGSphere3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 0.85, 0, 0, 0, 1.3, 0.24, -0.362, -0.3131)
+radius = 0.044
+material = SubResource("Mat_dark")
+
+[node name="UpperLegL" type="CSGCylinder3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, -0.1, -0.53, -0.36)
+radius = 0.09
+height = 0.37
+sides = 14
+material = SubResource("Mat_uniform")
+
+[node name="UpperLegR" type="CSGCylinder3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0.1, -0.53, -0.36)
+radius = 0.09
+height = 0.37
+sides = 14
+material = SubResource("Mat_uniform")
+
+[node name="KneeL" type="CSGSphere3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.1, -0.545, -0.535)
+radius = 0.082
+material = SubResource("Mat_uniform")
+
+[node name="KneeR" type="CSGSphere3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1, -0.545, -0.535)
+radius = 0.082
+material = SubResource("Mat_uniform")
+
+[node name="LowerLegL" type="CSGCylinder3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, -0.1, -0.56, -0.71)
+radius = 0.06
+height = 0.33
+sides = 14
+material = SubResource("Mat_uniform")
+
+[node name="LowerLegR" type="CSGCylinder3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0.1, -0.56, -0.71)
+radius = 0.06
+height = 0.33
+sides = 14
+material = SubResource("Mat_uniform")
+
+[node name="AnkleL" type="CSGSphere3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.1, -0.57, -0.86)
+radius = 0.052
+material = SubResource("Mat_uniform")
+
+[node name="AnkleR" type="CSGSphere3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1, -0.57, -0.86)
+radius = 0.052
+material = SubResource("Mat_uniform")
+
+[node name="FootL" type="CSGBox3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.1, -0.58, -0.88)
+size = Vector3(0.11, 0.08, 0.24)
+material = SubResource("Mat_dark")
+
+[node name="FootR" type="CSGBox3D" parent="SittingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1, -0.58, -0.88)
+size = Vector3(0.11, 0.08, 0.24)
+material = SubResource("Mat_dark")
+
+[node name="LyingPose" type="CSGCombiner3D" parent="."]
+visible = false
+
+[node name="Shoulders" type="CSGBox3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.28, 0.44)
+size = Vector3(0.4, 0.1, 0.12)
+material = SubResource("Mat_uniform")
+
+[node name="ShoulderCapL" type="CSGSphere3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.17, -0.28, 0.42)
+radius = 0.055
+material = SubResource("Mat_uniform")
+
+[node name="ShoulderCapR" type="CSGSphere3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.17, -0.28, 0.42)
+radius = 0.055
+material = SubResource("Mat_uniform")
+
+[node name="Torso" type="CSGCylinder3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, -0.29, 0.63)
+radius = 0.13
+height = 0.28
+sides = 14
+material = SubResource("Mat_uniform")
+
+[node name="ChestPocket" type="CSGBox3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.06, -0.22, 0.58)
+size = Vector3(0.08, 0.02, 0.07)
+material = SubResource("Mat_dark")
+
+[node name="AccentStripe" type="CSGBox3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.22, 0.63)
+size = Vector3(0.02, 0.01, 0.24)
+material = SubResource("Mat_accent")
+
+[node name="Belt" type="CSGBox3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.19, 0.79)
+size = Vector3(0.26, 0.07, 0.06)
+material = SubResource("Mat_dark")
+
+[node name="Hips" type="CSGCylinder3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, -0.18, 0.85)
+radius = 0.13
+height = 0.13
+sides = 14
+material = SubResource("Mat_uniform")
+
+[node name="UpperArmL" type="CSGCylinder3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, -0.17, -0.28, 0.55)
+radius = 0.045
+height = 0.22
+sides = 10
+material = SubResource("Mat_uniform")
+
+[node name="UpperArmR" type="CSGCylinder3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0.17, -0.28, 0.55)
+radius = 0.045
+height = 0.22
+sides = 10
+material = SubResource("Mat_uniform")
+
+[node name="ElbowL" type="CSGSphere3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.15, -0.26, 0.635)
+radius = 0.042
+material = SubResource("Mat_uniform")
+
+[node name="ElbowR" type="CSGSphere3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.15, -0.26, 0.635)
+radius = 0.042
+material = SubResource("Mat_uniform")
+
+[node name="LowerArmL" type="CSGCylinder3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, -0.13, -0.24, 0.72)
+radius = 0.04
+height = 0.2
+sides = 10
+material = SubResource("Mat_uniform")
+
+[node name="LowerArmR" type="CSGCylinder3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0.13, -0.24, 0.72)
+radius = 0.04
+height = 0.2
+sides = 10
+material = SubResource("Mat_uniform")
+
+[node name="HandL" type="CSGSphere3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.08, -0.2, 0.82)
+radius = 0.042
+material = SubResource("Mat_dark")
+
+[node name="HandR" type="CSGSphere3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.08, -0.2, 0.82)
+radius = 0.042
+material = SubResource("Mat_dark")
+
+[node name="UpperLegL" type="CSGCylinder3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, -0.09, -0.12, 1.0)
+radius = 0.08
+height = 0.2
+sides = 14
+material = SubResource("Mat_uniform")
+
+[node name="UpperLegR" type="CSGCylinder3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0.09, -0.12, 1.0)
+radius = 0.08
+height = 0.2
+sides = 14
+material = SubResource("Mat_uniform")
+
+[node name="KneeL" type="CSGSphere3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.09, -0.1, 1.085)
+radius = 0.075
+material = SubResource("Mat_uniform")
+
+[node name="KneeR" type="CSGSphere3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.09, -0.1, 1.085)
+radius = 0.075
+material = SubResource("Mat_uniform")
+
+[node name="LowerLegL" type="CSGCylinder3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, -0.09, -0.08, 1.17)
+radius = 0.06
+height = 0.16
+sides = 14
+material = SubResource("Mat_uniform")
+
+[node name="LowerLegR" type="CSGCylinder3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0.09, -0.08, 1.17)
+radius = 0.06
+height = 0.16
+sides = 14
+material = SubResource("Mat_uniform")
+
+[node name="BootCuffL" type="CSGBox3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.09, -0.06, 1.24)
+size = Vector3(0.1, 0.07, 0.05)
+material = SubResource("Mat_dark")
+
+[node name="BootCuffR" type="CSGBox3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.09, -0.06, 1.24)
+size = Vector3(0.1, 0.07, 0.05)
+material = SubResource("Mat_dark")
+
+[node name="FootL" type="CSGBox3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.09, -0.05, 1.3)
+size = Vector3(0.08, 0.08, 0.1)
+material = SubResource("Mat_dark")
+
+[node name="FootR" type="CSGBox3D" parent="LyingPose"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.09, -0.05, 1.3)
+size = Vector3(0.08, 0.08, 0.1)
+material = SubResource("Mat_dark")
+
+[node name="HeadGroup" type="CSGCombiner3D" parent="."]
+layers = 4
+
+[node name="Neck" type="CSGCylinder3D" parent="HeadGroup"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.27, -0.05)
+radius = 0.055
+height = 0.14
+sides = 12
+material = SubResource("Mat_uniform")
+
+[node name="Head" type="CSGSphere3D" parent="HeadGroup"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.12, -0.04)
+radius = 0.1
+material = SubResource("Mat_dark")
+
+[node name="Visor" type="CSGBox3D" parent="HeadGroup"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.11, -0.135)
+size = Vector3(0.14, 0.05, 0.03)
+material = SubResource("Mat_watch_metal")
+
+[node name="LapAnchor" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.4, -0.26)
+
+[node name="CarryAnchor" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.22, -0.35, -0.4)

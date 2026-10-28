@@ -1,0 +1,95 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/interactables/laptop.gd" id="1_laptop"]
+
+[sub_resource type="StandardMaterial3D" id="Mat_chassis"]
+albedo_color = Color(0.16, 0.17, 0.16, 1)
+roughness = 0.75
+metallic = 0.15
+
+[sub_resource type="StandardMaterial3D" id="Mat_bezel"]
+albedo_color = Color(0.09, 0.09, 0.1, 1)
+roughness = 0.6
+
+[sub_resource type="StandardMaterial3D" id="Mat_keys"]
+albedo_color = Color(0.06, 0.06, 0.07, 1)
+roughness = 0.5
+
+[sub_resource type="StandardMaterial3D" id="Mat_feet"]
+albedo_color = Color(0.04, 0.04, 0.04, 1)
+roughness = 0.9
+
+[node name="Laptop" type="Node3D"]
+script = ExtResource("1_laptop")
+
+[node name="Base" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 0)
+size = Vector3(0.32, 0.02, 0.22)
+material = SubResource("Mat_chassis")
+
+[node name="FootFL" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.14, -0.005, -0.09)
+size = Vector3(0.02, 0.015, 0.02)
+material = SubResource("Mat_feet")
+
+[node name="FootFR" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.14, -0.005, -0.09)
+size = Vector3(0.02, 0.015, 0.02)
+material = SubResource("Mat_feet")
+
+[node name="FootBL" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.14, -0.005, 0.09)
+size = Vector3(0.02, 0.015, 0.02)
+material = SubResource("Mat_feet")
+
+[node name="FootBR" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.14, -0.005, 0.09)
+size = Vector3(0.02, 0.015, 0.02)
+material = SubResource("Mat_feet")
+
+[node name="KeyboardPlate" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.023, 0.01)
+size = Vector3(0.26, 0.004, 0.15)
+material = SubResource("Mat_bezel")
+
+[node name="KeyRow1" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.027, -0.05)
+size = Vector3(0.22, 0.003, 0.02)
+material = SubResource("Mat_keys")
+
+[node name="KeyRow2" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.027, -0.02)
+size = Vector3(0.22, 0.003, 0.02)
+material = SubResource("Mat_keys")
+
+[node name="KeyRow3" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.027, 0.01)
+size = Vector3(0.22, 0.003, 0.02)
+material = SubResource("Mat_keys")
+
+[node name="KeyRow4" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.027, 0.04)
+size = Vector3(0.22, 0.003, 0.02)
+material = SubResource("Mat_keys")
+
+[node name="Trackpad" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.025, 0.085)
+size = Vector3(0.09, 0.002, 0.05)
+material = SubResource("Mat_bezel")
+
+[node name="HingePivot" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.021, -0.105)
+
+[node name="LidBack" type="CSGBox3D" parent="HingePivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.007, 0.105)
+size = Vector3(0.32, 0.014, 0.21)
+material = SubResource("Mat_chassis")
+
+[node name="ScreenBezel" type="CSGBox3D" parent="HingePivot/LidBack"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.008, 0)
+size = Vector3(0.28, 0.002, 0.17)
+material = SubResource("Mat_bezel")
+
+[node name="ScreenGlow" type="CSGBox3D" parent="HingePivot/LidBack"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 0, -0.0095, 0)
+size = Vector3(0.14, 0.002, 0.24)

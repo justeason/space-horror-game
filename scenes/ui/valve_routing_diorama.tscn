@@ -1,0 +1,372 @@
+[gd_scene load_steps=25 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/valve_routing_diorama.gd" id="1_diorama"]
+
+[sub_resource type="BoxShape3D" id="Shape_valve"]
+size = Vector3(0.32, 0.32, 0.22)
+
+[sub_resource type="StandardMaterial3D" id="Mat_backdrop"]
+albedo_color = Color(0.1, 0.11, 0.12, 1)
+roughness = 0.75
+metallic = 0.2
+
+[sub_resource type="StandardMaterial3D" id="Mat_pipe_inlet"]
+resource_local_to_scene = true
+albedo_color = Color(0.42, 0.45, 0.48, 1)
+roughness = 0.35
+metallic = 0.65
+
+[sub_resource type="StandardMaterial3D" id="Mat_pipe_v1_junction"]
+resource_local_to_scene = true
+albedo_color = Color(0.42, 0.45, 0.48, 1)
+roughness = 0.35
+metallic = 0.65
+
+[sub_resource type="StandardMaterial3D" id="Mat_pipe_junction_v2"]
+resource_local_to_scene = true
+albedo_color = Color(0.42, 0.45, 0.48, 1)
+roughness = 0.35
+metallic = 0.65
+
+[sub_resource type="StandardMaterial3D" id="Mat_pipe_v2_outlet"]
+resource_local_to_scene = true
+albedo_color = Color(0.42, 0.45, 0.48, 1)
+roughness = 0.35
+metallic = 0.65
+
+[sub_resource type="StandardMaterial3D" id="Mat_pipe_v2_outlet_seg"]
+resource_local_to_scene = true
+albedo_color = Color(0.42, 0.45, 0.48, 1)
+roughness = 0.35
+metallic = 0.65
+
+[sub_resource type="StandardMaterial3D" id="Mat_pipe_junction_down"]
+resource_local_to_scene = true
+albedo_color = Color(0.42, 0.45, 0.48, 1)
+roughness = 0.35
+metallic = 0.65
+
+[sub_resource type="StandardMaterial3D" id="Mat_pipe_v3_drain"]
+resource_local_to_scene = true
+albedo_color = Color(0.42, 0.45, 0.48, 1)
+roughness = 0.35
+metallic = 0.65
+
+[sub_resource type="StandardMaterial3D" id="Mat_fitting"]
+albedo_color = Color(0.3, 0.32, 0.34, 1)
+roughness = 0.45
+metallic = 0.6
+
+[sub_resource type="StandardMaterial3D" id="Mat_drain_fitting"]
+albedo_color = Color(0.4, 0.22, 0.12, 1)
+roughness = 0.5
+metallic = 0.4
+
+[sub_resource type="StandardMaterial3D" id="Mat_valve_body_1"]
+albedo_color = Color(0.22, 0.24, 0.26, 1)
+roughness = 0.4
+metallic = 0.55
+
+[sub_resource type="StandardMaterial3D" id="Mat_valve_body_2"]
+albedo_color = Color(0.22, 0.24, 0.26, 1)
+roughness = 0.4
+metallic = 0.55
+
+[sub_resource type="StandardMaterial3D" id="Mat_valve_body_3"]
+albedo_color = Color(0.22, 0.24, 0.26, 1)
+roughness = 0.4
+metallic = 0.55
+
+[sub_resource type="StandardMaterial3D" id="Mat_handle_1"]
+resource_local_to_scene = true
+albedo_color = Color(0.55, 0.1, 0.08, 1)
+roughness = 0.4
+metallic = 0.3
+emission_enabled = true
+emission = Color(0.3, 0.05, 0.03, 1)
+emission_energy_multiplier = 0.3
+
+[sub_resource type="StandardMaterial3D" id="Mat_handle_2"]
+resource_local_to_scene = true
+albedo_color = Color(0.55, 0.1, 0.08, 1)
+roughness = 0.4
+metallic = 0.3
+emission_enabled = true
+emission = Color(0.3, 0.05, 0.03, 1)
+emission_energy_multiplier = 0.3
+
+[sub_resource type="StandardMaterial3D" id="Mat_handle_3"]
+resource_local_to_scene = true
+albedo_color = Color(0.55, 0.1, 0.08, 1)
+roughness = 0.4
+metallic = 0.3
+emission_enabled = true
+emission = Color(0.3, 0.05, 0.03, 1)
+emission_energy_multiplier = 0.3
+
+[sub_resource type="StandardMaterial3D" id="Mat_gauge_face"]
+albedo_color = Color(0.08, 0.09, 0.1, 1)
+roughness = 0.3
+
+[sub_resource type="StandardMaterial3D" id="Mat_gauge_needle"]
+albedo_color = Color(0.5, 0.8, 0.85, 1)
+roughness = 0.3
+emission_enabled = true
+emission = Color(0.3, 0.6, 0.65, 1)
+emission_energy_multiplier = 0.5
+
+[sub_resource type="StandardMaterial3D" id="Mat_bracket"]
+albedo_color = Color(0.16, 0.17, 0.18, 1)
+roughness = 0.6
+metallic = 0.3
+
+[sub_resource type="BoxShape3D" id="Shape_bracket"]
+size = Vector3(0.32, 0.32, 0.22)
+
+[node name="ValveRoutingDiorama" type="Node3D"]
+script = ExtResource("1_diorama")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 2.05)
+fov = 50.0
+
+[node name="KeyLight" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0.6, 1.3)
+light_energy = 3.2
+omni_range = 4.0
+
+[node name="FillLight" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.7, -0.3, 1.1)
+light_color = Color(0.75, 0.82, 0.9, 1)
+light_energy = 1.4
+omni_range = 4.0
+
+[node name="RimLight" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, -0.6)
+light_color = Color(0.6, 0.75, 0.9, 1)
+light_energy = 0.9
+omni_range = 3.0
+
+[node name="Backdrop" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.12, -0.15, -0.12)
+size = Vector3(2.05, 1.55, 0.08)
+material = SubResource("Mat_backdrop")
+
+[node name="Pipes" type="Node3D" parent="."]
+
+[node name="InletStub" type="CSGCylinder3D" parent="Pipes"]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, -0.82, 0.25, 0)
+radius = 0.045
+height = 0.1
+sides = 12
+material = SubResource("Mat_pipe_inlet")
+
+[node name="SegInletV1" type="CSGCylinder3D" parent="Pipes"]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, -0.69, 0.25, 0)
+radius = 0.04
+height = 0.19
+sides = 12
+material = SubResource("Mat_pipe_v1_junction")
+
+[node name="SegV1Junction" type="CSGCylinder3D" parent="Pipes"]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, -0.35, 0.25, 0)
+radius = 0.04
+height = 0.26
+sides = 12
+material = SubResource("Mat_pipe_junction_v2")
+
+[node name="JunctionFitting" type="CSGSphere3D" parent="Pipes"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.15, 0.25, 0)
+radius = 0.06
+material = SubResource("Mat_fitting")
+
+[node name="SegJunctionV2" type="CSGCylinder3D" parent="Pipes"]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, 0.02, 0.25, 0)
+radius = 0.04
+height = 0.2
+sides = 12
+material = SubResource("Mat_pipe_v2_outlet")
+
+[node name="SegV2Outlet" type="CSGCylinder3D" parent="Pipes"]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, 0.4, 0.25, 0)
+radius = 0.04
+height = 0.24
+sides = 12
+material = SubResource("Mat_pipe_v2_outlet_seg")
+
+[node name="OutletFlange" type="CSGCylinder3D" parent="Pipes"]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, 0.56, 0.25, 0)
+radius = 0.065
+height = 0.025
+sides = 16
+material = SubResource("Mat_fitting")
+
+[node name="SegJunctionDown" type="CSGCylinder3D" parent="Pipes"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.15, 0.06, 0)
+radius = 0.04
+height = 0.24
+sides = 12
+material = SubResource("Mat_pipe_junction_down")
+
+[node name="SegV3Drain" type="CSGCylinder3D" parent="Pipes"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.15, -0.4, 0)
+radius = 0.04
+height = 0.3
+sides = 12
+material = SubResource("Mat_pipe_v3_drain")
+
+[node name="DrainFlange" type="CSGCylinder3D" parent="Pipes"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.15, -0.58, 0)
+radius = 0.065
+height = 0.025
+sides = 16
+material = SubResource("Mat_drain_fitting")
+
+[node name="Brackets" type="Node3D" parent="."]
+
+[node name="BracketA" type="CSGBox3D" parent="Brackets"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.69, 0.1, -0.06)
+size = Vector3(0.06, 0.12, 0.05)
+material = SubResource("Mat_bracket")
+
+[node name="BracketB" type="CSGBox3D" parent="Brackets"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.4, 0.1, -0.06)
+size = Vector3(0.06, 0.12, 0.05)
+material = SubResource("Mat_bracket")
+
+[node name="BracketC" type="CSGBox3D" parent="Brackets"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.15, -0.4, -0.06)
+size = Vector3(0.12, 0.06, 0.05)
+material = SubResource("Mat_bracket")
+
+[node name="Valves" type="Node3D" parent="."]
+
+[node name="V1" type="Node3D" parent="Valves"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.55, 0.25, 0)
+
+[node name="Body" type="CSGCylinder3D" parent="Valves/V1"]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0)
+radius = 0.07
+height = 0.1
+sides = 14
+material = SubResource("Mat_valve_body_1")
+
+[node name="HandleRoot" type="Node3D" parent="Valves/V1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.06, 0)
+
+[node name="Handle" type="CSGBox3D" parent="Valves/V1/HandleRoot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.08, 0, 0)
+size = Vector3(0.16, 0.025, 0.03)
+material = SubResource("Mat_handle_1")
+
+[node name="HandleKnob" type="CSGSphere3D" parent="Valves/V1/HandleRoot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.16, 0, 0)
+radius = 0.022
+material = SubResource("Mat_handle_1")
+
+[node name="Collision" type="StaticBody3D" parent="Valves/V1"]
+
+[node name="Shape" type="CollisionShape3D" parent="Valves/V1/Collision"]
+shape = SubResource("Shape_valve")
+
+[node name="V2" type="Node3D" parent="Valves"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.2, 0.25, 0)
+
+[node name="Body" type="CSGCylinder3D" parent="Valves/V2"]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0)
+radius = 0.07
+height = 0.1
+sides = 14
+material = SubResource("Mat_valve_body_2")
+
+[node name="HandleRoot" type="Node3D" parent="Valves/V2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.06, 0)
+
+[node name="Handle" type="CSGBox3D" parent="Valves/V2/HandleRoot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.08, 0, 0)
+size = Vector3(0.16, 0.025, 0.03)
+material = SubResource("Mat_handle_2")
+
+[node name="HandleKnob" type="CSGSphere3D" parent="Valves/V2/HandleRoot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.16, 0, 0)
+radius = 0.022
+material = SubResource("Mat_handle_2")
+
+[node name="Collision" type="StaticBody3D" parent="Valves/V2"]
+
+[node name="Shape" type="CollisionShape3D" parent="Valves/V2/Collision"]
+shape = SubResource("Shape_valve")
+
+[node name="V3" type="Node3D" parent="Valves"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.15, -0.15, 0)
+
+[node name="Body" type="CSGCylinder3D" parent="Valves/V3"]
+radius = 0.07
+height = 0.1
+sides = 14
+material = SubResource("Mat_valve_body_3")
+
+[node name="HandleRoot" type="Node3D" parent="Valves/V3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.08, 0, 0)
+
+[node name="Handle" type="CSGBox3D" parent="Valves/V3/HandleRoot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.08, 0)
+size = Vector3(0.025, 0.16, 0.03)
+material = SubResource("Mat_handle_3")
+
+[node name="HandleKnob" type="CSGSphere3D" parent="Valves/V3/HandleRoot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.16, 0)
+radius = 0.022
+material = SubResource("Mat_handle_3")
+
+[node name="Collision" type="StaticBody3D" parent="Valves/V3"]
+
+[node name="Shape" type="CollisionShape3D" parent="Valves/V3/Collision"]
+shape = SubResource("Shape_bracket")
+
+[node name="Gauge" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.56, 0.45, 0)
+
+[node name="Face" type="CSGCylinder3D" parent="Gauge"]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0, 0.03)
+radius = 0.065
+height = 0.012
+sides = 20
+material = SubResource("Mat_gauge_face")
+
+[node name="Needle" type="CSGBox3D" parent="Gauge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.025, 0.04)
+size = Vector3(0.006, 0.05, 0.006)
+material = SubResource("Mat_gauge_needle")
+
+[node name="Labels" type="Node3D" parent="."]
+
+[node name="InletLabel" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.82, 0.4, 0)
+pixel_size = 0.0016
+billboard = 0
+no_depth_test = true
+modulate = Color(0.8, 0.85, 0.88, 0.95)
+font_size = 22
+text = "INLET"
+horizontal_alignment = 1
+
+[node name="OutletLabel" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.56, 0.4, 0)
+pixel_size = 0.0016
+billboard = 0
+no_depth_test = true
+modulate = Color(0.8, 0.85, 0.88, 0.95)
+font_size = 22
+text = "OUTLET"
+horizontal_alignment = 1
+
+[node name="DrainLabel" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.15, -0.68, 0)
+pixel_size = 0.0016
+billboard = 0
+no_depth_test = true
+modulate = Color(0.85, 0.6, 0.4, 0.95)
+font_size = 22
+text = "DRAIN"
+horizontal_alignment = 1

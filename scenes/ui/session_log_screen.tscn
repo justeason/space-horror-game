@@ -1,0 +1,71 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/session_log_screen.gd" id="1_screen"]
+
+[node name="SessionLogScreen" type="SubViewport"]
+size = Vector2i(480, 280)
+transparent_bg = false
+script = ExtResource("1_screen")
+
+[node name="Control" type="Control" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="Bg" type="ColorRect" parent="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.06, 0.08, 0.07, 1)
+
+[node name="VBox" type="VBoxContainer" parent="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 12.0
+offset_top = 10.0
+offset_right = -12.0
+offset_bottom = -10.0
+
+[node name="TitleLabel" type="Label" parent="Control/VBox"]
+layout_mode = 2
+text = "SESSION LOG"
+theme_override_colors/font_color = Color(0.75, 0.95, 0.8, 1)
+theme_override_font_sizes/font_size = 20
+
+[node name="SubtitleLabel" type="Label" parent="Control/VBox"]
+layout_mode = 2
+text = "prototype -- no station date/time system yet"
+theme_override_colors/font_color = Color(0.45, 0.5, 0.45, 1)
+theme_override_font_sizes/font_size = 11
+
+[node name="SampleLabel" type="Label" parent="Control/VBox"]
+layout_mode = 2
+text = "[SAMPLE DATA -- not actual station records]
+Power: nominal   Life support: nominal   Comms: nominal"
+theme_override_colors/font_color = Color(0.5, 0.55, 0.48, 1)
+theme_override_font_sizes/font_size = 12
+autowrap_mode = 2
+
+[node name="HSeparator" type="HSeparator" parent="Control/VBox"]
+layout_mode = 2
+
+[node name="EntryField" type="TextEdit" parent="Control/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_font_sizes/font_size = 15
+placeholder_text = "(no entry yet -- press T to write one)"
+wrap_mode = 1
+
+[node name="HintLabel" type="Label" parent="Control/VBox"]
+layout_mode = 2
+text = "T: Edit Entry     F: Close Laptop"
+theme_override_colors/font_color = Color(0.4, 0.45, 0.4, 1)
+theme_override_font_sizes/font_size = 11
+
+[node name="EditHintLabel" type="Label" parent="Control/VBox"]
+visible = false
+layout_mode = 2
+text = "ESC — Exit editing          Ctrl+S — Save"
+theme_override_colors/font_color = Color(1.0, 0.82, 0.3, 1)
+theme_override_font_sizes/font_size = 14

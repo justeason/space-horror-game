@@ -1,0 +1,59 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/interactables/workstation_console.gd" id="1_console"]
+[ext_resource type="PackedScene" path="res://scenes/ui/workstation_screen.tscn" id="2_screen"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_collision"]
+size = Vector3(0.66, 0.44, 0.1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_bezel"]
+size = Vector3(0.64, 0.42, 0.035)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_bezel"]
+albedo_color = Color(0.1, 0.1, 0.11, 1)
+roughness = 0.75
+
+[sub_resource type="BoxMesh" id="BoxMesh_trim"]
+size = Vector3(0.68, 0.46, 0.015)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_trim"]
+albedo_color = Color(0.22, 0.23, 0.25, 1)
+roughness = 0.55
+metallic = 0.35
+
+[sub_resource type="BoxMesh" id="BoxMesh_mount_arm"]
+size = Vector3(0.1, 0.19, 0.08)
+
+[sub_resource type="BoxMesh" id="BoxMesh_screen"]
+size = Vector3(0.576, 0.36, 0.015)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_screen_default"]
+shading_mode = 0
+albedo_color = Color(0.03, 0.03, 0.04, 1)
+
+[node name="WorkstationConsole" type="StaticBody3D"]
+script = ExtResource("1_console")
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_collision")
+
+[node name="Trim" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.008)
+mesh = SubResource("BoxMesh_trim")
+surface_material_override/0 = SubResource("StandardMaterial3D_trim")
+
+[node name="Bezel" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_bezel")
+surface_material_override/0 = SubResource("StandardMaterial3D_bezel")
+
+[node name="MountArm" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.305, -0.04)
+mesh = SubResource("BoxMesh_mount_arm")
+surface_material_override/0 = SubResource("StandardMaterial3D_trim")
+
+[node name="Screen" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.02)
+mesh = SubResource("BoxMesh_screen")
+surface_material_override/0 = SubResource("StandardMaterial3D_screen_default")
+
+[node name="WorkstationScreen" parent="." instance=ExtResource("2_screen")]

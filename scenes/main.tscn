@@ -1,9 +1,35 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=31 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="1_player"]
 [ext_resource type="Script" path="res://scripts/navigation/movement_node.gd" id="2_node"]
 [ext_resource type="PackedScene" path="res://scenes/interactables/toggle_switch.tscn" id="3_switch"]
 [ext_resource type="PackedScene" path="res://scenes/interactables/control_panel.tscn" id="4_panel"]
+[ext_resource type="PackedScene" path="res://scenes/surveillance/surveillance_camera.tscn" id="5_cam"]
+[ext_resource type="PackedScene" path="res://scenes/interactables/surveillance_console.tscn" id="6_console"]
+[ext_resource type="PackedScene" path="res://scenes/interactables/wall_watch_window.tscn" id="7_window"]
+[ext_resource type="PackedScene" path="res://scenes/dev/dev_label.tscn" id="8_devlabel"]
+[ext_resource type="Script" path="res://scripts/dev/nav_debug_overlay.gd" id="9_navdebug"]
+[ext_resource type="PackedScene" path="res://scenes/dev/free_move_body.tscn" id="10_freebody"]
+[ext_resource type="Script" path="res://scripts/dev/global_free_move.gd" id="11_freezone"]
+[ext_resource type="PackedScene" path="res://scenes/interactables/bunk.tscn" id="12_bunk"]
+[ext_resource type="Script" path="res://scripts/player/sleep_state.gd" id="13_sleepstate"]
+[ext_resource type="PackedScene" path="res://scenes/interactables/laptop.tscn" id="14_laptop"]
+[ext_resource type="Script" path="res://scripts/station/day_plan.gd" id="15_dayplan"]
+[ext_resource type="PackedScene" path="res://scenes/interactables/workstation_console.tscn" id="16_workstation"]
+[ext_resource type="Script" path="res://scripts/station/workstation_state.gd" id="17_workstationstate"]
+[ext_resource type="Script" path="res://scripts/interactables/electrical_panel.gd" id="18_panel"]
+[ext_resource type="PackedScene" path="res://scenes/interactables/loose_connection.tscn" id="19_loose"]
+[ext_resource type="PackedScene" path="res://scenes/interactables/wire_component.tscn" id="20_wire"]
+[ext_resource type="PackedScene" path="res://scenes/interactables/rotary_control.tscn" id="21_rotary"]
+[ext_resource type="Script" path="res://scripts/interactables/terminal_connector.gd" id="22_terminal"]
+[ext_resource type="Script" path="res://scripts/player/focused_interaction_state.gd" id="23_focusedstate"]
+[ext_resource type="PackedScene" path="res://scenes/interactables/sensor_calibration_station.tscn" id="24_calibstation"]
+[ext_resource type="PackedScene" path="res://scenes/ui/electrical_repair_diorama.tscn" id="25_worlddiorama"]
+[ext_resource type="PackedScene" path="res://scenes/interactables/valve_routing_station.tscn" id="26_valvestation"]
+[ext_resource type="PackedScene" path="res://scenes/interactables/filter_housing_station.tscn" id="27_filterstation"]
+[ext_resource type="PackedScene" path="res://scenes/interactables/circuit_tracer_station.tscn" id="28_tracerstation"]
+[ext_resource type="PackedScene" path="res://scenes/interactables/signal_calibration_station.tscn" id="29_signalstation"]
+[ext_resource type="PackedScene" path="res://scenes/interactables/mirror.tscn" id="30_mirror"]
 
 [sub_resource type="Environment" id="Environment_main"]
 background_mode = 1
@@ -23,6 +49,117 @@ roughness = 0.9
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_corridor"]
 albedo_color = Color(0.38, 0.4, 0.44, 1)
 roughness = 0.85
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_passage"]
+albedo_color = Color(0.26, 0.25, 0.23, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hull"]
+albedo_color = Color(0.18, 0.19, 0.21, 1)
+roughness = 0.7
+metallic = 0.3
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hatch"]
+albedo_color = Color(0.25, 0.24, 0.22, 1)
+roughness = 0.55
+metallic = 0.5
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_status_ok"]
+albedo_color = Color(0.12, 0.38, 0.18, 1)
+roughness = 0.4
+emission_enabled = true
+emission = Color(0.15, 0.55, 0.22, 1)
+emission_energy_multiplier = 0.35
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_status_bezel_ws"]
+albedo_color = Color(0.08, 0.08, 0.09, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_sealed"]
+albedo_color = Color(0.32, 0.13, 0.1, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_elec_panel_body"]
+albedo_color = Color(0.17, 0.18, 0.22, 1)
+roughness = 0.6
+metallic = 0.35
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_elec_panel_door"]
+albedo_color = Color(0.26, 0.27, 0.31, 1)
+roughness = 0.32
+metallic = 0.3
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_elec_panel_accent"]
+albedo_color = Color(0.2, 0.52, 0.5, 1)
+roughness = 0.4
+metallic = 0.5
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_elec_panel_cavity"]
+albedo_color = Color(0.05, 0.05, 0.06, 1)
+roughness = 0.85
+metallic = 0.05
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hazard_yellow"]
+albedo_color = Color(0.75, 0.58, 0.08, 1)
+roughness = 0.6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hazard_black"]
+albedo_color = Color(0.05, 0.05, 0.05, 1)
+roughness = 0.6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_breaker"]
+albedo_color = Color(0.22, 0.22, 0.24, 1)
+roughness = 0.5
+metallic = 0.3
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_breaker_toggle"]
+albedo_color = Color(0.55, 0.08, 0.06, 1)
+roughness = 0.55
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_damaged_wire"]
+albedo_color = Color(0.3, 0.09, 0.07, 1)
+roughness = 0.8
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_terminal"]
+size = Vector3(0.09, 0.11, 0.045)
+
+[sub_resource type="BoxMesh" id="BoxMesh_terminal"]
+size = Vector3(0.09, 0.11, 0.045)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_terminal_intact"]
+albedo_color = Color(0.14, 0.3, 0.17, 1)
+roughness = 0.5
+metallic = 0.25
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_panel"]
+albedo_color = Color(0.58, 0.56, 0.52, 1)
+roughness = 0.75
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_instrument_insert"]
+albedo_color = Color(0.25, 0.26, 0.28, 1)
+roughness = 0.7
+metallic = 0.1
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_panel_dark"]
+albedo_color = Color(0.34, 0.36, 0.35, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_upholstery"]
+albedo_color = Color(0.33, 0.39, 0.38, 1)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_upholstery_light"]
+albedo_color = Color(0.62, 0.6, 0.56, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_fixture"]
+albedo_color = Color(0.55, 0.56, 0.58, 1)
+roughness = 0.35
+metallic = 0.7
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_basin"]
+albedo_color = Color(0.68, 0.67, 0.63, 1)
+roughness = 0.4
 
 [node name="Main" type="Node3D"]
 
@@ -49,9 +186,21 @@ size = Vector3(0.2, 3.0, 3.4)
 material = SubResource("StandardMaterial3D_wall")
 use_collision = true
 
-[node name="ControlRoomEastWall" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3, 1.5, 0.5)
-size = Vector3(0.2, 3.0, 3.4)
+[node name="ControlRoomEastWallSouth" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3, 1.5, -0.65)
+size = Vector3(0.2, 3.0, 1.1)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="ControlRoomEastWallNorth" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3, 1.5, 1.575)
+size = Vector3(0.2, 3.0, 0.45)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="ControlRoomLivingDoorLintel" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3, 2.6, 0.5)
+size = Vector3(0.2, 0.8, 1.2)
 material = SubResource("StandardMaterial3D_wall")
 use_collision = true
 
@@ -91,43 +240,1640 @@ size = Vector3(1.2, 0.8, 0.2)
 material = SubResource("StandardMaterial3D_wall")
 use_collision = true
 
+[node name="ConsoleDesk" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, -0.8)
+size = Vector3(1.8, 0.06, 0.4)
+material = SubResource("StandardMaterial3D_hull")
+
+[node name="ConsoleDeskEdge" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, -0.6)
+size = Vector3(1.8, 0.03, 0.02)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="ConsoleDeskBacking" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.05, -0.98)
+size = Vector3(1.8, 0.6, 0.04)
+material = SubResource("StandardMaterial3D_panel")
+
+[node name="WsInstrumentInsert" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.82, -0.975)
+size = Vector3(1.4, 0.34, 0.025)
+material = SubResource("StandardMaterial3D_instrument_insert")
+
+[node name="ConsoleDeskBackingTrim" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.05, -0.955)
+size = Vector3(1.76, 0.56, 0.02)
+material = SubResource("StandardMaterial3D_panel_dark")
+
+[node name="ConsoleDeskKickplate" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.375, -0.88)
+size = Vector3(1.6, 0.75, 0.24)
+material = SubResource("StandardMaterial3D_panel_dark")
+
+[node name="ConsoleConduitA" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.45, 0.4, -0.96)
+size = Vector3(0.03, 0.7, 0.03)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="ConsoleConduitB" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.45, 0.4, -0.96)
+size = Vector3(0.03, 0.7, 0.03)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="OperatorStoolPost" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.21, -0.35)
+size = Vector3(0.08, 0.42, 0.08)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="OperatorStoolSeat" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45, -0.35)
+size = Vector3(0.28, 0.05, 0.28)
+material = SubResource("StandardMaterial3D_upholstery")
+
+[node name="ControlRoomCeilingSeamA" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.98, -0.5)
+size = Vector3(2.4, 0.03, 0.04)
+material = SubResource("StandardMaterial3D_panel_dark")
+
+[node name="ControlRoomCeilingSeamB" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.98, 0.8)
+size = Vector3(2.4, 0.03, 0.04)
+material = SubResource("StandardMaterial3D_panel_dark")
+
+[node name="ControlRoomCeilingSeamC" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.98, 1.8)
+size = Vector3(2.4, 0.03, 0.04)
+material = SubResource("StandardMaterial3D_panel_dark")
+
+[node name="ControlRoomBackWallTrim" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.2, -0.98)
+size = Vector3(2.4, 0.05, 0.02)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="ControlRoomTaskLightHousing" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.86, -0.75)
+size = Vector3(0.3, 0.08, 0.15)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="ControlRoomEquipmentHousingWest" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.22, 1.8, 0.3)
+size = Vector3(0.08, 0.4, 0.3)
+material = SubResource("StandardMaterial3D_panel")
+
+[node name="ControlRoomEquipmentHousingVentA" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.19, 1.92, 0.3)
+size = Vector3(0.02, 0.03, 0.22)
+material = SubResource("StandardMaterial3D_panel_dark")
+
+[node name="ControlRoomEquipmentHousingVentB" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.19, 1.8, 0.3)
+size = Vector3(0.02, 0.03, 0.22)
+material = SubResource("StandardMaterial3D_panel_dark")
+
+[node name="ControlRoomEquipmentHousingVentC" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.19, 1.68, 0.3)
+size = Vector3(0.02, 0.03, 0.22)
+material = SubResource("StandardMaterial3D_panel_dark")
+
+[node name="ControlRoomTaskConduit" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.9, -0.98)
+size = Vector3(0.03, 1.8, 0.03)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="LivingFloor" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.7, -0.1, 0.5)
+size = Vector3(4.0, 0.2, 4.0)
+material = SubResource("StandardMaterial3D_floor")
+use_collision = true
+
+[node name="LivingCeiling" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.7, 2.9, 0.5)
+size = Vector3(4.0, 0.2, 4.0)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="LivingWestWallSouth" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.7, 1.4, -0.8)
+size = Vector3(0.2, 2.8, 1.4)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="LivingWestWallNorth" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.7, 1.4, 1.8)
+size = Vector3(0.2, 2.8, 1.4)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="LivingEastWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.7, 1.4, 0.5)
+size = Vector3(0.2, 2.8, 4.0)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="LivingNorthWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.7, 1.4, 2.5)
+size = Vector3(4.0, 2.8, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="LivingSouthWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.7, 1.4, -1.5)
+size = Vector3(4.0, 2.8, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="BunkPlatform" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.0, 0.2, -0.5)
+size = Vector3(1.0, 0.4, 1.8)
+material = SubResource("StandardMaterial3D_hull")
+use_collision = true
+
+[node name="BunkMattressBase" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.0, 0.43, -0.5)
+size = Vector3(0.94, 0.1, 1.74)
+material = SubResource("StandardMaterial3D_upholstery")
+
+[node name="BunkMattressTop" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.0, 0.5, -0.5)
+size = Vector3(0.82, 0.07, 1.6)
+material = SubResource("StandardMaterial3D_upholstery")
+
+[node name="BunkPillowBase" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.0, 0.54, -1.15)
+size = Vector3(0.52, 0.08, 0.4)
+material = SubResource("StandardMaterial3D_upholstery_light")
+
+[node name="BunkPillowTop" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.0, 0.605, -1.15)
+size = Vector3(0.38, 0.06, 0.28)
+material = SubResource("StandardMaterial3D_upholstery_light")
+
+[node name="BunkBlanketFold" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.0, 0.545, 0.05)
+size = Vector3(0.84, 0.1, 0.55)
+material = SubResource("StandardMaterial3D_panel_dark")
+
+[node name="BunkFrameTrimWest" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.54, 0.42, -0.5)
+size = Vector3(0.06, 0.06, 1.76)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="BunkFrameTrimFoot" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.0, 0.42, 0.37)
+size = Vector3(0.98, 0.06, 0.06)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="BunkHeadboardPanel" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.0, 0.675, -1.33)
+size = Vector3(0.7, 0.55, 0.14)
+material = SubResource("StandardMaterial3D_panel")
+
+[node name="BunkHeadboardInset" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.0, 0.675, -1.27)
+size = Vector3(0.56, 0.42, 0.04)
+material = SubResource("StandardMaterial3D_panel_dark")
+
+[node name="ReadingLightBase" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.3, 0.85, -1.24)
+size = Vector3(0.1, 0.1, 0.08)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="ReadingLightArm" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.3, 0.95, -1.1)
+size = Vector3(0.04, 0.04, 0.24)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="ReadingLightHead" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.3, 1.05, -0.95)
+size = Vector3(0.12, 0.06, 0.1)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="LockerCarcass" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.2, 1.0, 1.85)
+size = Vector3(0.6, 2.0, 0.7)
+material = SubResource("StandardMaterial3D_panel")
+use_collision = true
+
+[node name="LockerDoorSeam" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.885, 1.0, 1.85)
+size = Vector3(0.03, 1.8, 0.04)
+material = SubResource("StandardMaterial3D_hull")
+
+[node name="LockerDoorPanelLeft" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.885, 1.0, 1.68)
+size = Vector3(0.03, 1.8, 0.32)
+material = SubResource("StandardMaterial3D_panel_dark")
+
+[node name="LockerDoorPanelRight" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.885, 1.0, 2.02)
+size = Vector3(0.03, 1.8, 0.32)
+material = SubResource("StandardMaterial3D_panel_dark")
+
+[node name="LockerHandleLeft" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.87, 1.0, 1.75)
+size = Vector3(0.04, 0.15, 0.04)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="LockerHandleRight" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.87, 1.0, 1.95)
+size = Vector3(0.04, 0.15, 0.04)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="LockerBaseKick" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.89, 0.08, 1.85)
+size = Vector3(0.03, 0.16, 0.66)
+material = SubResource("StandardMaterial3D_hull")
+
+[node name="LockerTopTrim" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.2, 2.02, 1.85)
+size = Vector3(0.62, 0.04, 0.72)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="WashCabinet" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.15, 0.45, 2.15)
+size = Vector3(0.7, 0.9, 0.5)
+material = SubResource("StandardMaterial3D_panel")
+use_collision = true
+
+[node name="WashCounterTop" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.15, 0.91, 2.15)
+size = Vector3(0.76, 0.04, 0.56)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="WashBasinWallNorth" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.15, 0.875, 2.27)
+size = Vector3(0.42, 0.07, 0.03)
+material = SubResource("StandardMaterial3D_hull")
+
+[node name="WashBasinWallSouth" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.15, 0.875, 1.93)
+size = Vector3(0.42, 0.07, 0.03)
+material = SubResource("StandardMaterial3D_hull")
+
+[node name="WashBasinWallWest" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.94, 0.875, 2.1)
+size = Vector3(0.03, 0.07, 0.38)
+material = SubResource("StandardMaterial3D_hull")
+
+[node name="WashBasinWallEast" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.36, 0.875, 2.1)
+size = Vector3(0.03, 0.07, 0.38)
+material = SubResource("StandardMaterial3D_hull")
+
+[node name="WashBasinFloor" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.15, 0.84, 2.1)
+size = Vector3(0.36, 0.02, 0.32)
+material = SubResource("StandardMaterial3D_basin")
+
+[node name="WashFaucetBase" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.15, 0.98, 2.3)
+size = Vector3(0.05, 0.1, 0.05)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="WashFaucetSpout" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.15, 1.05, 2.15)
+size = Vector3(0.04, 0.04, 0.22)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="WashMirrorCabinet" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.15, 1.5, 2.36)
+size = Vector3(0.56, 0.5, 0.08)
+material = SubResource("StandardMaterial3D_panel_dark")
+
+[node name="WashMirrorGlass" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.15, 1.5, 2.32)
+size = Vector3(0.5, 0.42, 0.02)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="WashUnderStoragePanel" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.15, 0.25, 1.91)
+size = Vector3(0.5, 0.3, 0.03)
+material = SubResource("StandardMaterial3D_panel_dark")
+
+[node name="WashUnderHandle" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.15, 0.25, 1.885)
+size = Vector3(0.1, 0.03, 0.03)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="DeskCarcass" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.6, 0.37, 2.2)
+size = Vector3(0.8, 0.74, 0.4)
+material = SubResource("StandardMaterial3D_panel")
+use_collision = true
+
+[node name="DeskSurfaceSlab" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.6, 0.76, 2.15)
+size = Vector3(0.86, 0.05, 0.46)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="DeskFrontPanelInset" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.6, 0.37, 2.02)
+size = Vector3(0.6, 0.5, 0.03)
+material = SubResource("StandardMaterial3D_panel_dark")
+
+[node name="DeskHingeBracketLeft" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.25, 0.72, 2.38)
+size = Vector3(0.06, 0.06, 0.06)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="DeskHingeBracketRight" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.95, 0.72, 2.38)
+size = Vector3(0.06, 0.06, 0.06)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="DeskTaskLightBase" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.3, 0.79, 2.05)
+size = Vector3(0.05, 0.05, 0.05)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="DeskTaskLightArm" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.3, 0.88, 2.0)
+size = Vector3(0.03, 0.03, 0.12)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="DeskTaskLightHead" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.35, 0.95, 1.92)
+size = Vector3(0.1, 0.04, 0.08)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="DeskMug" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.8, 0.8, 2.05)
+size = Vector3(0.07, 0.09, 0.07)
+material = SubResource("StandardMaterial3D_panel_dark")
+
+[node name="DeskNotebook" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.7, 0.775, 2.0)
+size = Vector3(0.18, 0.02, 0.14)
+material = SubResource("StandardMaterial3D_upholstery")
+
+[node name="WallShelf" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.6, 2.0, 2.36)
+size = Vector3(0.7, 0.1, 0.18)
+material = SubResource("StandardMaterial3D_panel")
+
+[node name="ShelfBook" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.78, 2.09, 2.36)
+size = Vector3(0.12, 0.16, 0.14)
+material = SubResource("StandardMaterial3D_upholstery")
+
+[node name="LivingCeilingSeamA" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.78, 0.5)
+size = Vector3(0.04, 0.03, 3.6)
+material = SubResource("StandardMaterial3D_panel_dark")
+
+[node name="LivingCeilingSeamB" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.0, 2.78, 0.5)
+size = Vector3(0.04, 0.03, 3.6)
+material = SubResource("StandardMaterial3D_panel_dark")
+
+[node name="LivingCeilingSeamC" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.2, 2.78, 0.5)
+size = Vector3(0.04, 0.03, 3.6)
+material = SubResource("StandardMaterial3D_panel_dark")
+
+[node name="LivingSouthWallTrim" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.7, 2.2, -1.38)
+size = Vector3(3.6, 0.05, 0.02)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="LivingNorthWallTrim" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.7, 2.2, 2.38)
+size = Vector3(3.6, 0.05, 0.02)
+material = SubResource("StandardMaterial3D_fixture")
+
+[node name="StoolBase" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.8, 0.2, 1.8)
+size = Vector3(0.32, 0.4, 0.32)
+material = SubResource("StandardMaterial3D_hull")
+use_collision = true
+
+[node name="StoolSeatCap" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.8, 0.41, 1.8)
+size = Vector3(0.4, 0.06, 0.4)
+material = SubResource("StandardMaterial3D_upholstery_light")
+
+[node name="PersonalContainer" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.37, 0.1, 0.3)
+size = Vector3(0.25, 0.2, 0.25)
+material = SubResource("StandardMaterial3D_panel_dark")
+
+[node name="PersonalContainerStrap" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.37, 0.18, 0.3)
+size = Vector3(0.26, 0.03, 0.05)
+material = SubResource("StandardMaterial3D_hull")
+
 [node name="CorridorFloor" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 6.1)
-size = Vector3(1.6, 0.2, 8.0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 2.65)
+size = Vector3(1.6, 0.2, 1.1)
 material = SubResource("StandardMaterial3D_corridor")
 use_collision = true
 
 [node name="CorridorCeiling" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 6.1)
-size = Vector3(1.6, 0.2, 8.0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 2.65)
+size = Vector3(1.6, 0.2, 1.1)
 material = SubResource("StandardMaterial3D_wall")
 use_collision = true
 
 [node name="CorridorWestWall" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.7, 1.3, 6.1)
-size = Vector3(0.2, 2.6, 8.0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.7, 1.3, 2.65)
+size = Vector3(0.2, 2.6, 1.1)
 material = SubResource("StandardMaterial3D_corridor")
 use_collision = true
 
 [node name="CorridorEastWall" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.7, 1.3, 6.1)
-size = Vector3(0.2, 2.6, 8.0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.7, 1.3, 2.65)
+size = Vector3(0.2, 2.6, 1.1)
 material = SubResource("StandardMaterial3D_corridor")
 use_collision = true
 
-[node name="CorridorEndWall" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 10.1)
-size = Vector3(1.6, 2.6, 0.2)
+[node name="CorridorEndWallWest" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.7, 1.3, 3.2)
+size = Vector3(0.2, 2.6, 0.2)
 material = SubResource("StandardMaterial3D_wall")
 use_collision = true
+
+[node name="CorridorEndWallEast" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.7, 1.3, 3.2)
+size = Vector3(0.2, 2.6, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="JunctionAFloor" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 4.5)
+size = Vector3(2.0, 0.2, 2.0)
+material = SubResource("StandardMaterial3D_floor")
+use_collision = true
+
+[node name="JunctionACeiling" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 4.5)
+size = Vector3(2.0, 0.2, 2.0)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="JunctionWestWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.0, 1.3, 4.5)
+size = Vector3(0.2, 2.6, 2.0)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="JunctionStepWallWest" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.2, 1.3, 5.5)
+size = Vector3(0.4, 2.6, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="JunctionStepWallEast" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.2, 1.3, 5.5)
+size = Vector3(0.4, 2.6, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="JunctionFloorNorth" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 6.4)
+size = Vector3(2.8, 0.2, 1.8)
+material = SubResource("StandardMaterial3D_floor")
+use_collision = true
+
+[node name="JunctionCeilingNorth" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 6.4)
+size = Vector3(2.8, 0.2, 1.8)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="JunctionEastWallNorth" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.4, 1.3, 6.4)
+size = Vector3(0.2, 2.6, 1.8)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="JunctionWestWallNorthNorth" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.4, 1.3, 6.98)
+size = Vector3(0.2, 2.6, 0.64)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="JunctionNorthWallWest" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.1, 1.3, 7.3)
+size = Vector3(0.6, 2.6, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="JunctionNorthWallEast" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.7, 1.3, 7.3)
+size = Vector3(1.4, 2.6, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="JunctionAEastWallSouth" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.0, 1.3, 3.7)
+size = Vector3(0.2, 2.6, 0.4)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="JunctionAEastWallNorth" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.0, 1.3, 5.3)
+size = Vector3(0.2, 2.6, 0.4)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="CommsTunnelASouthWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.8, 1.3, 3.9)
+size = Vector3(1.6, 2.6, 0.2)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="CommsTunnelANorthWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.2, 1.3, 5.1)
+size = Vector3(0.4, 2.6, 0.2)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="CommsTunnelAFloor" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.8, -0.1, 4.5)
+size = Vector3(1.6, 0.2, 1.2)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="CommsTunnelACeiling" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.8, 2.7, 4.5)
+size = Vector3(1.6, 0.2, 1.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="CommsTunnelEastWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.6, 1.3, 4.9)
+size = Vector3(0.2, 2.6, 2.0)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="CommsTunnelBWestWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.4, 1.3, 5.5)
+size = Vector3(0.2, 2.6, 0.8)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="CommsTunnelBFloor" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.0, -0.1, 5.2)
+size = Vector3(1.2, 0.2, 1.4)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="CommsTunnelBCeiling" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.0, 2.7, 5.2)
+size = Vector3(1.2, 0.2, 1.4)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="CommsFloor" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.0, -0.1, 7.1)
+size = Vector3(2.8, 0.2, 2.4)
+material = SubResource("StandardMaterial3D_floor")
+use_collision = true
+
+[node name="CommsCeiling" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.0, 3.3, 7.1)
+size = Vector3(2.8, 0.2, 2.4)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="CommsSouthWallWest" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.0, 1.6, 5.9)
+size = Vector3(0.8, 3.2, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="CommsSouthWallEast" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.0, 1.6, 5.9)
+size = Vector3(0.8, 3.2, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="CommsNorthWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.0, 1.6, 8.3)
+size = Vector3(2.8, 3.2, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="CommsWestWallBelow" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.6, 0.55, 7.1)
+size = Vector3(0.2, 1.1, 1.0)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="CommsWestWallAbove" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.6, 2.65, 7.1)
+size = Vector3(0.2, 1.1, 1.0)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="CommsWestWallSouthOfWindow" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.6, 1.6, 6.25)
+size = Vector3(0.2, 1.0, 0.7)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="CommsWestWallNorthOfWindow" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.6, 1.6, 7.95)
+size = Vector3(0.2, 1.0, 0.7)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="CommsEastWallSouth" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.4, 1.6, 6.25)
+size = Vector3(0.2, 3.2, 0.7)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="CommsEastWallNorth" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.4, 1.6, 7.95)
+size = Vector3(0.2, 3.2, 0.7)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="CommsAlcoveFloor" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.1, -0.1, 7.1)
+size = Vector3(1.4, 0.2, 1.0)
+material = SubResource("StandardMaterial3D_floor")
+use_collision = true
+
+[node name="CommsAlcoveCeiling" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.1, 3.3, 7.1)
+size = Vector3(1.4, 0.2, 1.0)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="CommsAlcoveNorthWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.1, 1.6, 7.6)
+size = Vector3(1.4, 3.2, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="CommsAlcoveSouthWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.1, 1.6, 6.6)
+size = Vector3(1.4, 3.2, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="CommsAlcoveEastWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.8, 1.6, 7.1)
+size = Vector3(0.2, 3.2, 1.0)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="EngineeringTunnelFloor" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.0, -0.1, 6.06)
+size = Vector3(1.2, 0.2, 1.2)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="EngineeringTunnelCeiling" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.0, 2.7, 6.06)
+size = Vector3(1.2, 0.2, 1.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="EngineeringTunnelNorthWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.0, 1.3, 6.66)
+size = Vector3(1.2, 2.6, 0.2)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="EngineeringTunnelSouthWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.0, 1.3, 5.46)
+size = Vector3(1.2, 2.6, 0.2)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="EngineeringFloor" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.2, -0.1, 5.0)
+size = Vector3(3.2, 0.2, 3.8)
+material = SubResource("StandardMaterial3D_floor")
+use_collision = true
+
+[node name="EngineeringCeiling" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.2, 3.3, 5.0)
+size = Vector3(3.2, 0.2, 3.8)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="EngineeringEastWallSouth" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.6, 1.6, 4.33)
+size = Vector3(0.2, 3.2, 2.46)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="EngineeringEastWallNorth" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.6, 1.6, 6.73)
+size = Vector3(0.2, 3.2, 0.34)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="EngineeringWestWallSouth" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.8, 1.6, 3.7)
+size = Vector3(0.2, 3.2, 1.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="EngineeringWestWallNorth" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.8, 1.6, 6.1)
+size = Vector3(0.2, 3.2, 1.6)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="EngineeringSouthWallWest" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.55, 1.6, 3.1)
+size = Vector3(0.5, 3.2, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="EngineeringSouthWallEast" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.45, 1.6, 3.1)
+size = Vector3(1.7, 3.2, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="EngineeringNorthWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.2, 1.6, 6.9)
+size = Vector3(3.2, 3.2, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="EngineeringCabinet1" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.2, 1.1, 3.7)
+size = Vector3(1.0, 2.2, 0.3)
+material = SubResource("StandardMaterial3D_elec_panel_body")
+use_collision = true
+script = ExtResource("18_panel")
+day_plan_path = NodePath("../../DayPlan")
+carry_system_path = NodePath("../../Player/CarrySystem")
+message_label_path = NodePath("../../Player/HUD/TaskMessageLabel")
+repair_view_path = NodePath("../../Player/HUD/ElectricalRepairView")
+wire_component_path = NodePath("../../Interactables/WireComponent")
+
+[node name="BaseFrame" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.12, 0)
+size = Vector3(1.06, 0.06, 0.34)
+material = SubResource("StandardMaterial3D_breaker")
+
+[node name="TopLabelPlate" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.07, 1.06, 0.153)
+size = Vector3(0.46, 0.08, 0.006)
+material = SubResource("StandardMaterial3D_breaker")
+
+[node name="TopLabelText" type="Label3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.07, 1.06, 0.157)
+pixel_size = 0.0011
+billboard = 0
+no_depth_test = true
+modulate = Color(0.85, 0.85, 0.82, 0.95)
+font_size = 26
+text = "POWER DISTRIBUTION"
+
+[node name="HazardStripe1" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.375, 0.96, 0.152)
+size = Vector3(0.15, 0.06, 0.006)
+material = SubResource("StandardMaterial3D_hazard_yellow")
+
+[node name="HazardStripe2" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.225, 0.96, 0.152)
+size = Vector3(0.15, 0.06, 0.006)
+material = SubResource("StandardMaterial3D_hazard_black")
+
+[node name="HazardStripe3" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.075, 0.96, 0.152)
+size = Vector3(0.15, 0.06, 0.006)
+material = SubResource("StandardMaterial3D_hazard_yellow")
+
+[node name="HazardStripe4" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.075, 0.96, 0.152)
+size = Vector3(0.15, 0.06, 0.006)
+material = SubResource("StandardMaterial3D_hazard_black")
+
+[node name="HazardStripe5" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.225, 0.96, 0.152)
+size = Vector3(0.15, 0.06, 0.006)
+material = SubResource("StandardMaterial3D_hazard_yellow")
+
+[node name="HazardStripe6" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.375, 0.96, 0.152)
+size = Vector3(0.15, 0.06, 0.006)
+material = SubResource("StandardMaterial3D_hazard_black")
+
+[node name="UpperCompartmentLabelPlate" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.93, 0.153)
+size = Vector3(0.3, 0.05, 0.006)
+material = SubResource("StandardMaterial3D_breaker")
+
+[node name="UpperCompartmentLabelText" type="Label3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.93, 0.157)
+pixel_size = 0.0009
+billboard = 0
+no_depth_test = true
+modulate = Color(0.85, 0.85, 0.82, 0.95)
+font_size = 20
+text = "DIAGNOSTICS"
+
+[node name="UpperHingeTop" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.28, 0.9, 0.14)
+size = Vector3(0.06, 0.1, 0.04)
+material = SubResource("StandardMaterial3D_elec_panel_accent")
+
+[node name="UpperHingeBottom" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.28, 0.58, 0.14)
+size = Vector3(0.06, 0.1, 0.04)
+material = SubResource("StandardMaterial3D_elec_panel_accent")
+
+[node name="UpperCoverSeam" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.25, 0.74, 0.151)
+size = Vector3(0.012, 0.36, 0.01)
+material = SubResource("StandardMaterial3D_hazard_black")
+
+[node name="UpperCover" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.03, 0.74, 0.1505)
+size = Vector3(0.44, 0.34, 0.005)
+material = SubResource("StandardMaterial3D_elec_panel_door")
+
+[node name="UpperSwitch1" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.12, 0.7, 0.158)
+size = Vector3(0.09, 0.13, 0.012)
+material = SubResource("StandardMaterial3D_breaker")
+
+[node name="UpperSwitch1Toggle" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.12, 0.66, 0.165)
+size = Vector3(0.03, 0.06, 0.01)
+material = SubResource("StandardMaterial3D_breaker_toggle")
+
+[node name="UpperSwitch2" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.03, 0.7, 0.158)
+size = Vector3(0.09, 0.13, 0.012)
+material = SubResource("StandardMaterial3D_breaker")
+
+[node name="UpperSwitch2Toggle" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.03, 0.74, 0.165)
+size = Vector3(0.03, 0.06, 0.01)
+material = SubResource("StandardMaterial3D_breaker_toggle")
+
+[node name="UpperSwitch3" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.18, 0.7, 0.158)
+size = Vector3(0.09, 0.13, 0.012)
+material = SubResource("StandardMaterial3D_breaker")
+
+[node name="UpperSwitch3Toggle" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.18, 0.66, 0.165)
+size = Vector3(0.03, 0.06, 0.01)
+material = SubResource("StandardMaterial3D_breaker_toggle")
+
+[node name="UpperIndicator1" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.12, 0.85, 0.16)
+size = Vector3(0.03, 0.03, 0.012)
+material = SubResource("StandardMaterial3D_terminal_intact")
+
+[node name="UpperIndicator2" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.03, 0.85, 0.16)
+size = Vector3(0.03, 0.03, 0.012)
+material = SubResource("StandardMaterial3D_terminal_intact")
+
+[node name="UpperIndicator3" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.18, 0.85, 0.16)
+size = Vector3(0.03, 0.03, 0.012)
+material = SubResource("StandardMaterial3D_breaker")
+
+[node name="MiddleCompartmentLabelPlate" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.37, 0.153)
+size = Vector3(0.3, 0.05, 0.006)
+material = SubResource("StandardMaterial3D_breaker")
+
+[node name="MiddleCompartmentLabelText" type="Label3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.37, 0.157)
+pixel_size = 0.0009
+billboard = 0
+no_depth_test = true
+modulate = Color(0.85, 0.85, 0.82, 0.95)
+font_size = 20
+text = "ELECTRICAL SERVICE"
+
+[node name="MiddleHingeTop" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.28, 0.32, 0.14)
+size = Vector3(0.06, 0.1, 0.04)
+material = SubResource("StandardMaterial3D_elec_panel_accent")
+
+[node name="MiddleHingeBottom" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.28, -0.02, 0.14)
+size = Vector3(0.06, 0.1, 0.04)
+material = SubResource("StandardMaterial3D_elec_panel_accent")
+
+[node name="MiddleCoverSeam" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.25, 0.15, 0.151)
+size = Vector3(0.012, 0.36, 0.01)
+material = SubResource("StandardMaterial3D_hazard_black")
+
+[node name="ServiceBayCavity" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 0.05)
+operation = 2
+size = Vector3(0.46, 0.32, 0.22)
+material = SubResource("StandardMaterial3D_elec_panel_cavity")
+
+[node name="AccessHatchCover" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 0.151)
+size = Vector3(0.5, 0.35, 0.006)
+material = SubResource("StandardMaterial3D_elec_panel_door")
+visible = true
+
+[node name="Terminal" type="StaticBody3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.14, 0.15, 0.17)
+visible = false
+script = ExtResource("22_terminal")
+panel_path = NodePath("..")
+terminal_id = &"damaged"
+
+[node name="Collision" type="CollisionShape3D" parent="Geometry/EngineeringCabinet1/Terminal"]
+shape = SubResource("BoxShape3D_terminal")
+disabled = true
+
+[node name="Visual" type="MeshInstance3D" parent="Geometry/EngineeringCabinet1/Terminal"]
+mesh = SubResource("BoxMesh_terminal")
+surface_material_override/0 = SubResource("StandardMaterial3D_breaker")
+
+[node name="IntactTerminal" type="StaticBody3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.14, 0.15, 0.17)
+visible = false
+script = ExtResource("22_terminal")
+panel_path = NodePath("..")
+terminal_id = &"intact"
+
+[node name="Collision" type="CollisionShape3D" parent="Geometry/EngineeringCabinet1/IntactTerminal"]
+shape = SubResource("BoxShape3D_terminal")
+disabled = true
+
+[node name="Visual" type="MeshInstance3D" parent="Geometry/EngineeringCabinet1/IntactTerminal"]
+mesh = SubResource("BoxMesh_terminal")
+surface_material_override/0 = SubResource("StandardMaterial3D_terminal_intact")
+
+[node name="WorldDiorama" parent="Geometry/EngineeringCabinet1" instance=ExtResource("25_worlddiorama")]
+transform = Transform3D(0.3, 0, 0, 0, 0.3, 0, 0, 0, 0.3, 0, 0.1, 0.11)
+world_display_mode = true
+
+[node name="UpperInspectionLight" type="OmniLight3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.74, 0.3)
+light_color = Color(0.88, 0.4, 0.16, 1)
+light_energy = 0.4
+omni_range = 0.7
+
+[node name="MiddleInspectionLight" type="OmniLight3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 0.1)
+light_color = Color(0.88, 0.4, 0.16, 1)
+light_energy = 0.48
+omni_range = 0.7
+
+[node name="LowerInspectionLight" type="OmniLight3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.55, 0.3)
+light_color = Color(0.88, 0.4, 0.16, 1)
+light_energy = 0.35
+omni_range = 0.7
+
+[node name="LowerCompartmentLabelPlate" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.27, 0.153)
+size = Vector3(0.3, 0.05, 0.006)
+material = SubResource("StandardMaterial3D_breaker")
+
+[node name="LowerCompartmentLabelText" type="Label3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.27, 0.157)
+pixel_size = 0.0009
+billboard = 0
+no_depth_test = true
+modulate = Color(0.85, 0.85, 0.82, 0.95)
+font_size = 20
+text = "POWER / UTILITY"
+
+[node name="LowerHingeTop" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, -0.37, 0.14)
+size = Vector3(0.06, 0.1, 0.04)
+material = SubResource("StandardMaterial3D_elec_panel_accent")
+
+[node name="LowerHingeBottom" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, -0.73, 0.14)
+size = Vector3(0.06, 0.1, 0.04)
+material = SubResource("StandardMaterial3D_elec_panel_accent")
+
+[node name="LowerCoverSeam" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.27, -0.55, 0.151)
+size = Vector3(0.012, 0.4, 0.01)
+material = SubResource("StandardMaterial3D_hazard_black")
+
+[node name="LowerCover" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.01, -0.55, 0.1505)
+size = Vector3(0.48, 0.38, 0.005)
+material = SubResource("StandardMaterial3D_elec_panel_door")
+
+[node name="LowerVentSlat1" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.01, -0.62, 0.158)
+size = Vector3(0.36, 0.015, 0.012)
+material = SubResource("StandardMaterial3D_breaker")
+
+[node name="LowerVentSlat2" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.01, -0.58, 0.158)
+size = Vector3(0.36, 0.015, 0.012)
+material = SubResource("StandardMaterial3D_breaker")
+
+[node name="LowerVentSlat3" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.01, -0.54, 0.158)
+size = Vector3(0.36, 0.015, 0.012)
+material = SubResource("StandardMaterial3D_breaker")
+
+[node name="LowerHazardStripe1" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.17, -0.42, 0.152)
+size = Vector3(0.1, 0.045, 0.006)
+material = SubResource("StandardMaterial3D_hazard_yellow")
+
+[node name="LowerHazardStripe2" type="CSGBox3D" parent="Geometry/EngineeringCabinet1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.19, -0.42, 0.152)
+size = Vector3(0.1, 0.045, 0.006)
+material = SubResource("StandardMaterial3D_hazard_yellow")
+
+[node name="EngineeringCabinet2" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.0, 1.0, 6.75)
+size = Vector3(1.0, 1.8, 0.3)
+material = SubResource("StandardMaterial3D_hatch")
+use_collision = true
+
+[node name="EngineeringMachineryHousing" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.55, 0.9, 6.0)
+size = Vector3(0.5, 1.6, 1.4)
+material = SubResource("StandardMaterial3D_hatch")
+use_collision = true
+
+[node name="EngineeringConduitPipe1" type="CSGCylinder3D" parent="Geometry"]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, -4.2, 2.9, 4.2)
+radius = 0.05
+height = 3.0
+sides = 10
+material = SubResource("StandardMaterial3D_passage")
+
+[node name="EngineeringConduitPipe2" type="CSGCylinder3D" parent="Geometry"]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, -4.2, 2.75, 4.6)
+radius = 0.04
+height = 2.5
+sides = 10
+material = SubResource("StandardMaterial3D_passage")
+
+[node name="EngineeringCableBundle" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.75, 1.5, 4.0)
+size = Vector3(0.08, 2.0, 0.08)
+material = SubResource("StandardMaterial3D_passage")
+
+[node name="EngineeringWarningLabel" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.7, 2.3, 5.0)
+size = Vector3(0.4, 0.3, 0.05)
+material = SubResource("StandardMaterial3D_sealed")
+
+[node name="AirlockTunnelFloor" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.8, -0.1, 0.25)
+size = Vector3(1.0, 0.2, 5.7)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="AirlockTunnelCeiling" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.8, 2.7, 0.25)
+size = Vector3(1.0, 0.2, 5.7)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="AirlockTunnelEastWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.3, 1.3, 0.25)
+size = Vector3(0.2, 2.6, 5.7)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="AirlockTunnelWestWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.3, 1.3, 0.25)
+size = Vector3(0.2, 2.6, 5.7)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="AirlockBulkheadWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.8, 1.3, -2.6)
+size = Vector3(1.0, 2.6, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="AirlockHatchRim" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.8, 1.3, -2.45)
+size = Vector3(0.9, 2.1, 0.15)
+material = SubResource("StandardMaterial3D_hull")
+
+[node name="AirlockHatchDoor" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.8, 1.3, -2.35)
+size = Vector3(0.7, 1.7, 0.1)
+material = SubResource("StandardMaterial3D_sealed")
+
+[node name="AirlockHatchWheel" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.8, 1.3, -2.54)
+size = Vector3(0.3, 0.3, 0.1)
+material = SubResource("StandardMaterial3D_hatch")
+
+[node name="AirlockHatchWheelBarH" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.8, 1.3, -2.56)
+size = Vector3(0.34, 0.06, 0.06)
+material = SubResource("StandardMaterial3D_hatch")
+
+[node name="AirlockHatchWheelBarV" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.8, 1.3, -2.56)
+size = Vector3(0.06, 0.34, 0.06)
+material = SubResource("StandardMaterial3D_hatch")
+
+[node name="AirlockHatchBolt1" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.45, 2.2, -2.54)
+size = Vector3(0.08, 0.08, 0.06)
+material = SubResource("StandardMaterial3D_hatch")
+
+[node name="AirlockHatchBolt2" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.15, 2.2, -2.54)
+size = Vector3(0.08, 0.08, 0.06)
+material = SubResource("StandardMaterial3D_hatch")
+
+[node name="AirlockHatchBolt3" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.45, 0.4, -2.54)
+size = Vector3(0.08, 0.08, 0.06)
+material = SubResource("StandardMaterial3D_hatch")
+
+[node name="AirlockHatchBolt4" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.15, 0.4, -2.54)
+size = Vector3(0.08, 0.08, 0.06)
+material = SubResource("StandardMaterial3D_hatch")
+
+[node name="AirlockHatchStripeTop" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.8, 2.05, -2.52)
+size = Vector3(0.9, 0.12, 0.1)
+material = SubResource("StandardMaterial3D_sealed")
+
+[node name="AirlockHatchStripeBottom" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.8, 0.55, -2.52)
+size = Vector3(0.9, 0.12, 0.1)
+material = SubResource("StandardMaterial3D_sealed")
+
+[node name="StorageConnectorASouthWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.7, 1.3, 4.3)
+size = Vector3(1.8, 2.6, 0.2)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="StorageConnectorANorthWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.05, 1.3, 5.3)
+size = Vector3(0.5, 2.6, 0.2)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="StorageConnectorAFloor" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.4, -0.1, 4.8)
+size = Vector3(1.2, 0.2, 1.0)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="StorageConnectorACeiling" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.4, 2.7, 4.8)
+size = Vector3(1.2, 0.2, 1.0)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="StorageConnectorBWestWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.5, 1.3, 5.55)
+size = Vector3(0.2, 2.6, 2.7)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="StorageConnectorBFloor" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.0, -0.1, 5.95)
+size = Vector3(1.0, 0.2, 1.9)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="StorageConnectorBCeiling" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.0, 2.7, 5.95)
+size = Vector3(1.0, 0.2, 1.9)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="StorageEngineeringElbowFloor" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.7, -0.1, 5.55)
+size = Vector3(1.8, 0.2, 2.7)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="StorageEngineeringElbowCeiling" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.7, 2.7, 5.55)
+size = Vector3(1.8, 0.2, 2.7)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="StorageFloor" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.5, -0.1, 8.0)
+size = Vector3(2.2, 0.2, 2.2)
+material = SubResource("StandardMaterial3D_floor")
+use_collision = true
+
+[node name="StorageCeiling" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.5, 3.3, 8.0)
+size = Vector3(2.2, 0.2, 2.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="StorageSouthWallWest" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.55, 1.6, 6.9)
+size = Vector3(0.1, 3.2, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="StorageSouthWallEast" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.95, 1.6, 6.9)
+size = Vector3(1.1, 3.2, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="StorageNorthWallWest" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.05, 1.6, 9.1)
+size = Vector3(1.1, 3.2, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="StorageNorthWallEast" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.45, 1.6, 9.1)
+size = Vector3(0.1, 3.2, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="StorageEastWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.4, 1.6, 8.0)
+size = Vector3(0.2, 3.2, 2.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="StorageWestWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.6, 1.6, 8.0)
+size = Vector3(0.2, 3.2, 2.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="StorageRack1" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.5, 1.2, 8.0)
+size = Vector3(0.3, 2.0, 1.6)
+material = SubResource("StandardMaterial3D_hatch")
+use_collision = true
+
+[node name="StorageRack1Shelf" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.3, 1.24, 8.5)
+size = Vector3(0.42, 0.03, 0.4)
+material = SubResource("StandardMaterial3D_hatch")
+
+[node name="StorageRack2" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.5, 1.2, 8.0)
+size = Vector3(0.3, 2.0, 1.6)
+material = SubResource("StandardMaterial3D_hatch")
+use_collision = true
+
+[node name="StorageConnectorCFloor" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.0, -0.1, 9.825)
+size = Vector3(1.0, 0.2, 1.45)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="StorageConnectorCCeiling" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.0, 2.7, 9.825)
+size = Vector3(1.0, 0.2, 1.45)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="StorageConnectorCEastWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.5, 1.3, 9.5)
+size = Vector3(0.2, 2.6, 0.8)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="StorageConnectorCWestWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.5, 1.3, 9.825)
+size = Vector3(0.2, 2.6, 1.45)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="StorageConnectorDFloor" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.5, -0.1, 10.55)
+size = Vector3(2.0, 0.2, 0.9)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="StorageConnectorDCeiling" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.5, 2.7, 10.55)
+size = Vector3(2.0, 0.2, 0.9)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="StorageConnectorDNorthWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.5, 1.3, 11.15)
+size = Vector3(2.0, 2.6, 0.2)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="StorageConnectorDSouthWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.0, 1.3, 9.6)
+size = Vector3(1.0, 2.6, 0.2)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="LifeSupportTunnelFloor" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4, -0.1, 8.3)
+size = Vector3(1.0, 0.2, 2.0)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="LifeSupportTunnelCeiling" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4, 2.7, 8.3)
+size = Vector3(1.0, 0.2, 2.0)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="LifeSupportTunnelEastWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1, 1.3, 8.3)
+size = Vector3(0.2, 2.6, 2.0)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="LifeSupportTunnelWestWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.9, 1.3, 7.8)
+size = Vector3(0.2, 2.6, 1.0)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="LifeSupportBendFloor" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.9, -0.1, 9.1)
+size = Vector3(3.4, 0.2, 1.6)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="LifeSupportBendCeiling" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.9, 2.7, 9.1)
+size = Vector3(3.4, 0.2, 1.6)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="LifeSupportBendNorthWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.25, 1.3, 8.4)
+size = Vector3(2.7, 2.6, 0.2)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="LifeSupportBendEastWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.75, 1.3, 9.8)
+size = Vector3(1.1, 2.6, 0.2)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="LifeSupportBendWestWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.5, 1.3, 8.9)
+size = Vector3(0.2, 2.6, 1.2)
+material = SubResource("StandardMaterial3D_corridor")
+use_collision = true
+
+[node name="LifeSupportFloor" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.9, -0.1, 10.8)
+size = Vector3(3.2, 0.2, 2.4)
+material = SubResource("StandardMaterial3D_floor")
+use_collision = true
+
+[node name="LifeSupportCeiling" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.9, 3.3, 10.8)
+size = Vector3(3.2, 0.2, 2.4)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="LifeSupportSouthWallWest" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.9, 1.6, 9.6)
+size = Vector3(1.2, 3.2, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="LifeSupportSouthWallEast" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.8, 1.6, 9.6)
+size = Vector3(1.0, 3.2, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="LifeSupportEastWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 1.6, 11.0)
+size = Vector3(0.2, 3.2, 2.0)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="LifeSupportNorthWall" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.9, 1.6, 12.0)
+size = Vector3(3.2, 3.2, 0.2)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="LifeSupportWestWallNorth" type="CSGBox3D" parent="Geometry"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.5, 1.6, 11.25)
+size = Vector3(0.2, 3.2, 1.5)
+material = SubResource("StandardMaterial3D_wall")
+use_collision = true
+
+[node name="DevLabels" type="Node3D" parent="."]
+visible = false
+
+[node name="ControlRoom" parent="DevLabels" instance=ExtResource("8_devlabel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0.5)
+text = "CONTROL ROOM"
+
+[node name="Corridor" parent="DevLabels" instance=ExtResource("8_devlabel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.3, 2.65)
+text = "CORRIDOR"
+
+[node name="Living" parent="DevLabels" instance=ExtResource("8_devlabel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.7, 2.5, 0.5)
+text = "LIVING QUARTERS"
+
+[node name="JunctionNode1" parent="DevLabels" instance=ExtResource("8_devlabel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.3, 4.5)
+text = "MAIN JUNCTION"
+
+[node name="CommsTunnel" parent="DevLabels" instance=ExtResource("8_devlabel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.0, 2.3, 4.8)
+text = "COMMS TUNNEL"
+
+[node name="Communications" parent="DevLabels" instance=ExtResource("8_devlabel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.0, 2.9, 7.1)
+text = "COMMUNICATIONS"
+
+[node name="JunctionNode2" parent="DevLabels" instance=ExtResource("8_devlabel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.3, 6.4)
+text = "MAIN JUNCTION"
+
+[node name="EngineeringTunnel" parent="DevLabels" instance=ExtResource("8_devlabel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.0, 2.3, 6.06)
+text = "ENGINEERING TUNNEL"
+
+[node name="Engineering" parent="DevLabels" instance=ExtResource("8_devlabel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.2, 2.9, 5.0)
+text = "ENGINEERING"
+
+[node name="AirlockTunnel" parent="DevLabels" instance=ExtResource("8_devlabel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.8, 2.3, 0.9)
+text = "AIRLOCK TUNNEL (MAINTENANCE BRANCH)"
+
+[node name="FutureAirlockEva" parent="DevLabels" instance=ExtResource("8_devlabel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.8, 1.9, -2.3)
+text = "FUTURE AIRLOCK / EVA"
+
+[node name="Storage" parent="DevLabels" instance=ExtResource("8_devlabel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.5, 2.9, 8.0)
+text = "STORAGE"
+
+[node name="LifeSupportTunnel" parent="DevLabels" instance=ExtResource("8_devlabel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4, 2.3, 7.8)
+text = "LIFE SUPPORT TUNNEL"
+
+[node name="LifeSupportBend" parent="DevLabels" instance=ExtResource("8_devlabel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.9, 2.3, 9.1)
+text = "LIFE SUPPORT BEND"
+
+[node name="LifeSupport" parent="DevLabels" instance=ExtResource("8_devlabel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.9, 2.9, 10.8)
+text = "LIFE SUPPORT"
+
+[node name="Surveillance" type="Node3D" parent="."]
+
+[node name="CameraControlRoom" parent="Surveillance" instance=ExtResource("5_cam")]
+camera_id = &"cam_control_room"
+
+[node name="Camera3D" parent="Surveillance/CameraControlRoom" index="0"]
+transform = Transform3D(-0.70710677, 0.28760624, -0.6459742, 0, 0.9135455, 0.40673664, 0.70710677, 0.28760624, -0.6459742, 0.8, 2.6, -0.7)
+
+[node name="CameraCorridor" parent="Surveillance" instance=ExtResource("5_cam")]
+camera_id = &"cam_corridor"
+
+[node name="Camera3D" parent="Surveillance/CameraCorridor" index="0"]
+transform = Transform3D(-1.0, 0.0, 0.0, 0.0, 0.913545, 0.406737, 0.0, 0.406737, -0.913545, 0, 2.4, 2.9)
+
+[node name="CameraCorridorEnd" parent="Surveillance" instance=ExtResource("5_cam")]
+camera_id = &"cam_corridor_end"
+
+[node name="Camera3D" parent="Surveillance/CameraCorridorEnd" index="0"]
+transform = Transform3D(1, 0, 0, 0, 0.9135455, 0.4067366, 0, -0.4067366, 0.9135455, 0, 2.4, 5.2)
+
+[node name="Mirrors" type="Node3D" parent="."]
+
+[node name="LivingQuartersMirror" parent="Mirrors" instance=ExtResource("30_mirror")]
+player_camera_path = NodePath("../../Player/LookPivot/PitchPivot/Camera3D")
+mirror_plane_path = NodePath("../../Geometry/WashMirrorGlass")
+glass_mesh_path = NodePath("../../Geometry/WashMirrorGlass")
 
 [node name="Interactables" type="Node3D" parent="."]
 
 [node name="ToggleSwitch" parent="Interactables" instance=ExtResource("3_switch")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.2, 1.4, -0.3)
+transform = Transform3D(0, 0, 1, 1, 0, 0, 0, 1, 0, 0.65, 0.86, -0.95)
+switch_label = "Aux"
 
 [node name="ControlPanel" parent="Interactables" instance=ExtResource("4_panel")]
-transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 1.2, 1.4, -0.3)
+transform = Transform3D(0, 0, 1, 1, 0, 0, 0, 1, 0, -0.65, 0.86, -0.95)
+
+[node name="SurveillanceConsole" parent="Interactables" instance=ExtResource("6_console")]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 0.0, 1.0, -0.9)
+visible = false
+camera_paths = [NodePath("../../Surveillance/CameraControlRoom"), NodePath("../../Surveillance/CameraCorridor"), NodePath("../../Surveillance/CameraCorridorEnd")]
+
+[node name="Collision" parent="Interactables/SurveillanceConsole" index="0"]
+disabled = true
+
+[node name="WallWatchWindow" parent="Interactables" instance=ExtResource("7_window")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.2, 1.5, 1.4)
+camera_path = NodePath("../../Surveillance/CameraCorridorEnd")
+
+[node name="Bunk" parent="Interactables" instance=ExtResource("12_bunk")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.0, 0.4, -0.5)
+sleep_state_path = NodePath("../../SleepState")
+player_path = NodePath("../../Player")
+
+[node name="BunksideLaptop" parent="Interactables" instance=ExtResource("14_laptop")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.36, 0.605, 0.0)
+
+[node name="WorkstationConsole" parent="Interactables" instance=ExtResource("16_workstation")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.18, -0.92)
+workstation_state_path = NodePath("../../WorkstationState")
+player_path = NodePath("../../Player")
+
+[node name="WsSwitchPower" parent="Interactables" instance=ExtResource("3_switch")]
+transform = Transform3D(0, 0, 1, 1, 0, 0, 0, 1, 0, -0.45, 0.78, -0.95)
+switch_label = "Power"
+
+[node name="WsSwitchComms" parent="Interactables" instance=ExtResource("3_switch")]
+transform = Transform3D(0, 0, 1, 1, 0, 0, 0, 1, 0, -0.25, 0.78, -0.95)
+switch_label = "Comms"
+
+[node name="WsRotary" parent="Interactables" instance=ExtResource("21_rotary")]
+transform = Transform3D(0, 0, 1, 1, 0, 0, 0, 1, 0, 0.0, 0.8, -0.95)
+
+[node name="WsSwitchLifeSupport" parent="Interactables" instance=ExtResource("3_switch")]
+transform = Transform3D(0, 0, 1, 1, 0, 0, 0, 1, 0, 0.25, 0.78, -0.95)
+switch_label = "Life Supp"
+
+[node name="WsSwitchLighting" parent="Interactables" instance=ExtResource("3_switch")]
+transform = Transform3D(0, 0, 1, 1, 0, 0, 0, 1, 0, 0.45, 0.78, -0.95)
+switch_label = "Lighting"
+
+[node name="WsStatusLightBezelA" type="CSGBox3D" parent="Interactables"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.58, 0.82, -0.965)
+size = Vector3(0.05, 0.05, 0.015)
+material = SubResource("StandardMaterial3D_status_bezel_ws")
+
+[node name="WsStatusLightA" type="CSGBox3D" parent="Interactables"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.58, 0.82, -0.955)
+size = Vector3(0.03, 0.03, 0.015)
+material = SubResource("StandardMaterial3D_status_ok")
+
+[node name="WsStatusLightBezelB" type="CSGBox3D" parent="Interactables"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.58, 0.82, -0.965)
+size = Vector3(0.05, 0.05, 0.015)
+material = SubResource("StandardMaterial3D_status_bezel_ws")
+
+[node name="WsStatusLightB" type="CSGBox3D" parent="Interactables"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.58, 0.82, -0.955)
+size = Vector3(0.03, 0.03, 0.015)
+material = SubResource("StandardMaterial3D_status_ok")
+
+[node name="LooseConnection" parent="Interactables" instance=ExtResource("19_loose")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.75, 1.3, 5.0)
+day_plan_path = NodePath("../../DayPlan")
+message_label_path = NodePath("../../Player/HUD/TaskMessageLabel")
+
+[node name="SensorCalibrationStation" parent="Interactables" instance=ExtResource("24_calibstation")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -2.9, 1.6, 11.78)
+day_plan_path = NodePath("../../DayPlan")
+calibration_view_path = NodePath("../../Player/HUD/SensorCalibrationView")
+
+[node name="ValveRoutingStation" parent="Interactables" instance=ExtResource("26_valvestation")]
+position = Vector3(-1.7, 1.6, 11.3)
+rotation_degrees = Vector3(0, -90, 0)
+day_plan_path = NodePath("../../DayPlan")
+valve_view_path = NodePath("../../Player/HUD/ValveRoutingView")
+
+[node name="FilterHousingStation" parent="Interactables" instance=ExtResource("27_filterstation")]
+position = Vector3(-1.7, 1.6, 10.0)
+rotation_degrees = Vector3(0, -90, 0)
+day_plan_path = NodePath("../../DayPlan")
+filter_view_path = NodePath("../../Player/HUD/FilterHousingView")
+
+[node name="CircuitTracerStation" parent="Interactables" instance=ExtResource("28_tracerstation")]
+position = Vector3(-2.75, 1.6, 4.3)
+rotation_degrees = Vector3(0, 90, 0)
+day_plan_path = NodePath("../../DayPlan")
+tracer_view_path = NodePath("../../Player/HUD/CircuitTracerView")
+
+[node name="SignalCalibrationStation" parent="Interactables" instance=ExtResource("29_signalstation")]
+position = Vector3(2.0, 1.6, 8.15)
+day_plan_path = NodePath("../../DayPlan")
+signal_view_path = NodePath("../../Player/HUD/SignalCalibrationView")
+
+[node name="WireComponent" parent="Interactables" instance=ExtResource("20_wire")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.3, 1.3, 8.5)
+carry_system_path = NodePath("../../Player/CarrySystem")
+message_label_path = NodePath("../../Player/HUD/TaskMessageLabel")
 
 [node name="Lights" type="Node3D" parent="."]
 
@@ -137,29 +1883,113 @@ light_color = Color(0.95, 0.95, 1, 1)
 light_energy = 1.4
 omni_range = 5.0
 
+[node name="Light_ConsoleTask" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.75, -0.75)
+light_color = Color(0.9, 0.95, 1, 1)
+light_energy = 0.6
+omni_range = 1.6
+
 [node name="Light_Doorway" type="OmniLight3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, 2.1)
 light_color = Color(0.85, 0.9, 1, 1)
 light_energy = 0.8
 omni_range = 3.0
 
-[node name="Light_Corridor1" type="OmniLight3D" parent="Lights"]
+[node name="Light_Corridor" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 2.65)
+light_color = Color(0.8, 0.88, 1, 1)
+light_energy = 1.0
+omni_range = 3.0
+
+[node name="Light_Living" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.7, 2.7, 0.5)
+light_color = Color(1, 0.92, 0.8, 1)
+light_energy = 1.1
+omni_range = 3.6
+
+[node name="Light_LivingBed" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.3, 1.08, -0.95)
+light_color = Color(1, 0.9, 0.75, 1)
+light_energy = 0.55
+omni_range = 1.4
+
+[node name="Light_JunctionNode1" type="OmniLight3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 4.5)
 light_color = Color(0.8, 0.88, 1, 1)
-light_energy = 1.0
-omni_range = 3.5
+light_energy = 0.9
+omni_range = 2.8
 
-[node name="Light_Corridor2" type="OmniLight3D" parent="Lights"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 7.0)
+[node name="Light_CommsTunnelA" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.8, 2.4, 4.5)
 light_color = Color(0.8, 0.88, 1, 1)
-light_energy = 1.0
-omni_range = 3.5
+light_energy = 0.9
+omni_range = 2.6
 
-[node name="Light_CorridorEnd" type="OmniLight3D" parent="Lights"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 9.5)
+[node name="Light_CommsTunnelB" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.0, 2.4, 5.2)
+light_color = Color(0.8, 0.88, 1, 1)
+light_energy = 0.9
+omni_range = 2.6
+
+[node name="Light_Comms" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.0, 2.9, 7.1)
+light_color = Color(0.85, 0.95, 0.9, 1)
+light_energy = 1.1
+omni_range = 3.2
+
+[node name="Light_JunctionNode2" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 6.4)
+light_color = Color(0.8, 0.88, 1, 1)
+light_energy = 0.9
+omni_range = 2.8
+
+[node name="Light_EngineeringTunnel" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.0, 2.4, 6.06)
+light_color = Color(0.8, 0.88, 1, 1)
+light_energy = 0.9
+omni_range = 2.6
+
+[node name="Light_Engineering" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.2, 2.9, 5.0)
+light_color = Color(0.95, 0.85, 0.75, 1)
+light_energy = 1.1
+omni_range = 3.4
+
+[node name="Light_AirlockTunnelA" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.8, 2.4, 2.0)
+light_color = Color(0.85, 0.75, 0.7, 1)
+light_energy = 0.7
+omni_range = 2.4
+
+[node name="Light_AirlockTunnelB" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.8, 2.4, -1.0)
+light_color = Color(0.85, 0.75, 0.7, 1)
+light_energy = 0.7
+omni_range = 2.6
+
+[node name="Light_Storage" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.5, 2.9, 8.0)
+light_color = Color(0.85, 0.85, 0.8, 1)
+light_energy = 0.9
+omni_range = 2.8
+
+[node name="Light_LifeSupportTunnel" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4, 2.4, 7.8)
+light_color = Color(0.8, 0.88, 1, 1)
+light_energy = 0.9
+omni_range = 2.4
+
+[node name="Light_LifeSupportBend" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.9, 2.4, 9.1)
 light_color = Color(0.8, 0.88, 1, 1)
 light_energy = 0.9
 omni_range = 3.0
+
+[node name="Light_LifeSupport" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.9, 2.9, 10.8)
+light_color = Color(0.85, 0.95, 0.9, 1)
+light_energy = 1.1
+omni_range = 3.2
 
 [node name="MovementNodes" type="Node3D" parent="."]
 
@@ -174,8 +2004,14 @@ region = &"control_room"
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0.7, 1.6, 1.4)
 script = ExtResource("2_node")
 node_id = "control_room_front_right"
-neighbors = [NodePath("../Doorway"), NodePath("../ControlRoomRearRight")]
+neighbors = [NodePath("../Doorway"), NodePath("../ControlRoomRearRight"), NodePath("../ControlLivingThreshold")]
 region = &"control_room"
+
+[node name="ControlLivingThreshold" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 1.3, 1.6, 0.65)
+script = ExtResource("2_node")
+node_id = "control_living_threshold"
+neighbors = [NodePath("../ControlRoomFrontRight"), NodePath("../LivingDoor")]
 
 [node name="ControlRoomRearLeft" type="Node3D" parent="MovementNodes"]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -0.7, 1.6, -0.5)
@@ -191,29 +2027,277 @@ node_id = "control_room_rear_right"
 neighbors = [NodePath("../ControlRoomFrontRight"), NodePath("../ControlRoomRearLeft")]
 region = &"control_room"
 
+[node name="LivingDoor" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 1.6, 1.6, 0.5)
+script = ExtResource("2_node")
+node_id = "living_door"
+neighbors = [NodePath("../ControlLivingThreshold"), NodePath("../LivingA")]
+
+[node name="LivingA" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 3.3, 1.6, 0.5)
+script = ExtResource("2_node")
+node_id = "living_a"
+neighbors = [NodePath("../LivingDoor"), NodePath("../LivingBed"), NodePath("../LivingHygiene"), NodePath("../LivingTable")]
+
+[node name="LivingBed" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 5.0, 1.6, 1.0)
+script = ExtResource("2_node")
+node_id = "living_bed"
+neighbors = [NodePath("../LivingA")]
+
+[node name="LivingHygiene" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 2.15, 1.6, 1.55)
+script = ExtResource("2_node")
+node_id = "living_hygiene"
+neighbors = [NodePath("../LivingA")]
+
+[node name="LivingTable" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 3.3, 1.6, 1.65)
+script = ExtResource("2_node")
+node_id = "living_table"
+neighbors = [NodePath("../LivingA")]
+
 [node name="Doorway" type="Node3D" parent="MovementNodes"]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 1.6, 2.1)
 script = ExtResource("2_node")
 node_id = "doorway"
-neighbors = [NodePath("../ControlRoomFrontLeft"), NodePath("../ControlRoomFrontRight"), NodePath("../Corridor1")]
+neighbors = [NodePath("../ControlRoomFrontLeft"), NodePath("../ControlRoomFrontRight"), NodePath("../JunctionNode1")]
 
-[node name="Corridor1" type="Node3D" parent="MovementNodes"]
+[node name="JunctionNode1" type="Node3D" parent="MovementNodes"]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 1.6, 4.5)
 script = ExtResource("2_node")
-node_id = "corridor_1"
-neighbors = [NodePath("../Doorway"), NodePath("../Corridor2")]
+node_id = "junction_node_1"
+neighbors = [NodePath("../Doorway"), NodePath("../CommsTunnelElbow"), NodePath("../JunctionNode2")]
+region = &"main_junction"
 
-[node name="Corridor2" type="Node3D" parent="MovementNodes"]
-transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 1.6, 7.0)
+[node name="JunctionNode2" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 1.6, 6.3)
 script = ExtResource("2_node")
-node_id = "corridor_2"
-neighbors = [NodePath("../Corridor1"), NodePath("../CorridorEnd")]
+node_id = "junction_node_2"
+neighbors = [NodePath("../EngineeringTunnel1"), NodePath("../LifeSupportJunctionGap")]
+region = &"main_junction"
 
-[node name="CorridorEnd" type="Node3D" parent="MovementNodes"]
-transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 1.6, 9.5)
+[node name="CommsTunnelElbow" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 2.0, 1.6, 4.8)
 script = ExtResource("2_node")
-node_id = "corridor_end"
-neighbors = [NodePath("../Corridor2")]
+node_id = "comms_tunnel_elbow"
+neighbors = [NodePath("../JunctionNode1"), NodePath("../CommsA")]
+
+[node name="CommsA" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 2.0, 1.6, 6.4)
+script = ExtResource("2_node")
+node_id = "comms_a"
+neighbors = [NodePath("../CommsTunnelElbow"), NodePath("../CommsAlcove")]
+region = &"communications"
+
+[node name="CommsWindow" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 1.1, 1.6, 7.5)
+script = ExtResource("2_node")
+node_id = "comms_window"
+neighbors = []
+region = &"communications"
+
+[node name="CommsAlcove" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 4.1, 1.6, 7.1)
+script = ExtResource("2_node")
+node_id = "comms_alcove"
+neighbors = [NodePath("../CommsA")]
+
+[node name="EngineeringTunnel1" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -2.0, 1.6, 6.06)
+script = ExtResource("2_node")
+node_id = "engineering_tunnel_1"
+neighbors = [NodePath("../JunctionNode2"), NodePath("../EngineeringA")]
+
+[node name="EngineeringA" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -3.6, 1.6, 5.2)
+script = ExtResource("2_node")
+node_id = "engineering_a"
+neighbors = [NodePath("../EngineeringTunnel1")]
+region = &"engineering"
+
+[node name="EngineeringB" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -4.9, 1.6, 4.6)
+script = ExtResource("2_node")
+node_id = "engineering_b"
+neighbors = [NodePath("../StorageElbowE"), NodePath("../AirlockTunnel1")]
+region = &"engineering"
+
+[node name="AirlockTunnel1" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -4.8, 1.6, 0.9)
+script = ExtResource("2_node")
+node_id = "airlock_tunnel_1"
+neighbors = [NodePath("../EngineeringB"), NodePath("../AirlockStub")]
+
+[node name="AirlockStub" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -4.8, 1.6, -2.1)
+script = ExtResource("2_node")
+node_id = "airlock_stub"
+neighbors = [NodePath("../AirlockTunnel1")]
+
+[node name="StorageElbowE" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -6.75, 1.6, 5.15)
+script = ExtResource("2_node")
+node_id = "storage_elbow_e"
+neighbors = [NodePath("../EngineeringB"), NodePath("../StorageA")]
+
+[node name="StorageA" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -7.0, 1.6, 7.4)
+script = ExtResource("2_node")
+node_id = "storage_a"
+neighbors = [NodePath("../StorageElbowE")]
+region = &"storage"
+
+[node name="StorageB" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -6.0, 1.6, 8.7)
+script = ExtResource("2_node")
+node_id = "storage_b"
+neighbors = [NodePath("../StorageElbowLS")]
+region = &"storage"
+
+[node name="StorageElbowLS" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -6.0, 1.6, 10.325)
+script = ExtResource("2_node")
+node_id = "storage_elbow_ls"
+neighbors = [NodePath("../StorageB"), NodePath("../StorageLifeSupportLink")]
+
+[node name="StorageLifeSupportLink" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -4.1, 1.6, 10.1)
+script = ExtResource("2_node")
+node_id = "storage_life_support_link"
+neighbors = [NodePath("../StorageElbowLS"), NodePath("../LifeSupportB")]
+
+[node name="LifeSupportJunctionGap" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -0.4, 1.6, 7.3)
+script = ExtResource("2_node")
+node_id = "life_support_junction_gap"
+neighbors = [NodePath("../JunctionNode2"), NodePath("../LifeSupportTunnel1")]
+
+[node name="LifeSupportTunnel1" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -0.4, 1.6, 7.8)
+script = ExtResource("2_node")
+node_id = "life_support_tunnel_1"
+neighbors = [NodePath("../LifeSupportJunctionGap"), NodePath("../LifeSupportTunnel2")]
+
+[node name="LifeSupportTunnel2" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -0.55, 1.6, 8.8)
+script = ExtResource("2_node")
+node_id = "life_support_tunnel_2"
+neighbors = [NodePath("../LifeSupportTunnel1"), NodePath("../LifeSupportBendMid")]
+
+[node name="LifeSupportBendMid" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -3.0, 1.6, 9.0)
+script = ExtResource("2_node")
+node_id = "life_support_bend_mid"
+neighbors = [NodePath("../LifeSupportTunnel2"), NodePath("../LifeSupportApproach")]
+
+[node name="LifeSupportApproach" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -2.8, 1.6, 9.7)
+script = ExtResource("2_node")
+node_id = "life_support_approach"
+neighbors = [NodePath("../LifeSupportBendMid"), NodePath("../LifeSupportA")]
+
+[node name="LifeSupportA" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -2.8, 1.6, 11.0)
+script = ExtResource("2_node")
+node_id = "life_support_a"
+neighbors = [NodePath("../LifeSupportApproach")]
+region = &"life_support"
+
+[node name="LifeSupportB" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -4.0, 1.6, 10.8)
+script = ExtResource("2_node")
+node_id = "life_support_b"
+neighbors = [NodePath("../StorageLifeSupportLink")]
+region = &"life_support"
 
 [node name="Player" parent="." instance=ExtResource("1_player")]
 starting_node = NodePath("../MovementNodes/ControlRoomRearLeft")
+
+[node name="Camera3D" parent="Player/LookPivot/PitchPivot" index="0"]
+prompt_label_path = NodePath("../../../HUD/PromptLabel")
+sleep_state_path = NodePath("../../../../SleepState")
+
+[node name="Flashlight" parent="Player/LookPivot/PitchPivot/Camera3D" index="1"]
+focused_state_path = NodePath("../../../../../FocusedInteractionState")
+sfx_path = NodePath("../../../../HUD/MechanicalSfx")
+
+[node name="FreeMoveBody" parent="." instance=ExtResource("10_freebody")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 4.5)
+
+[node name="GlobalFreeMove" type="Node3D" parent="."]
+script = ExtResource("11_freezone")
+player_path = NodePath("../Player")
+free_body_path = NodePath("../FreeMoveBody")
+
+[node name="LaptopView" parent="Player" index="2"]
+laptop_path = NodePath("../../Interactables/BunksideLaptop")
+
+[node name="Wristwatch" parent="Player" index="4"]
+day_plan_path = NodePath("../../DayPlan")
+electrical_panel_path = NodePath("../../Geometry/EngineeringCabinet1")
+
+[node name="ElectricalRepairView" parent="Player/HUD" index="5"]
+focused_state_path = NodePath("../../../FocusedInteractionState")
+
+[node name="SensorCalibrationView" parent="Player/HUD" index="6"]
+focused_state_path = NodePath("../../../FocusedInteractionState")
+
+[node name="ValveRoutingView" parent="Player/HUD" index="7"]
+focused_state_path = NodePath("../../../FocusedInteractionState")
+
+[node name="FilterHousingView" parent="Player/HUD" index="8"]
+focused_state_path = NodePath("../../../FocusedInteractionState")
+sfx_path = NodePath("../MechanicalSfx")
+
+[node name="CircuitTracerView" parent="Player/HUD" index="9"]
+focused_state_path = NodePath("../../../FocusedInteractionState")
+sfx_path = NodePath("../MechanicalSfx")
+
+[node name="SignalCalibrationView" parent="Player/HUD" index="10"]
+focused_state_path = NodePath("../../../FocusedInteractionState")
+sfx_path = NodePath("../MechanicalSfx")
+
+[node name="WorkstationScreen" parent="Interactables/WorkstationConsole" index="3"]
+day_plan_path = NodePath("../../../DayPlan")
+electrical_panel_path = NodePath("../../../Geometry/EngineeringCabinet1")
+surveillance_console_path = NodePath("../../SurveillanceConsole")
+
+[node name="DayPlan" type="Node" parent="."]
+script = ExtResource("15_dayplan")
+
+[node name="SleepState" type="Node3D" parent="."]
+script = ExtResource("13_sleepstate")
+player_path = NodePath("../Player")
+free_body_path = NodePath("../FreeMoveBody")
+interaction_controller_path = NodePath("../Player/LookPivot/PitchPivot/Camera3D")
+look_controller_path = NodePath("../Player/LookPivot")
+player_body_path = NodePath("../Player/PlayerBody")
+laptop_view_path = NodePath("../Player/LaptopView")
+prompt_label_path = NodePath("../Player/HUD/PromptLabel")
+day_plan_path = NodePath("../DayPlan")
+eyes_overlay_path = NodePath("../Player/HUD/EyesOverlay")
+wristwatch_label_path = NodePath("../Player/HUD/WristwatchLabel")
+sit_position = Vector3(5.0, 1.2, -1.1)
+
+[node name="WorkstationState" type="Node3D" parent="."]
+script = ExtResource("17_workstationstate")
+player_path = NodePath("../Player")
+free_body_path = NodePath("../FreeMoveBody")
+global_free_move_path = NodePath("../GlobalFreeMove")
+interaction_controller_path = NodePath("../Player/LookPivot/PitchPivot/Camera3D")
+look_controller_path = NodePath("../Player/LookPivot")
+player_body_path = NodePath("../Player/PlayerBody")
+workstation_console_path = NodePath("../Interactables/WorkstationConsole")
+workstation_screen_path = NodePath("../Interactables/WorkstationConsole/WorkstationScreen")
+
+[node name="FocusedInteractionState" type="Node" parent="."]
+script = ExtResource("23_focusedstate")
+free_body_path = NodePath("../FreeMoveBody")
+global_free_move_path = NodePath("../GlobalFreeMove")
+interaction_controller_path = NodePath("../Player/LookPivot/PitchPivot/Camera3D")
+look_controller_path = NodePath("../Player/LookPivot")
+
+[node name="NavDebugOverlay" type="Node3D" parent="."]
+script = ExtResource("9_navdebug")
+enabled = false

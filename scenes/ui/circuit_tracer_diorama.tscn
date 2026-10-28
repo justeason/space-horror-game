@@ -1,0 +1,288 @@
+[gd_scene load_steps=19 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/circuit_tracer_diorama.gd" id="1_diorama"]
+
+[sub_resource type="BoxShape3D" id="Shape_tp"]
+size = Vector3(0.1, 0.1, 0.1)
+
+[sub_resource type="StandardMaterial3D" id="Mat_backdrop"]
+albedo_color = Color(0.1, 0.11, 0.12, 1)
+roughness = 0.75
+metallic = 0.2
+
+[sub_resource type="StandardMaterial3D" id="Mat_power"]
+albedo_color = Color(0.6, 0.45, 0.1, 1)
+roughness = 0.4
+metallic = 0.5
+emission_enabled = true
+emission = Color(0.6, 0.45, 0.1, 1)
+emission_energy_multiplier = 0.4
+
+[sub_resource type="StandardMaterial3D" id="Mat_wire"]
+albedo_color = Color(0.35, 0.37, 0.4, 1)
+roughness = 0.4
+metallic = 0.5
+
+[sub_resource type="StandardMaterial3D" id="Mat_tp1_body"]
+resource_local_to_scene = true
+albedo_color = Color(0.5, 0.52, 0.55, 1)
+roughness = 0.3
+metallic = 0.7
+
+[sub_resource type="StandardMaterial3D" id="Mat_tp2_body"]
+resource_local_to_scene = true
+albedo_color = Color(0.5, 0.52, 0.55, 1)
+roughness = 0.3
+metallic = 0.7
+
+[sub_resource type="StandardMaterial3D" id="Mat_tp3_body"]
+resource_local_to_scene = true
+albedo_color = Color(0.5, 0.52, 0.55, 1)
+roughness = 0.3
+metallic = 0.7
+
+[sub_resource type="StandardMaterial3D" id="Mat_tp4_body"]
+resource_local_to_scene = true
+albedo_color = Color(0.5, 0.52, 0.55, 1)
+roughness = 0.3
+metallic = 0.7
+
+[sub_resource type="StandardMaterial3D" id="Mat_probe_tip"]
+resource_local_to_scene = true
+albedo_color = Color(0.85, 0.75, 0.2, 1)
+roughness = 0.3
+emission_enabled = true
+emission = Color(0.6, 0.5, 0.1, 1)
+emission_energy_multiplier = 0.6
+
+[sub_resource type="StandardMaterial3D" id="Mat_probe_body"]
+albedo_color = Color(0.15, 0.16, 0.17, 1)
+roughness = 0.5
+metallic = 0.4
+
+[sub_resource type="StandardMaterial3D" id="Mat_display_face"]
+albedo_color = Color(0.03, 0.05, 0.04, 1)
+roughness = 0.3
+
+[node name="CircuitTracerDiorama" type="Node3D"]
+script = ExtResource("1_diorama")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.85)
+fov = 50.0
+
+[node name="KeyLight" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0.6, 1.3)
+light_energy = 3.2
+omni_range = 4.0
+
+[node name="FillLight" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.7, -0.2, 1.1)
+light_color = Color(0.75, 0.82, 0.9, 1)
+light_energy = 1.4
+omni_range = 4.0
+
+[node name="Backdrop" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.1)
+size = Vector3(1.95, 1.1, 0.08)
+material = SubResource("Mat_backdrop")
+
+[node name="Power" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.82, 0, 0)
+
+[node name="Body" type="CSGBox3D" parent="Power"]
+size = Vector3(0.14, 0.22, 0.08)
+material = SubResource("Mat_power")
+
+[node name="Segments" type="Node3D" parent="."]
+
+[node name="PowerTp1" type="CSGCylinder3D" parent="Segments"]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, -0.6, 0, 0)
+radius = 0.025
+height = 0.3
+sides = 10
+material = SubResource("Mat_wire")
+
+[node name="Tp1Tp2" type="CSGCylinder3D" parent="Segments"]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, -0.2, 0, 0)
+radius = 0.025
+height = 0.3
+sides = 10
+material = SubResource("Mat_wire")
+
+[node name="Tp2Tp3" type="CSGCylinder3D" parent="Segments"]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, 0.2, 0, 0)
+radius = 0.025
+height = 0.3
+sides = 10
+material = SubResource("Mat_wire")
+
+[node name="Tp3Tp4" type="CSGCylinder3D" parent="Segments"]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, 0.6, 0, 0)
+radius = 0.025
+height = 0.3
+sides = 10
+material = SubResource("Mat_wire")
+
+[node name="SegmentColliders" type="Node3D" parent="."]
+
+[node name="PowerTp1Col" type="StaticBody3D" parent="SegmentColliders"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6, 0, 0)
+
+[node name="Shape" type="CollisionShape3D" parent="SegmentColliders/PowerTp1Col"]
+shape = SubResource("Shape_tp")
+
+[node name="Tp1Tp2Col" type="StaticBody3D" parent="SegmentColliders"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.2, 0, 0)
+
+[node name="Shape" type="CollisionShape3D" parent="SegmentColliders/Tp1Tp2Col"]
+shape = SubResource("Shape_tp")
+
+[node name="Tp2Tp3Col" type="StaticBody3D" parent="SegmentColliders"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.2, 0, 0)
+
+[node name="Shape" type="CollisionShape3D" parent="SegmentColliders/Tp2Tp3Col"]
+shape = SubResource("Shape_tp")
+
+[node name="Tp3Tp4Col" type="StaticBody3D" parent="SegmentColliders"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.6, 0, 0)
+
+[node name="Shape" type="CollisionShape3D" parent="SegmentColliders/Tp3Tp4Col"]
+shape = SubResource("Shape_tp")
+
+[node name="TestPoints" type="Node3D" parent="."]
+
+[node name="Tp1" type="Node3D" parent="TestPoints"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4, 0, 0)
+
+[node name="Body" type="CSGSphere3D" parent="TestPoints/Tp1"]
+radius = 0.045
+material = SubResource("Mat_tp1_body")
+
+[node name="Collision" type="StaticBody3D" parent="TestPoints/Tp1"]
+
+[node name="Shape" type="CollisionShape3D" parent="TestPoints/Tp1/Collision"]
+shape = SubResource("Shape_tp")
+
+[node name="Tp2" type="Node3D" parent="TestPoints"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+
+[node name="Body" type="CSGSphere3D" parent="TestPoints/Tp2"]
+radius = 0.045
+material = SubResource("Mat_tp2_body")
+
+[node name="Collision" type="StaticBody3D" parent="TestPoints/Tp2"]
+
+[node name="Shape" type="CollisionShape3D" parent="TestPoints/Tp2/Collision"]
+shape = SubResource("Shape_tp")
+
+[node name="Tp3" type="Node3D" parent="TestPoints"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.4, 0, 0)
+
+[node name="Body" type="CSGSphere3D" parent="TestPoints/Tp3"]
+radius = 0.045
+material = SubResource("Mat_tp3_body")
+
+[node name="Collision" type="StaticBody3D" parent="TestPoints/Tp3"]
+
+[node name="Shape" type="CollisionShape3D" parent="TestPoints/Tp3/Collision"]
+shape = SubResource("Shape_tp")
+
+[node name="Tp4" type="Node3D" parent="TestPoints"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, 0, 0)
+
+[node name="Body" type="CSGSphere3D" parent="TestPoints/Tp4"]
+radius = 0.045
+material = SubResource("Mat_tp4_body")
+
+[node name="Collision" type="StaticBody3D" parent="TestPoints/Tp4"]
+
+[node name="Shape" type="CollisionShape3D" parent="TestPoints/Tp4/Collision"]
+shape = SubResource("Shape_tp")
+
+[node name="Probe" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4, -0.3, 0.1)
+visible = false
+
+[node name="Tip" type="CSGCylinder3D" parent="Probe"]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0.1, 0)
+radius = 0.012
+height = 0.04
+sides = 10
+material = SubResource("Mat_probe_tip")
+
+[node name="Body" type="CSGCylinder3D" parent="Probe"]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0.1, -0.1)
+radius = 0.022
+height = 0.16
+sides = 10
+material = SubResource("Mat_probe_body")
+
+[node name="Display" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.42, 0)
+
+[node name="Face" type="CSGBox3D" parent="Display"]
+size = Vector3(0.6, 0.14, 0.02)
+material = SubResource("Mat_display_face")
+
+[node name="ReadingText" type="Label3D" parent="Display"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.02)
+pixel_size = 0.0014
+billboard = 0
+no_depth_test = true
+modulate = Color(0.4, 0.95, 0.55, 1)
+font_size = 20
+text = "PROBE A TEST POINT"
+horizontal_alignment = 1
+
+[node name="Labels" type="Node3D" parent="."]
+
+[node name="PowerLabel" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.82, -0.2, 0)
+pixel_size = 0.0013
+billboard = 0
+no_depth_test = true
+modulate = Color(0.8, 0.85, 0.88, 0.95)
+font_size = 16
+text = "POWER"
+horizontal_alignment = 1
+
+[node name="Tp1Label" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4, -0.15, 0)
+pixel_size = 0.0013
+billboard = 0
+no_depth_test = true
+modulate = Color(0.8, 0.85, 0.88, 0.95)
+font_size = 16
+text = "TP1"
+horizontal_alignment = 1
+
+[node name="Tp2Label" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.15, 0)
+pixel_size = 0.0013
+billboard = 0
+no_depth_test = true
+modulate = Color(0.8, 0.85, 0.88, 0.95)
+font_size = 16
+text = "TP2"
+horizontal_alignment = 1
+
+[node name="Tp3Label" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.4, -0.15, 0)
+pixel_size = 0.0013
+billboard = 0
+no_depth_test = true
+modulate = Color(0.8, 0.85, 0.88, 0.95)
+font_size = 16
+text = "TP3"
+horizontal_alignment = 1
+
+[node name="Tp4Label" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, -0.15, 0)
+pixel_size = 0.0013
+billboard = 0
+no_depth_test = true
+modulate = Color(0.8, 0.85, 0.88, 0.95)
+font_size = 16
+text = "TP4"
+horizontal_alignment = 1

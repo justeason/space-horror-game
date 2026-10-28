@@ -1,0 +1,32 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/interactables/wall_watch_window.gd" id="1_window"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_collision"]
+size = Vector3(0.12, 0.42, 0.36)
+
+[sub_resource type="BoxMesh" id="BoxMesh_backplate"]
+size = Vector3(0.04, 0.4, 0.34)
+
+[sub_resource type="BoxMesh" id="BoxMesh_screen"]
+size = Vector3(0.02, 0.26, 0.22)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_backplate"]
+albedo_color = Color(0.18, 0.18, 0.2, 1)
+roughness = 0.85
+metallic = 0.15
+
+[node name="WallWatchWindow" type="StaticBody3D"]
+script = ExtResource("1_window")
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_collision")
+
+[node name="Backplate" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.02, 0, 0)
+mesh = SubResource("BoxMesh_backplate")
+surface_material_override/0 = SubResource("StandardMaterial3D_backplate")
+
+[node name="Screen" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.01, 0, 0)
+mesh = SubResource("BoxMesh_screen")

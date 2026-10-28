@@ -1,0 +1,655 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/workstation_screen.gd" id="1_screen"]
+
+[node name="WorkstationScreen" type="SubViewport"]
+size = Vector2i(640, 400)
+transparent_bg = false
+script = ExtResource("1_screen")
+
+[node name="Control" type="Control" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="Bg" type="ColorRect" parent="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.05, 0.07, 0.09, 1)
+
+[node name="VBox" type="VBoxContainer" parent="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 26.0
+offset_top = 22.0
+offset_right = -26.0
+offset_bottom = -20.0
+theme_override_constants/separation = 8
+
+[node name="TitleBar" type="HBoxContainer" parent="Control/VBox"]
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="Control/VBox/TitleBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "STATION WORKSTATION"
+theme_override_colors/font_color = Color(0.7, 0.9, 1.0, 1)
+theme_override_font_sizes/font_size = 13
+
+[node name="HSeparator" type="HSeparator" parent="Control/VBox"]
+layout_mode = 2
+
+[node name="Content" type="Control" parent="Control/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+clip_contents = true
+
+[node name="Home" type="VBoxContainer" parent="Control/VBox/Content"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/separation = 10
+
+[node name="Welcome" type="Label" parent="Control/VBox/Content/Home"]
+layout_mode = 2
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(580, 0)
+text = "WORKSTATION READY"
+theme_override_colors/font_color = Color(0.8, 0.85, 0.82, 1)
+theme_override_font_sizes/font_size = 11
+autowrap_mode = 2
+
+[node name="Menu" type="VBoxContainer" parent="Control/VBox/Content/Home"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="L1" type="Label" parent="Control/VBox/Content/Home/Menu"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[1] Overview"
+theme_override_colors/font_color = Color(0.68, 0.8, 0.76, 1)
+theme_override_font_sizes/font_size = 11
+
+[node name="L2" type="Label" parent="Control/VBox/Content/Home/Menu"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[2] Work Orders"
+theme_override_colors/font_color = Color(0.68, 0.8, 0.76, 1)
+theme_override_font_sizes/font_size = 11
+
+[node name="L3" type="Label" parent="Control/VBox/Content/Home/Menu"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[3] Diagnostics"
+theme_override_colors/font_color = Color(0.68, 0.8, 0.76, 1)
+theme_override_font_sizes/font_size = 11
+
+[node name="L4" type="Label" parent="Control/VBox/Content/Home/Menu"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[4] Surveillance"
+theme_override_colors/font_color = Color(0.68, 0.8, 0.76, 1)
+theme_override_font_sizes/font_size = 11
+
+[node name="L5" type="Label" parent="Control/VBox/Content/Home/Menu"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[5] Save / Load"
+theme_override_colors/font_color = Color(0.5, 0.55, 0.52, 1)
+theme_override_font_sizes/font_size = 11
+
+[node name="L6" type="Label" parent="Control/VBox/Content/Home/Menu"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "[6] Settings"
+theme_override_colors/font_color = Color(0.5, 0.55, 0.52, 1)
+theme_override_font_sizes/font_size = 11
+
+[node name="Overview" type="VBoxContainer" parent="Control/VBox/Content"]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/separation = 8
+
+[node name="StatusLights" type="HBoxContainer" parent="Control/VBox/Content/Overview"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Power" type="VBoxContainer" parent="Control/VBox/Content/Overview/StatusLights"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Light" type="ColorRect" parent="Control/VBox/Content/Overview/StatusLights/Power"]
+custom_minimum_size = Vector2(13, 13)
+layout_mode = 2
+size_flags_horizontal = 4
+color = Color(0.2, 0.85, 0.3, 1)
+
+[node name="Label" type="Label" parent="Control/VBox/Content/Overview/StatusLights/Power"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.78, 0.74, 1)
+theme_override_font_sizes/font_size = 9
+text = "PWR"
+horizontal_alignment = 1
+
+[node name="Battery" type="VBoxContainer" parent="Control/VBox/Content/Overview/StatusLights"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Light" type="ColorRect" parent="Control/VBox/Content/Overview/StatusLights/Battery"]
+custom_minimum_size = Vector2(13, 13)
+layout_mode = 2
+size_flags_horizontal = 4
+color = Color(0.2, 0.85, 0.3, 1)
+
+[node name="Label" type="Label" parent="Control/VBox/Content/Overview/StatusLights/Battery"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.78, 0.74, 1)
+theme_override_font_sizes/font_size = 9
+text = "BAT"
+horizontal_alignment = 1
+
+[node name="Pressure" type="VBoxContainer" parent="Control/VBox/Content/Overview/StatusLights"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Light" type="ColorRect" parent="Control/VBox/Content/Overview/StatusLights/Pressure"]
+custom_minimum_size = Vector2(13, 13)
+layout_mode = 2
+size_flags_horizontal = 4
+color = Color(0.2, 0.85, 0.3, 1)
+
+[node name="Label" type="Label" parent="Control/VBox/Content/Overview/StatusLights/Pressure"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.78, 0.74, 1)
+theme_override_font_sizes/font_size = 9
+text = "PRS"
+horizontal_alignment = 1
+
+[node name="O2" type="VBoxContainer" parent="Control/VBox/Content/Overview/StatusLights"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Light" type="ColorRect" parent="Control/VBox/Content/Overview/StatusLights/O2"]
+custom_minimum_size = Vector2(13, 13)
+layout_mode = 2
+size_flags_horizontal = 4
+color = Color(0.2, 0.85, 0.3, 1)
+
+[node name="Label" type="Label" parent="Control/VBox/Content/Overview/StatusLights/O2"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.78, 0.74, 1)
+theme_override_font_sizes/font_size = 9
+text = "O2"
+horizontal_alignment = 1
+
+[node name="CO2" type="VBoxContainer" parent="Control/VBox/Content/Overview/StatusLights"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Light" type="ColorRect" parent="Control/VBox/Content/Overview/StatusLights/CO2"]
+custom_minimum_size = Vector2(13, 13)
+layout_mode = 2
+size_flags_horizontal = 4
+color = Color(0.2, 0.85, 0.3, 1)
+
+[node name="Label" type="Label" parent="Control/VBox/Content/Overview/StatusLights/CO2"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.78, 0.74, 1)
+theme_override_font_sizes/font_size = 9
+text = "CO2"
+horizontal_alignment = 1
+
+[node name="Temp" type="VBoxContainer" parent="Control/VBox/Content/Overview/StatusLights"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Light" type="ColorRect" parent="Control/VBox/Content/Overview/StatusLights/Temp"]
+custom_minimum_size = Vector2(13, 13)
+layout_mode = 2
+size_flags_horizontal = 4
+color = Color(0.2, 0.85, 0.3, 1)
+
+[node name="Label" type="Label" parent="Control/VBox/Content/Overview/StatusLights/Temp"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.78, 0.74, 1)
+theme_override_font_sizes/font_size = 9
+text = "TMP"
+horizontal_alignment = 1
+
+[node name="Comms" type="VBoxContainer" parent="Control/VBox/Content/Overview/StatusLights"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Light" type="ColorRect" parent="Control/VBox/Content/Overview/StatusLights/Comms"]
+custom_minimum_size = Vector2(13, 13)
+layout_mode = 2
+size_flags_horizontal = 4
+color = Color(0.2, 0.85, 0.3, 1)
+
+[node name="Label" type="Label" parent="Control/VBox/Content/Overview/StatusLights/Comms"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.78, 0.74, 1)
+theme_override_font_sizes/font_size = 9
+text = "COM"
+horizontal_alignment = 1
+
+[node name="Structural" type="VBoxContainer" parent="Control/VBox/Content/Overview/StatusLights"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Light" type="ColorRect" parent="Control/VBox/Content/Overview/StatusLights/Structural"]
+custom_minimum_size = Vector2(13, 13)
+layout_mode = 2
+size_flags_horizontal = 4
+color = Color(0.2, 0.85, 0.3, 1)
+
+[node name="Label" type="Label" parent="Control/VBox/Content/Overview/StatusLights/Structural"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.78, 0.74, 1)
+theme_override_font_sizes/font_size = 9
+text = "STR"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="Control/VBox/Content/Overview"]
+layout_mode = 2
+
+[node name="Status" type="Label" parent="Control/VBox/Content/Overview"]
+layout_mode = 2
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(580, 0)
+theme_override_colors/font_color = Color(1.0, 0.85, 0.3, 1)
+theme_override_font_sizes/font_size = 11
+autowrap_mode = 2
+
+[node name="MapSeparator" type="HSeparator" parent="Control/VBox/Content/Overview"]
+layout_mode = 2
+
+[node name="MapHint" type="Label" parent="Control/VBox/Content/Overview"]
+layout_mode = 2
+text = "STATION MAP     [←/→] Select Room"
+theme_override_colors/font_color = Color(0.6, 0.68, 0.64, 1)
+theme_override_font_sizes/font_size = 10
+
+[node name="Map" type="Control" parent="Control/VBox/Content/Overview"]
+custom_minimum_size = Vector2(400, 185)
+layout_mode = 2
+
+[node name="EdgeLqCr" type="ColorRect" parent="Control/VBox/Content/Overview/Map"]
+layout_mode = 0
+offset_left = 90.0
+offset_top = 67.0
+offset_right = 100.0
+offset_bottom = 69.0
+color = Color(0.4, 0.44, 0.42, 1)
+
+[node name="EdgeCrMj" type="ColorRect" parent="Control/VBox/Content/Overview/Map"]
+layout_mode = 0
+offset_left = 180.0
+offset_top = 67.0
+offset_right = 200.0
+offset_bottom = 69.0
+color = Color(0.4, 0.44, 0.42, 1)
+
+[node name="EdgeMjComms" type="ColorRect" parent="Control/VBox/Content/Overview/Map"]
+layout_mode = 0
+offset_left = 239.0
+offset_top = 31.0
+offset_right = 241.0
+offset_bottom = 55.0
+color = Color(0.4, 0.44, 0.42, 1)
+
+[node name="EdgeMjLs" type="ColorRect" parent="Control/VBox/Content/Overview/Map"]
+layout_mode = 0
+offset_left = 280.0
+offset_top = 67.0
+offset_right = 310.0
+offset_bottom = 69.0
+color = Color(0.4, 0.44, 0.42, 1)
+
+[node name="EdgeMjEng" type="ColorRect" parent="Control/VBox/Content/Overview/Map"]
+layout_mode = 0
+offset_left = 239.0
+offset_top = 81.0
+offset_right = 241.0
+offset_bottom = 105.0
+color = Color(0.4, 0.44, 0.42, 1)
+
+[node name="EdgeEngStorage" type="ColorRect" parent="Control/VBox/Content/Overview/Map"]
+layout_mode = 0
+offset_left = 280.0
+offset_top = 117.0
+offset_right = 310.0
+offset_bottom = 119.0
+color = Color(0.4, 0.44, 0.42, 1)
+
+[node name="EdgeEngAirlock" type="ColorRect" parent="Control/VBox/Content/Overview/Map"]
+layout_mode = 0
+offset_left = 239.0
+offset_top = 131.0
+offset_right = 241.0
+offset_bottom = 145.0
+color = Color(0.4, 0.44, 0.42, 1)
+
+[node name="EdgeStorageLs" type="ColorRect" parent="Control/VBox/Content/Overview/Map"]
+layout_mode = 0
+offset_left = 349.0
+offset_top = 81.0
+offset_right = 351.0
+offset_bottom = 105.0
+color = Color(0.4, 0.44, 0.42, 1)
+
+[node name="RoomLivingQuarters" type="ColorRect" parent="Control/VBox/Content/Overview/Map"]
+layout_mode = 0
+offset_left = 10.0
+offset_top = 55.0
+offset_right = 90.0
+offset_bottom = 81.0
+color = Color(0.22, 0.24, 0.27, 1)
+
+[node name="Label" type="Label" parent="Control/VBox/Content/Overview/Map/RoomLivingQuarters"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+text = "Living Qtrs"
+theme_override_colors/font_color = Color(0.85, 0.87, 0.85, 1)
+theme_override_font_sizes/font_size = 9
+horizontal_alignment = 1
+vertical_alignment = 1
+mouse_filter = 2
+
+[node name="RoomControlRoom" type="ColorRect" parent="Control/VBox/Content/Overview/Map"]
+layout_mode = 0
+offset_left = 100.0
+offset_top = 55.0
+offset_right = 180.0
+offset_bottom = 81.0
+color = Color(0.22, 0.24, 0.27, 1)
+
+[node name="Label" type="Label" parent="Control/VBox/Content/Overview/Map/RoomControlRoom"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+text = "Control Room"
+theme_override_colors/font_color = Color(0.85, 0.87, 0.85, 1)
+theme_override_font_sizes/font_size = 9
+horizontal_alignment = 1
+vertical_alignment = 1
+mouse_filter = 2
+
+[node name="RoomMainJunction" type="ColorRect" parent="Control/VBox/Content/Overview/Map"]
+layout_mode = 0
+offset_left = 200.0
+offset_top = 55.0
+offset_right = 280.0
+offset_bottom = 81.0
+color = Color(0.22, 0.24, 0.27, 1)
+
+[node name="Label" type="Label" parent="Control/VBox/Content/Overview/Map/RoomMainJunction"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+text = "Main Junction"
+theme_override_colors/font_color = Color(0.85, 0.87, 0.85, 1)
+theme_override_font_sizes/font_size = 9
+horizontal_alignment = 1
+vertical_alignment = 1
+mouse_filter = 2
+
+[node name="RoomCommunications" type="ColorRect" parent="Control/VBox/Content/Overview/Map"]
+layout_mode = 0
+offset_left = 200.0
+offset_top = 5.0
+offset_right = 280.0
+offset_bottom = 31.0
+color = Color(0.22, 0.24, 0.27, 1)
+
+[node name="Label" type="Label" parent="Control/VBox/Content/Overview/Map/RoomCommunications"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+text = "Comms"
+theme_override_colors/font_color = Color(0.85, 0.87, 0.85, 1)
+theme_override_font_sizes/font_size = 9
+horizontal_alignment = 1
+vertical_alignment = 1
+mouse_filter = 2
+
+[node name="RoomLifeSupport" type="ColorRect" parent="Control/VBox/Content/Overview/Map"]
+layout_mode = 0
+offset_left = 310.0
+offset_top = 55.0
+offset_right = 390.0
+offset_bottom = 81.0
+color = Color(0.22, 0.24, 0.27, 1)
+
+[node name="Label" type="Label" parent="Control/VBox/Content/Overview/Map/RoomLifeSupport"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+text = "Life Support"
+theme_override_colors/font_color = Color(0.85, 0.87, 0.85, 1)
+theme_override_font_sizes/font_size = 9
+horizontal_alignment = 1
+vertical_alignment = 1
+mouse_filter = 2
+
+[node name="RoomEngineering" type="ColorRect" parent="Control/VBox/Content/Overview/Map"]
+layout_mode = 0
+offset_left = 200.0
+offset_top = 105.0
+offset_right = 280.0
+offset_bottom = 131.0
+color = Color(0.22, 0.24, 0.27, 1)
+
+[node name="Label" type="Label" parent="Control/VBox/Content/Overview/Map/RoomEngineering"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+text = "Engineering"
+theme_override_colors/font_color = Color(0.85, 0.87, 0.85, 1)
+theme_override_font_sizes/font_size = 9
+horizontal_alignment = 1
+vertical_alignment = 1
+mouse_filter = 2
+
+[node name="RoomStorage" type="ColorRect" parent="Control/VBox/Content/Overview/Map"]
+layout_mode = 0
+offset_left = 310.0
+offset_top = 105.0
+offset_right = 390.0
+offset_bottom = 131.0
+color = Color(0.22, 0.24, 0.27, 1)
+
+[node name="Label" type="Label" parent="Control/VBox/Content/Overview/Map/RoomStorage"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+text = "Storage"
+theme_override_colors/font_color = Color(0.85, 0.87, 0.85, 1)
+theme_override_font_sizes/font_size = 9
+horizontal_alignment = 1
+vertical_alignment = 1
+mouse_filter = 2
+
+[node name="RoomAirlock" type="ColorRect" parent="Control/VBox/Content/Overview/Map"]
+layout_mode = 0
+offset_left = 200.0
+offset_top = 145.0
+offset_right = 280.0
+offset_bottom = 171.0
+color = Color(0.22, 0.24, 0.27, 1)
+
+[node name="Label" type="Label" parent="Control/VBox/Content/Overview/Map/RoomAirlock"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+text = "Airlock"
+theme_override_colors/font_color = Color(0.85, 0.87, 0.85, 1)
+theme_override_font_sizes/font_size = 9
+horizontal_alignment = 1
+vertical_alignment = 1
+mouse_filter = 2
+
+[node name="RoomInfo" type="Label" parent="Control/VBox/Content/Overview"]
+layout_mode = 2
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(580, 0)
+theme_override_colors/font_color = Color(0.72, 0.8, 0.9, 1)
+theme_override_font_sizes/font_size = 10
+autowrap_mode = 2
+
+[node name="WorkOrders" type="VBoxContainer" parent="Control/VBox/Content"]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="List" type="Label" parent="Control/VBox/Content/WorkOrders"]
+layout_mode = 2
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(580, 0)
+theme_override_colors/font_color = Color(0.78, 0.84, 0.8, 1)
+theme_override_font_sizes/font_size = 11
+autowrap_mode = 2
+
+[node name="Diagnostics" type="VBoxContainer" parent="Control/VBox/Content"]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/separation = 8
+
+[node name="TerminalLights" type="HBoxContainer" parent="Control/VBox/Content/Diagnostics"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="T1" type="VBoxContainer" parent="Control/VBox/Content/Diagnostics/TerminalLights"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Light" type="ColorRect" parent="Control/VBox/Content/Diagnostics/TerminalLights/T1"]
+custom_minimum_size = Vector2(16, 16)
+layout_mode = 2
+size_flags_horizontal = 4
+color = Color(0.2, 0.85, 0.3, 1)
+
+[node name="Label" type="Label" parent="Control/VBox/Content/Diagnostics/TerminalLights/T1"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.78, 0.74, 1)
+theme_override_font_sizes/font_size = 10
+text = "T-1"
+horizontal_alignment = 1
+
+[node name="T2" type="VBoxContainer" parent="Control/VBox/Content/Diagnostics/TerminalLights"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Light" type="ColorRect" parent="Control/VBox/Content/Diagnostics/TerminalLights/T2"]
+custom_minimum_size = Vector2(16, 16)
+layout_mode = 2
+size_flags_horizontal = 4
+color = Color(0.2, 0.85, 0.3, 1)
+
+[node name="Label" type="Label" parent="Control/VBox/Content/Diagnostics/TerminalLights/T2"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.78, 0.74, 1)
+theme_override_font_sizes/font_size = 10
+text = "T-2"
+horizontal_alignment = 1
+
+[node name="Status" type="Label" parent="Control/VBox/Content/Diagnostics"]
+layout_mode = 2
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(580, 0)
+theme_override_colors/font_color = Color(0.78, 0.84, 0.8, 1)
+theme_override_font_sizes/font_size = 11
+autowrap_mode = 2
+
+[node name="Surveillance" type="VBoxContainer" parent="Control/VBox/Content"]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/separation = 6
+
+[node name="Feed" type="TextureRect" parent="Control/VBox/Content/Surveillance"]
+custom_minimum_size = Vector2(0, 190)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="CameraLabel" type="Label" parent="Control/VBox/Content/Surveillance"]
+layout_mode = 2
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(580, 0)
+theme_override_colors/font_color = Color(0.78, 0.84, 0.8, 1)
+theme_override_font_sizes/font_size = 11
+autowrap_mode = 2
+
+[node name="SaveLoad" type="VBoxContainer" parent="Control/VBox/Content"]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="Notice" type="Label" parent="Control/VBox/Content/SaveLoad"]
+layout_mode = 2
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(580, 0)
+text = "Save / Load is not available in this build.
+(Planned -- see the project roadmap.)"
+theme_override_colors/font_color = Color(0.6, 0.6, 0.55, 1)
+theme_override_font_sizes/font_size = 11
+autowrap_mode = 2
+
+[node name="Settings" type="VBoxContainer" parent="Control/VBox/Content"]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/separation = 6
+
+[node name="DifficultyLabel" type="Label" parent="Control/VBox/Content/Settings"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.85, 0.8, 1)
+theme_override_font_sizes/font_size = 22
+text = "GAME DIFFICULTY: NORMAL"
+
+[node name="DifficultyDetail" type="Label" parent="Control/VBox/Content/Settings"]
+layout_mode = 2
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(580, 0)
+theme_override_colors/font_color = Color(0.72, 0.78, 0.74, 1)
+theme_override_font_sizes/font_size = 13
+autowrap_mode = 2
+text = "Applies across the whole station, not just Engineering -- every repair and diagnostic task reads this same setting.
+
+EASY — stronger step-by-step hints, verbose diagnostics, no access screws.
+NORMAL — hints only while disconnecting, balanced diagnostics, no access screws.
+HARD — no wire-order hints, terse diagnostics, four access screws to open/close a cover.
+
+Changing this applies right away to any task not yet started. A repair already in progress keeps the requirements it started with until it is finished."
+
+[node name="HintBar2" type="Label" parent="Control/VBox/Content/Settings"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.68, 0.64, 1)
+theme_override_font_sizes/font_size = 12
+text = "[R] Cycle Difficulty (Easy / Normal / Hard)"
+
+[node name="HSeparator2" type="HSeparator" parent="Control/VBox"]
+layout_mode = 2
+
+[node name="HintBar" type="HBoxContainer" parent="Control/VBox"]
+layout_mode = 2
+
+[node name="HintLabel" type="Label" parent="Control/VBox/HintBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1.0, 0.82, 0.3, 1)
+theme_override_font_sizes/font_size = 10
+autowrap_mode = 2

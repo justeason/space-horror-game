@@ -1,23 +1,58 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/interactables/toggle_switch.gd" id="1_switch"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_collision"]
-size = Vector3(0.22, 0.42, 0.32)
+size = Vector3(0.26, 0.26, 0.26)
+
+[sub_resource type="BoxMesh" id="BoxMesh_mount"]
+size = Vector3(0.02, 0.25, 0.25)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_mount"]
+albedo_color = Color(0.32, 0.33, 0.35, 1)
+roughness = 0.7
+metallic = 0.25
 
 [sub_resource type="BoxMesh" id="BoxMesh_plate"]
-size = Vector3(0.06, 0.4, 0.3)
+size = Vector3(0.06, 0.2, 0.2)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_plate"]
-albedo_color = Color(0.22, 0.22, 0.24, 1)
+albedo_color = Color(0.16, 0.16, 0.18, 1)
 roughness = 0.8
 metallic = 0.2
 
 [sub_resource type="BoxMesh" id="BoxMesh_lever"]
-size = Vector3(0.14, 0.03, 0.03)
+size = Vector3(0.12, 0.028, 0.028)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_lever"]
+albedo_color = Color(0.1, 0.1, 0.11, 1)
+roughness = 0.6
+metallic = 0.3
+
+[sub_resource type="BoxMesh" id="BoxMesh_lever_tip"]
+size = Vector3(0.026, 0.034, 0.034)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_lever_tip"]
+albedo_color = Color(0.5, 0.5, 0.53, 1)
+roughness = 0.35
+metallic = 0.55
+
+[sub_resource type="BoxMesh" id="BoxMesh_indicator_bezel"]
+size = Vector3(0.015, 0.07, 0.07)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_indicator_bezel"]
+albedo_color = Color(0.08, 0.08, 0.09, 1)
+roughness = 0.7
 
 [sub_resource type="BoxMesh" id="BoxMesh_indicator"]
-size = Vector3(0.02, 0.05, 0.05)
+size = Vector3(0.012, 0.045, 0.045)
+
+[sub_resource type="BoxMesh" id="BoxMesh_label_backing"]
+size = Vector3(0.012, 0.042, 0.13)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_label_backing"]
+albedo_color = Color(0.08, 0.08, 0.09, 1)
+roughness = 0.7
 
 [node name="ToggleSwitch" type="StaticBody3D"]
 script = ExtResource("1_switch")
@@ -25,6 +60,11 @@ script = ExtResource("1_switch")
 [node name="Collision" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0, 0)
 shape = SubResource("BoxShape3D_collision")
+
+[node name="MountingPlate" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.055, 0, 0)
+mesh = SubResource("BoxMesh_mount")
+surface_material_override/0 = SubResource("StandardMaterial3D_mount")
 
 [node name="Plate" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.03, 0, 0)
@@ -35,10 +75,36 @@ surface_material_override/0 = SubResource("StandardMaterial3D_plate")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.08, 0)
 
 [node name="LeverMesh" type="MeshInstance3D" parent="LeverPivot"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.07, 0, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.06, 0, 0)
 mesh = SubResource("BoxMesh_lever")
-surface_material_override/0 = SubResource("StandardMaterial3D_plate")
+surface_material_override/0 = SubResource("StandardMaterial3D_lever")
+
+[node name="LeverTip" type="MeshInstance3D" parent="LeverPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.125, 0, 0)
+mesh = SubResource("BoxMesh_lever_tip")
+surface_material_override/0 = SubResource("StandardMaterial3D_lever_tip")
+
+[node name="IndicatorBezel" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.005, -0.08, 0)
+mesh = SubResource("BoxMesh_indicator_bezel")
+surface_material_override/0 = SubResource("StandardMaterial3D_indicator_bezel")
 
 [node name="IndicatorLight" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.01, -0.08, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.014, -0.08, 0)
 mesh = SubResource("BoxMesh_indicator")
+
+[node name="LabelBacking" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.046, 0.104, 0)
+mesh = SubResource("BoxMesh_label_backing")
+surface_material_override/0 = SubResource("StandardMaterial3D_label_backing")
+
+[node name="Label3D" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.039, 0.104, 0)
+billboard = 1
+no_depth_test = true
+pixel_size = 0.0013
+modulate = Color(0.75, 0.77, 0.74, 0.95)
+outline_modulate = Color(0, 0, 0, 0.7)
+font_size = 20
+outline_size = 3
+text = "Switch"

@@ -1,0 +1,17 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/interactables/signal_calibration_station.gd" id="1_signal"]
+[ext_resource type="PackedScene" path="res://scenes/ui/signal_calibration_diorama.tscn" id="2_diorama"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_collision"]
+size = Vector3(0.7, 0.55, 0.3)
+
+[node name="SignalCalibrationStation" type="StaticBody3D"]
+script = ExtResource("1_signal")
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_collision")
+
+[node name="WorldDiorama" parent="." instance=ExtResource("2_diorama")]
+transform = Transform3D(0.3, 0, 0, 0, 0.3, 0, 0, 0, 0.3, 0, 0, 0.05)
+world_display_mode = true

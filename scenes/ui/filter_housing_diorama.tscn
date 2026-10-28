@@ -1,0 +1,269 @@
+[gd_scene load_steps=18 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/filter_housing_diorama.gd" id="1_diorama"]
+
+[sub_resource type="BoxShape3D" id="Shape_click"]
+size = Vector3(0.18, 0.18, 0.18)
+
+[sub_resource type="BoxShape3D" id="Shape_latch"]
+size = Vector3(0.1, 0.1, 0.1)
+
+[sub_resource type="StandardMaterial3D" id="Mat_backdrop"]
+albedo_color = Color(0.1, 0.11, 0.12, 1)
+roughness = 0.75
+metallic = 0.2
+
+[sub_resource type="StandardMaterial3D" id="Mat_housing"]
+albedo_color = Color(0.38, 0.4, 0.43, 1)
+roughness = 0.4
+metallic = 0.55
+
+[sub_resource type="StandardMaterial3D" id="Mat_rim"]
+albedo_color = Color(0.28, 0.3, 0.32, 1)
+roughness = 0.4
+metallic = 0.6
+
+[sub_resource type="StandardMaterial3D" id="Mat_keyway"]
+albedo_color = Color(0.85, 0.6, 0.2, 1)
+roughness = 0.4
+emission_enabled = true
+emission = Color(0.5, 0.35, 0.1, 1)
+emission_energy_multiplier = 0.4
+
+[sub_resource type="StandardMaterial3D" id="Mat_old_cartridge"]
+albedo_color = Color(0.42, 0.32, 0.18, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="Mat_new_cartridge"]
+albedo_color = Color(0.72, 0.75, 0.78, 1)
+roughness = 0.35
+metallic = 0.2
+
+[sub_resource type="StandardMaterial3D" id="Mat_cartridge_tab"]
+albedo_color = Color(0.85, 0.6, 0.2, 1)
+roughness = 0.4
+emission_enabled = true
+emission = Color(0.5, 0.35, 0.1, 1)
+emission_energy_multiplier = 0.4
+
+[sub_resource type="StandardMaterial3D" id="Mat_tray"]
+albedo_color = Color(0.2, 0.21, 0.22, 1)
+roughness = 0.6
+metallic = 0.3
+
+[sub_resource type="StandardMaterial3D" id="Mat_latch_1"]
+resource_local_to_scene = true
+albedo_color = Color(0.15, 0.55, 0.22, 1)
+roughness = 0.4
+metallic = 0.3
+
+[sub_resource type="StandardMaterial3D" id="Mat_latch_2"]
+resource_local_to_scene = true
+albedo_color = Color(0.15, 0.55, 0.22, 1)
+roughness = 0.4
+metallic = 0.3
+
+[sub_resource type="StandardMaterial3D" id="Mat_valve_body"]
+albedo_color = Color(0.22, 0.24, 0.26, 1)
+roughness = 0.4
+metallic = 0.55
+
+[sub_resource type="StandardMaterial3D" id="Mat_valve_handle"]
+resource_local_to_scene = true
+albedo_color = Color(0.55, 0.1, 0.08, 1)
+roughness = 0.4
+metallic = 0.3
+emission_enabled = true
+emission = Color(0.3, 0.05, 0.03, 1)
+emission_energy_multiplier = 0.3
+
+[sub_resource type="StandardMaterial3D" id="Mat_gauge_face"]
+albedo_color = Color(0.08, 0.09, 0.1, 1)
+roughness = 0.3
+
+[sub_resource type="StandardMaterial3D" id="Mat_gauge_needle"]
+albedo_color = Color(0.5, 0.8, 0.85, 1)
+roughness = 0.3
+emission_enabled = true
+emission = Color(0.3, 0.6, 0.65, 1)
+emission_energy_multiplier = 0.5
+
+[node name="FilterHousingDiorama" type="Node3D"]
+script = ExtResource("1_diorama")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.05, 1.9)
+fov = 50.0
+
+[node name="KeyLight" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0.6, 1.3)
+light_energy = 3.2
+omni_range = 4.0
+
+[node name="FillLight" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.7, -0.2, 1.1)
+light_color = Color(0.75, 0.82, 0.9, 1)
+light_energy = 1.4
+omni_range = 4.0
+
+[node name="Backdrop" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.05, -0.05, -0.14)
+size = Vector3(1.9, 1.35, 0.08)
+material = SubResource("Mat_backdrop")
+
+[node name="Housing" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.15, 0.1, 0)
+
+[node name="Tube" type="CSGCylinder3D" parent="Housing"]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0)
+radius = 0.13
+height = 0.42
+sides = 20
+material = SubResource("Mat_housing")
+
+[node name="EndCap" type="CSGCylinder3D" parent="Housing"]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, -0.21, 0, 0)
+radius = 0.14
+height = 0.02
+sides = 20
+material = SubResource("Mat_rim")
+
+[node name="OpenRim" type="CSGTorus3D" parent="Housing"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0.21, 0, 0)
+inner_radius = 0.12
+outer_radius = 0.15
+sides = 20
+ring_sides = 10
+material = SubResource("Mat_rim")
+
+[node name="KeywayMark" type="CSGBox3D" parent="Housing"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.21, -0.1096, 0.1096)
+size = Vector3(0.025, 0.03, 0.01)
+material = SubResource("Mat_keyway")
+
+[node name="Latch1" type="Node3D" parent="Housing"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.14, 0.1)
+
+[node name="Latch1Body" type="CSGBox3D" parent="Housing/Latch1"]
+size = Vector3(0.04, 0.09, 0.025)
+material = SubResource("Mat_latch_1")
+
+[node name="Latch1Collision" type="StaticBody3D" parent="Housing/Latch1"]
+
+[node name="Shape" type="CollisionShape3D" parent="Housing/Latch1/Latch1Collision"]
+shape = SubResource("Shape_latch")
+
+[node name="Latch2" type="Node3D" parent="Housing"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.14, 0.1)
+
+[node name="Latch2Body" type="CSGBox3D" parent="Housing/Latch2"]
+size = Vector3(0.04, 0.09, 0.025)
+material = SubResource("Mat_latch_2")
+
+[node name="Latch2Collision" type="StaticBody3D" parent="Housing/Latch2"]
+
+[node name="Shape" type="CollisionShape3D" parent="Housing/Latch2/Latch2Collision"]
+shape = SubResource("Shape_latch")
+
+[node name="OldCartridge" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.1, 0.1, 0)
+
+[node name="Body" type="CSGCylinder3D" parent="OldCartridge"]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0)
+radius = 0.11
+height = 0.3
+sides = 16
+material = SubResource("Mat_old_cartridge")
+
+[node name="Collision" type="StaticBody3D" parent="OldCartridge"]
+
+[node name="Shape" type="CollisionShape3D" parent="OldCartridge/Collision"]
+shape = SubResource("Shape_click")
+
+[node name="NewCartridge" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1, -0.42, 0.15)
+
+[node name="Body" type="CSGCylinder3D" parent="NewCartridge"]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0)
+radius = 0.095
+height = 0.26
+sides = 16
+material = SubResource("Mat_new_cartridge")
+
+[node name="TabRoot" type="Node3D" parent="NewCartridge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.13, 0, 0)
+
+[node name="Tab" type="CSGBox3D" parent="NewCartridge/TabRoot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
+size = Vector3(0.025, 0.03, 0.01)
+material = SubResource("Mat_cartridge_tab")
+
+[node name="Collision" type="StaticBody3D" parent="NewCartridge"]
+
+[node name="Shape" type="CollisionShape3D" parent="NewCartridge/Collision"]
+shape = SubResource("Shape_click")
+
+[node name="Tray" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1, -0.56, 0.1)
+size = Vector3(0.3, 0.025, 0.3)
+material = SubResource("Mat_tray")
+
+[node name="Valve" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.7, 0.35, 0)
+
+[node name="Body" type="CSGCylinder3D" parent="Valve"]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0)
+radius = 0.065
+height = 0.08
+sides = 14
+material = SubResource("Mat_valve_body")
+
+[node name="HandleRoot" type="Node3D" parent="Valve"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
+
+[node name="Handle" type="CSGBox3D" parent="Valve/HandleRoot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.07, 0, 0)
+size = Vector3(0.14, 0.022, 0.028)
+material = SubResource("Mat_valve_handle")
+
+[node name="Collision" type="StaticBody3D" parent="Valve"]
+
+[node name="Shape" type="CollisionShape3D" parent="Valve/Collision"]
+shape = SubResource("Shape_click")
+
+[node name="Gauge" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.7, 0.1, 0)
+
+[node name="Face" type="CSGCylinder3D" parent="Gauge"]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0, 0.03)
+radius = 0.06
+height = 0.012
+sides = 20
+material = SubResource("Mat_gauge_face")
+
+[node name="Needle" type="CSGBox3D" parent="Gauge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.022, 0.04)
+size = Vector3(0.006, 0.045, 0.006)
+material = SubResource("Mat_gauge_needle")
+
+[node name="Labels" type="Node3D" parent="."]
+
+[node name="ValveLabel" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.7, 0.48, 0)
+pixel_size = 0.0014
+billboard = 0
+no_depth_test = true
+modulate = Color(0.8, 0.85, 0.88, 0.95)
+font_size = 18
+text = "AIRFLOW"
+horizontal_alignment = 1
+
+[node name="TrayLabel" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1, -0.68, 0.15)
+pixel_size = 0.0014
+billboard = 0
+no_depth_test = true
+modulate = Color(0.8, 0.85, 0.88, 0.95)
+font_size = 18
+text = "SPARE CARTRIDGE"
+horizontal_alignment = 1

@@ -1,0 +1,87 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/interactables/rotary_control.gd" id="1_rotary"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_collision"]
+size = Vector3(0.1, 0.1, 0.08)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_base"]
+albedo_color = Color(0.14, 0.14, 0.16, 1)
+roughness = 0.6
+metallic = 0.3
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_knob"]
+albedo_color = Color(0.5, 0.52, 0.55, 1)
+roughness = 0.35
+metallic = 0.6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_collar"]
+albedo_color = Color(0.3, 0.31, 0.33, 1)
+roughness = 0.65
+metallic = 0.3
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_tick"]
+albedo_color = Color(0.62, 0.6, 0.55, 1)
+roughness = 0.5
+
+[node name="RotaryControl" type="StaticBody3D"]
+script = ExtResource("1_rotary")
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_collision")
+
+[node name="MountingCollar" type="CSGCylinder3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, -0.004, 0)
+radius = 0.058
+height = 0.012
+sides = 20
+material = SubResource("StandardMaterial3D_collar")
+
+[node name="Base" type="CSGCylinder3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0, 0)
+radius = 0.045
+height = 0.02
+sides = 16
+material = SubResource("StandardMaterial3D_base")
+
+[node name="TickMarks" type="Node3D" parent="."]
+
+[node name="Tick0" type="CSGBox3D" parent="TickMarks"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 0.05, 0.012, 0)
+size = Vector3(0.004, 0.008, 0.012)
+material = SubResource("StandardMaterial3D_tick")
+
+[node name="Tick1" type="CSGBox3D" parent="TickMarks"]
+transform = Transform3D(0.7071068, 0, -0.7071068, 0, 1, 0, 0.7071068, 0, 0.7071068, 0.0353553, 0.012, -0.0353553)
+size = Vector3(0.004, 0.008, 0.012)
+material = SubResource("StandardMaterial3D_tick")
+
+[node name="Tick2" type="CSGBox3D" parent="TickMarks"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.012, -0.05)
+size = Vector3(0.004, 0.008, 0.012)
+material = SubResource("StandardMaterial3D_tick")
+
+[node name="Tick3" type="CSGBox3D" parent="TickMarks"]
+transform = Transform3D(0.7071068, 0, 0.7071068, 0, 1, 0, -0.7071068, 0, 0.7071068, -0.0353553, 0.012, -0.0353553)
+size = Vector3(0.004, 0.008, 0.012)
+material = SubResource("StandardMaterial3D_tick")
+
+[node name="Tick4" type="CSGBox3D" parent="TickMarks"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -0.05, 0.012, 0)
+size = Vector3(0.004, 0.008, 0.012)
+material = SubResource("StandardMaterial3D_tick")
+
+[node name="Knob" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.015, 0)
+
+[node name="KnobBody" type="CSGCylinder3D" parent="Knob"]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0.015, 0)
+radius = 0.032
+height = 0.03
+sides = 12
+material = SubResource("StandardMaterial3D_knob")
+
+[node name="KnobPointer" type="CSGBox3D" parent="Knob"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, -0.022)
+size = Vector3(0.006, 0.01, 0.018)
+material = SubResource("StandardMaterial3D_base")

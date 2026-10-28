@@ -11,3 +11,6 @@ data_*/
 
 # OS cruft
 .DS_Store
+
+# Regression test runner's own log of its most recent run (tests/run_tests.sh)
+tests/.last_run.log
