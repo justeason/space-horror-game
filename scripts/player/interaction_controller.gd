@@ -140,6 +140,36 @@ func _unhandled_input(event: InputEvent) -> void:
 		# movement_controller.gd still receives it.
 
 
+## Round 21 Priority 3: ROOT CAUSE of "I can see the storage cabinets
+## but cannot open them and there is no prompt" -- confirmed by reading
+## storage_cabinet.gd and main.tscn, not assumed. That script's
+## interact()/get_interact_prompt() live on the cabinet's own plain
+## Node3D ROOT, but its actual collidable surfaces are several
+## SEPARATE child CSGBox3D nodes (Back/Top/Bottom/SideNear/SideFar/
+## DoorPanel, each its own use_collision=true primitive, needed so the
+## cabinet reads as solid furniture a player can't walk through) --
+## none of which carry the script. A raycast through any of those
+## surfaces returns THAT CHILD as `collider`, which has no `interact()`
+## of its own, so the strict "the hit collider itself must have
+## interact()" check above always failed silently: not a missing
+## prompt string, a genuinely unreachable interaction.
+##
+## This walks up the hit collider's OWN ancestor chain (bounded, so a
+## stray unrelated parent far up the tree can't accidentally absorb a
+## click) looking for the first ancestor that DOES have `interact()`,
+## used ONLY as a fallback when the direct collider itself doesn't
+## qualify -- every other interactable in this project (electrical_panel.gd,
+## filter_housing_station.gd, wire_component.gd, ...) already puts its
+## script directly on the one collidable node, so for them the first
+## check above still resolves immediately and this fallback never
+## triggers, changing nothing about their existing behavior. This is
+## additive only: it can make a previously-dead raycast hit resolve to
+## a real interact() target, but can never take away a hit that already
+## resolved directly, so it carries no regression risk for anything
+## that already worked.
+const _ANCESTOR_SEARCH_DEPTH: int = 4
+
+
 func _raycast_hovered() -> Object:
 	var space_state := get_world_3d().direct_space_state
 	var origin := global_position
@@ -152,6 +182,13 @@ func _raycast_hovered() -> Object:
 		var collider = result["collider"]
 		if collider.has_method("interact"):
 			return collider
+		var ancestor: Node = collider.get_parent() if collider is Node else null
+		for i in _ANCESTOR_SEARCH_DEPTH:
+			if ancestor == null:
+				break
+			if ancestor.has_method("interact"):
+				return ancestor
+			ancestor = ancestor.get_parent()
 	return null
 
 

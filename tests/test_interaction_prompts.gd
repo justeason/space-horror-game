@@ -71,8 +71,52 @@ func _init() -> void:
 	_check("walked away from bed: prompt clears", not prompt_label.visible)
 
 	# ============================================================
-	# 3. Wire component: hover prompt appears, disappears once carried.
+	# 2b. Round 21 Priority 3 regression: the storage cabinet door must
+	# be openable via the REAL raycast/prompt path, not just a direct
+	# .interact() call. ROOT CAUSE this covers: storage_cabinet.gd's
+	# interact() lives on the cabinet's plain Node3D ROOT, but its
+	# collidable surfaces (Back/Top/Bottom/SideNear/SideFar/DoorPanel)
+	# are separate child CSGBox3D nodes -- a raycast hit on any of them
+	# used to return a collider with no interact() of its own, so
+	# get_hovered() always resolved to null and no prompt ever appeared
+	# (see interaction_controller.gd's own doc comment on the ancestor-
+	# walk fallback this round added). Aiming at the DOOR specifically
+	# (the believable "click here to open it" surface, not an arbitrary
+	# wall) and confirming BOTH the hover resolution and the prompt text
+	# is the actual, previously-missing coverage.
 	# ============================================================
+	var cabinet1: Node = main.get_node("Geometry/StorageCabinet1")
+	# Aimed at the HINGE, not the door panel itself: the hinge only ever
+	# rotates in place (never translates), so this same aim point stays
+	# valid both before AND after the door swings open -- the panel
+	# itself translates away from its closed position once open, which
+	# would otherwise make a second re-aim at its NEW position fragile.
+	var cabinet1_hinge: Node3D = cabinet1.get_node("DoorHinge")
+	var cam: Camera3D = look_pivot.get_node("PitchPivot/Camera3D")
+	var cabinet_eye: Vector3 = cabinet1_hinge.global_position + Vector3(0.3, 1.6 - cabinet1_hinge.global_position.y, 0.3)
+	_place(cabinet_eye)
+	await _aim_at(look_pivot, pitch_pivot, cabinet_eye, cabinet1_hinge.global_position)
+	_check("aiming at the storage cabinet's door resolves to the cabinet itself (real raycast, not a direct method call)", cam.get_hovered() == cabinet1)
+	_check("looking at the closed storage cabinet: a real open prompt is shown", prompt_label.text == "Click: Open Storage Cabinet")
+	_check("storage cabinet starts closed", not cabinet1.is_open())
+	cam.get_hovered().interact()
+	await create_timer(0.7).timeout
+	_check("storage cabinet opened via the real hover/interact path", cabinet1.is_open())
+	await _aim_at(look_pivot, pitch_pivot, cabinet_eye, cabinet1_hinge.global_position)
+	_check("looking at the now-open storage cabinet: prompt now offers to close it", prompt_label.text == "Click: Close Storage Cabinet")
+
+	# ============================================================
+	# 3. Wire component: hover prompt appears, disappears once carried.
+	#
+	# Round 19 Priority 3: the wire now rests inside a real closed
+	# storage cabinet (scripts/interactables/storage_cabinet.gd) --
+	# the cabinet above is already open (opened via the real hover path
+	# just proven) so the hover/prompt check below reaches the wire
+	# exactly as a real player would. See test_storage_cabinet.gd for
+	# dedicated coverage of the door gate itself (closed-state non-
+	# interactability, open-state reveal).
+	# ============================================================
+
 	var wire_eye: Vector3 = wire.global_position + Vector3(0.3, 1.6 - wire.global_position.y, 0.3)
 	_place(wire_eye)
 	await _aim_at(look_pivot, pitch_pivot, wire_eye, wire.global_position)

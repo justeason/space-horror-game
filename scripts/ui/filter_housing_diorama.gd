@@ -199,14 +199,27 @@ func sync_full_state(stage: int, latch_open: Dictionary, cartridge_angle_deg: fl
 		var mat: StandardMaterial3D = _latch_bodies[index].material
 		mat.albedo_color = COLOR_LATCH_OPEN if open else COLOR_LATCH_CLOSED
 
+	# Round 23 Priority 2 fix: the world-embedded twin (world_display_mode
+	# true) sits permanently in the actual 3D world right next to the
+	# REAL, full-scale, carryable FilterCartridge/UsedFilterCartridge
+	# objects (filter_cartridge.gd / used_filter_cartridge.gd) -- those
+	# already physically represent "a new cartridge is installed" /
+	# "the old one was ejected" out in the world. This diorama's own
+	# cartridge props exist only so the FOCUSED procedure view (the
+	# other, non-world instance of this same scene) has something to
+	# click/rotate/animate up close. Showing them in the world twin too
+	# produced a second, decorative, never-carryable cartridge mesh
+	# hovering at the station -- the "floating duplicate cartridge"
+	# bug. The world twin still shows the valve/latches (no real-world
+	# duplicate exists for those), just never its own cartridge meshes.
 	var old_removed: bool = stage >= Stage.ALIGN_INSERT
-	_old_cartridge.visible = not old_removed
+	_old_cartridge.visible = not old_removed and not world_display_mode
 	if not old_removed:
 		_old_cartridge.position.x = -0.1
 		_old_cartridge.scale = Vector3.ONE
 
 	var new_seated: bool = stage >= Stage.CLOSE_LATCHES
-	_new_cartridge.visible = true
+	_new_cartridge.visible = not world_display_mode
 	_new_cartridge.position = Vector3(-0.1, 0.1, 0.0) if new_seated else Vector3(0.1, -0.42, 0.15)
 	_new_cartridge.scale = Vector3.ONE
 	set_cartridge_angle(cartridge_angle_deg)

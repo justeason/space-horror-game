@@ -125,207 +125,97 @@ radial_segments = 12
 rings = 7
 material = SubResource("Mat_skin")
 
-[node name="KnuckleIndex" type="CSGSphere3D" parent="ArmGroup"]
-position = Vector3(0.118, -0.1, -0.462)
-radius = 0.014
-radial_segments = 10
-rings = 6
-material = SubResource("Mat_skin")
-
-[node name="FingerIndex1" type="CSGCylinder3D" parent="ArmGroup"]
-position = Vector3(0.118, -0.098, -0.472)
-rotation_degrees = Vector3(-100, 0, 0)
-radius = 0.015
-height = 0.05
-sides = 10
-smooth_faces = true
-material = SubResource("Mat_skin")
-
-[node name="FingerIndexTip" type="CSGSphere3D" parent="ArmGroup"]
-position = Vector3(0.118, -0.13, -0.5)
-radius = 0.0145
-radial_segments = 8
-rings = 5
-material = SubResource("Mat_skin")
-
-[node name="KnuckleMiddle" type="CSGSphere3D" parent="ArmGroup"]
-position = Vector3(0.098, -0.104, -0.468)
-radius = 0.015
-radial_segments = 10
-rings = 6
-material = SubResource("Mat_skin")
-
-[node name="FingerMiddle1" type="CSGCylinder3D" parent="ArmGroup"]
-position = Vector3(0.098, -0.102, -0.478)
-rotation_degrees = Vector3(-103, 0, 0)
-radius = 0.016
-height = 0.058
-sides = 10
-smooth_faces = true
-material = SubResource("Mat_skin")
-
-[node name="FingerMiddleTip" type="CSGSphere3D" parent="ArmGroup"]
-position = Vector3(0.098, -0.14, -0.511)
-radius = 0.0155
-radial_segments = 8
-rings = 5
-material = SubResource("Mat_skin")
-
-[node name="KnuckleRing" type="CSGSphere3D" parent="ArmGroup"]
-position = Vector3(0.078, -0.102, -0.465)
-radius = 0.014
-radial_segments = 10
-rings = 6
-material = SubResource("Mat_skin")
-
-[node name="FingerRing1" type="CSGCylinder3D" parent="ArmGroup"]
-position = Vector3(0.078, -0.1, -0.475)
-rotation_degrees = Vector3(-100, 0, 0)
-radius = 0.015
-height = 0.052
-sides = 10
-smooth_faces = true
-material = SubResource("Mat_skin")
-
-[node name="FingerRingTip" type="CSGSphere3D" parent="ArmGroup"]
-position = Vector3(0.078, -0.133, -0.503)
-radius = 0.0145
-radial_segments = 8
-rings = 5
-material = SubResource("Mat_skin")
-
-[node name="KnucklePinky" type="CSGSphere3D" parent="ArmGroup"]
-position = Vector3(0.06, -0.098, -0.456)
-radius = 0.0115
-radial_segments = 10
-rings = 6
-material = SubResource("Mat_skin")
-
-[node name="FingerPinky1" type="CSGCylinder3D" parent="ArmGroup"]
-position = Vector3(0.06, -0.096, -0.466)
-rotation_degrees = Vector3(-96, 0, 0)
-radius = 0.0125
-height = 0.04
-sides = 10
-smooth_faces = true
-material = SubResource("Mat_skin")
-
-[node name="FingerPinkyTip" type="CSGSphere3D" parent="ArmGroup"]
-position = Vector3(0.06, -0.118, -0.486)
-radius = 0.012
-radial_segments = 8
-rings = 5
-material = SubResource("Mat_skin")
-
-[node name="ThumbBase" type="CSGSphere3D" parent="ArmGroup"]
-position = Vector3(0.118, -0.082, -0.408)
-radius = 0.017
-radial_segments = 10
-rings = 6
-material = SubResource("Mat_skin")
-
-[node name="Thumb1" type="CSGCylinder3D" parent="ArmGroup"]
-position = Vector3(0.128, -0.078, -0.415)
-rotation_degrees = Vector3(8, 25, 95)
-radius = 0.0145
-height = 0.045
-sides = 10
-smooth_faces = true
-material = SubResource("Mat_skin")
-
-[node name="ThumbTip" type="CSGSphere3D" parent="ArmGroup"]
-position = Vector3(0.155, -0.068, -0.408)
-radius = 0.0135
-radial_segments = 8
-rings = 5
-material = SubResource("Mat_skin")
-
 [node name="WatchAssembly" type="CSGCombiner3D" parent="ArmGroup"]
 position = Vector3(0.093, -0.128, -0.395)
 rotation_degrees = Vector3(7, 0, 18)
 layers = 2
 
 [node name="Strap" type="CSGCylinder3D" parent="ArmGroup/WatchAssembly"]
-radius = 0.07
-height = 0.05
+radius = 0.062
+height = 0.044
 sides = 16
 material = SubResource("Mat_strap")
 
 [node name="StrapKeeperLoop" type="CSGCylinder3D" parent="ArmGroup/WatchAssembly"]
-position = Vector3(0, -0.05, 0.022)
+position = Vector3(0, -0.044, 0.018)
 rotation_degrees = Vector3(90, 0, 0)
-radius = 0.019
-height = 0.011
+radius = 0.017
+height = 0.01
 sides = 10
 material = SubResource("Mat_case_metal")
 
-[node name="WatchCase" type="CSGBox3D" parent="ArmGroup/WatchAssembly"]
-position = Vector3(0, 0, 0.032)
-size = Vector3(0.13, 0.115, 0.046)
+[node name="WatchCase" type="CSGCylinder3D" parent="ArmGroup/WatchAssembly"]
+position = Vector3(0, 0, 0.024)
+rotation_degrees = Vector3(90, 0, 0)
+radius = 0.05
+height = 0.03
+sides = 24
+smooth_faces = true
 material = SubResource("Mat_case")
 
 [node name="LugTop" type="CSGBox3D" parent="ArmGroup/WatchAssembly/WatchCase"]
-position = Vector3(0, 0.064, -0.015)
-size = Vector3(0.038, 0.024, 0.024)
+position = Vector3(0, 0.048, -0.008)
+size = Vector3(0.026, 0.02, 0.018)
 material = SubResource("Mat_case_metal")
 
 [node name="LugBottom" type="CSGBox3D" parent="ArmGroup/WatchAssembly/WatchCase"]
-position = Vector3(0, -0.064, -0.015)
-size = Vector3(0.038, 0.024, 0.024)
+position = Vector3(0, -0.048, -0.008)
+size = Vector3(0.026, 0.02, 0.018)
 material = SubResource("Mat_case_metal")
 
 [node name="Bezel" type="CSGCylinder3D" parent="ArmGroup/WatchAssembly/WatchCase"]
-position = Vector3(0, 0, 0.026)
+position = Vector3(0, 0, 0.022)
 rotation_degrees = Vector3(90, 0, 0)
-radius = 0.053
-height = 0.016
+radius = 0.05
+height = 0.012
 sides = 28
 material = SubResource("Mat_case_metal")
 
 [node name="FacePlate" type="CSGCylinder3D" parent="ArmGroup/WatchAssembly/WatchCase"]
-position = Vector3(0, 0, 0.019)
+position = Vector3(0, 0, 0.017)
 rotation_degrees = Vector3(90, 0, 0)
-radius = 0.043
-height = 0.008
+radius = 0.04
+height = 0.006
 sides = 28
 material = SubResource("Mat_face")
 
-[node name="FastenerTL" type="CSGSphere3D" parent="ArmGroup/WatchAssembly/WatchCase"]
-position = Vector3(-0.054, 0.048, 0.02)
-radius = 0.009
+[node name="RimScrewNE" type="CSGSphere3D" parent="ArmGroup/WatchAssembly/WatchCase"]
+position = Vector3(0.0318, 0.0318, 0.012)
+radius = 0.006
 material = SubResource("Mat_case_metal")
 
-[node name="FastenerTR" type="CSGSphere3D" parent="ArmGroup/WatchAssembly/WatchCase"]
-position = Vector3(0.054, 0.048, 0.02)
-radius = 0.009
+[node name="RimScrewNW" type="CSGSphere3D" parent="ArmGroup/WatchAssembly/WatchCase"]
+position = Vector3(-0.0318, 0.0318, 0.012)
+radius = 0.006
 material = SubResource("Mat_case_metal")
 
-[node name="FastenerBL" type="CSGSphere3D" parent="ArmGroup/WatchAssembly/WatchCase"]
-position = Vector3(-0.054, -0.048, 0.02)
-radius = 0.009
+[node name="RimScrewSW" type="CSGSphere3D" parent="ArmGroup/WatchAssembly/WatchCase"]
+position = Vector3(-0.0318, -0.0318, 0.012)
+radius = 0.006
 material = SubResource("Mat_case_metal")
 
-[node name="FastenerBR" type="CSGSphere3D" parent="ArmGroup/WatchAssembly/WatchCase"]
-position = Vector3(0.054, -0.048, 0.02)
-radius = 0.009
+[node name="RimScrewSE" type="CSGSphere3D" parent="ArmGroup/WatchAssembly/WatchCase"]
+position = Vector3(0.0318, -0.0318, 0.012)
+radius = 0.006
 material = SubResource("Mat_case_metal")
 
 [node name="Crown" type="CSGCylinder3D" parent="ArmGroup/WatchAssembly/WatchCase"]
-position = Vector3(0.069, 0, 0)
+position = Vector3(0.052, 0, 0.008)
 rotation_degrees = Vector3(0, 0, 90)
-radius = 0.0115
-height = 0.02
+radius = 0.009
+height = 0.014
 sides = 10
 material = SubResource("Mat_case_metal")
 
 [node name="SideButton" type="CSGBox3D" parent="ArmGroup/WatchAssembly/WatchCase"]
-position = Vector3(-0.068, 0.028, 0)
-size = Vector3(0.015, 0.022, 0.02)
+position = Vector3(-0.047, 0.022, 0.008)
+size = Vector3(0.012, 0.016, 0.014)
 material = SubResource("Mat_case_metal")
 
 [node name="WatchFaceText" type="Label3D" parent="ArmGroup/WatchAssembly"]
-position = Vector3(0, 0, 0.0605)
-pixel_size = 0.00042
+layers = 2
+position = Vector3(0, 0, 0.048)
+pixel_size = 0.00038
 billboard = 0
 no_depth_test = true
 double_sided = false

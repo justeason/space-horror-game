@@ -93,7 +93,61 @@ func _init() -> void:
 	_check("mirror camera's own lateral position shifted when the player moved sideways", not is_equal_approx(mirror_x_left, mirror_x_right))
 	_check("mirror camera stays on the correct (same) lateral side as the player (tracks, not inverts)", mirror_x_left < mirror_x_right)
 
-	_check("mirror camera always stays in front of the glass, never behind it (see honest-limitation doc comment)", mirror_cam.global_position.z < glass.global_position.z)
+	# ============================================================
+	# Round 19 Priority 1: the camera model was rebuilt around a genuine
+	# off-axis (asymmetric-frustum) portal projection -- the virtual eye
+	# now deliberately sits BEHIND the glass (see mirror.gd's own doc
+	# comment on why: it looks back THROUGH the glass at the room, which
+	# off-axis framing requires, and a solid single-sided CSGBox3D is
+	# backface-culled from the inside so this doesn't actually occlude
+	# anything). This is the OPPOSITE of the Round 18 approach (camera
+	# held in front of the glass) -- asserting it explicitly so a future
+	# edit that silently reverts to "in front" (plausible-looking, but
+	# breaks the off-axis math entirely) fails loudly here.
+	# ============================================================
+	var plane_normal_for_test: Vector3 = -glass.global_transform.basis.z.normalized()
+	_check("mirror camera's virtual eye sits BEHIND the glass (off-axis portal projection, not a camera floating in front)", (glass.global_position - mirror_cam.global_position).dot(plane_normal_for_test) > 0.0)
+	_check("mirror camera uses an asymmetric (off-axis) frustum projection, not a plain symmetric one", mirror_cam.projection == Camera3D.PROJECTION_FRUSTUM)
+	# Round 21 Priority 2: depth raised 0.4 -> 0.8 (see mirror.gd's own
+	# doc comment) to narrow the effective FOV and reduce near-field
+	# stretching -- the upper bound here widened to match; still well
+	# under 1.0 (the near plane stays "small", not accidentally plain-
+	# symmetric-camera-sized).
+	_check("mirror camera's near plane distance is positive and small (the virtual eye's fixed depth behind the glass)", mirror_cam.near > 0.0 and mirror_cam.near < 1.0)
+	_check("mirror camera's frustum vertical size matches the physical glass rectangle's full height", is_equal_approx(mirror_cam.size, 0.42))
+
+	# The off-axis frustum's own asymmetry (frustum_offset) must shift
+	# with the player's lateral position -- this is the actual mechanism
+	# that produces real, oblique-angle-correct parallax (a FIXED offset
+	# would mean the window is not responding to where the real viewer
+	# stands at all).
+	free_body.sync_to_eye_position(left_pos)
+	player.global_position = left_pos
+	for i in 3: await process_frame
+	var offset_left: float = mirror_cam.frustum_offset.x
+	free_body.sync_to_eye_position(right_pos)
+	player.global_position = right_pos
+	for i in 3: await process_frame
+	var offset_right: float = mirror_cam.frustum_offset.x
+	_check("mirror camera's off-axis frustum offset shifts when the player moves sideways (real window-style asymmetry, not a fixed frustum)", not is_equal_approx(offset_left, offset_right))
+
+	# ============================================================
+	# Round 19 Priority 1: camera ORIENTATION is now fixed to the
+	# glass's own plane basis (a portal's viewing axis doesn't rotate
+	# with the viewer -- only the frustum's asymmetry does), a deliberate
+	# change from the player-gaze-reflecting orientation tried earlier
+	# this round. Confirm it stays fixed even as the player turns their
+	# head, so a future regression back to gaze-following orientation
+	# (which double-counts with the off-axis offset) is caught here.
+	# ============================================================
+	var basis_before: Basis = mirror_cam.global_transform.basis
+	look_pivot.rotation.y = 0.6
+	look_pivot._target_yaw = 0.6
+	for i in 3: await process_frame
+	_check("mirror camera's orientation stays fixed to the glass plane regardless of player look direction (off-axis offset carries the viewpoint, not camera rotation)", mirror_cam.global_transform.basis.is_equal_approx(basis_before))
+	look_pivot.rotation.y = 0.0
+	look_pivot._target_yaw = 0.0
+	for i in 3: await process_frame
 
 	# ============================================================
 	# Round 18 Priority 1 requirement #5: apparent zoom with distance.
@@ -125,9 +179,24 @@ func _init() -> void:
 	var head_group: Node3D = body.get_node("HeadGroup")
 	_check("HeadGroup is on its own dedicated render layer (bit 3 / value 4), not the default layer 1", head_group.layers == 4)
 	_check("player's own first-person camera excludes HeadGroup's layer", (cam.cull_mask & 4) == 0)
-	_check("the mirror's own camera uses the default cull_mask (sees every layer)", (mirror_cam.cull_mask & 4) != 0)
+	_check("the mirror's own camera still sees HeadGroup's layer (4) -- only the first-person rig's layer is excluded, not this one", (mirror_cam.cull_mask & 4) != 0)
 	_check("player's own camera still sees the watch rig's layer (2) -- a pre-existing, unrelated layer this change must not collide with", (cam.cull_mask & 2) != 0)
 	_check("HeadGroup is visible while standing", head_group.visible)
+
+	# ============================================================
+	# Round 21 Priority 1: the mirror must NOT render the first-person
+	# watch rig (first_person_watch_rig.tscn's ArmGroup/WatchAssembly,
+	# layer 2) -- that rig is a plain child of the PLAYER's own
+	# Camera3D, positioned at the eye point, meant for the player's own
+	# first-person view only. Before this fix, the mirror's camera used
+	# Camera3D's own default cull_mask (every layer), so it rendered
+	# that rig too -- its own separate, never-upgraded, literally
+	# skin-colored cylinder arm sitting right at the reflection's head/
+	# chest position, which is what was actually being seen and
+	# reported as "still looks like cylinders," not the (already
+	# improved) world-body arm. See mirror.gd's own doc comment.
+	# ============================================================
+	_check("the mirror's own camera EXCLUDES the first-person watch rig's layer (2) -- that rig belongs to the player's own view only", (mirror_cam.cull_mask & 2) == 0)
 
 	main.queue_free()
 	await process_frame

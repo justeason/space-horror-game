@@ -79,11 +79,12 @@ const GameSettings = preload("res://scripts/station/game_settings.gd")
 ## 4-6 CHAMBER EXPANSION SEAM" this file's own class doc comment already
 ## flagged as the one deliberately-deferred piece from Round 14. 6 (not
 ## the full 8-12 the brief's own targets mention) was chosen because the
-## brief's OWN required-calibration-count table tops out at "HARD: 5-6
-## chambers requiring calibration" -- a 6-chamber total satisfies every
-## row of that table exactly (EASY 1-2 of 6, NORMAL 3-4 of 6, HARD 5-6
-## of 6, see _REQUIRED_RANGE_BY_DIFFICULTY) without needing a chamber
-## count the table itself never actually requires being fully active.
+## brief's OWN required-calibration-count table topped out at "HARD: 5-6
+## chambers requiring calibration" -- a 6-chamber total satisfies that
+## table's upper end without needing a chamber count never actually
+## required to be fully active. (Round 19 Priority 4 later separated
+## required-count from difficulty entirely -- see
+## _REQUIRED_RANGE_BY_PROGRESSION's own doc comment.)
 const CHAMBERS: Array[StringName] = [&"a", &"b", &"c", &"d", &"e", &"f"]
 const CHAMBER_LABELS := {
 	&"a": "CHAMBER A", &"b": "CHAMBER B", &"c": "CHAMBER C",
@@ -199,17 +200,46 @@ static func _coupling_for_difficulty(difficulty: int) -> Array:
 	return _build_neighbor_coupling(CHAMBERS.size(), weight)
 
 
-## Round 18 Priority 3's own explicit per-difficulty target table:
-## EASY 1-2, NORMAL 3-4, HARD 5-6 of this station's 6 total chambers.
-const _REQUIRED_RANGE_BY_DIFFICULTY := {
-	GameSettings.Difficulty.EASY: [1, 2],
-	GameSettings.Difficulty.NORMAL: [3, 4],
-	GameSettings.Difficulty.HARD: [5, 6],
-}
+## Round 19 Priority 4: REPLACES Round 18 Priority 3's per-DIFFICULTY
+## required-count table (EASY 1-2/NORMAL 3-4/HARD 5-6), per this round's
+## explicit audit instruction -- tying active-fault COUNT directly to
+## the global EASY/NORMAL/HARD setting meant an experienced player who
+## always plays EASY could never meet a complex multi-chamber fault, and
+## a first-time player who happens to play on HARD was thrown straight
+## into 5-6 simultaneous faults with no on-ramp. Required count is now
+## keyed on _completions_this_session instead -- a technician-
+## progression/scenario-complexity axis, independent of difficulty.
+## Difficulty (below: _TOLERANCE_BY_DIFFICULTY, _STABILITY_DURATION_BY_DIFFICULTY,
+## _coupling_for_difficulty(), and the first-use hint) still exclusively
+## governs how FORGIVING a given attempt is -- band width, hold time,
+## coupling strength, hints -- exactly the brief's own split ("global
+## difficulty should determine hints/tolerances/forgiveness/stability
+## conditions; technician progression/scenario complexity should
+## determine how many chambers are faulty simultaneously").
+##
+## _completions_this_session deliberately does NOT live on DayPlan: that
+## script's own class doc comment documents "no calendar, no day
+## counter, no simulation-time system" as an explicit approved decision
+## (Approved Decision A.1, Option A) -- adding a persistent cross-day
+## counter there would reverse it. This counter instead lives entirely
+## on this view (a plain scene node that is never freed/recreated
+## between day resets, same as every other per-session UI script here),
+## incremented once per successful _commit_success() -- it survives
+## reset_for_new_day() (so a technician's accumulated skill persists
+## across in-game days, which is the point) but resets on an actual game
+## restart, same as any other non-persisted session state in this
+## project.
+const _REQUIRED_RANGE_BY_PROGRESSION := [
+	[1, 2], # first attempt ever: manageable introduction, any difficulty
+	[2, 4], # a few completions in: broader range
+	[3, 6], # experienced: can reach the full complex multi-chamber case
+]
+var _completions_this_session: int = 0
 
 
-func _random_required_count(difficulty: int) -> int:
-	var range_pair: Array = _REQUIRED_RANGE_BY_DIFFICULTY.get(difficulty, [3, 4])
+func _random_required_count() -> int:
+	var tier: int = mini(_completions_this_session, _REQUIRED_RANGE_BY_PROGRESSION.size() - 1)
+	var range_pair: Array = _REQUIRED_RANGE_BY_PROGRESSION[tier]
 	return randi_range(range_pair[0], range_pair[1])
 
 
@@ -262,6 +292,17 @@ const _STABILITY_DURATION_BY_DIFFICULTY := {
 ## station export; sensor_calibration_station.gd's active_fault_count()
 ## is no longer read here (kept on that script, now unused by this view,
 ## rather than deleted -- see that script's own updated comment).
+##
+## Round 19 Priority 4 (supersedes the difficulty-range part of the
+## paragraph above): per this round's explicit audit instruction,
+## required count no longer depends on difficulty AT ALL -- it is keyed
+## on _completions_this_session instead (a technician-progression axis),
+## so a player who always plays EASY still eventually meets a complex
+## multi-chamber fault, and a first-time HARD player still gets a
+## manageable introduction. See _REQUIRED_RANGE_BY_PROGRESSION's own doc
+## comment for the full reasoning. Difficulty's role is now exclusively
+## _coupling_for_difficulty()/_TOLERANCE_BY_DIFFICULTY/
+## _STABILITY_DURATION_BY_DIFFICULTY below -- forgiveness, not count.
 
 @onready var _focused_state: Node = get_node(focused_state_path)
 @onready var _sfx: Node = get_node_or_null(sfx_path)
@@ -337,7 +378,13 @@ func _ready() -> void:
 ## so sync/_refresh()/hover code never needs a "which chambers are
 ## procedural" branch.
 func _build_chamber_d_to_f() -> void:
-	var row: HBoxContainer = get_node("Panel/VBox/ChamberRow")
+	# Round 19 Priority 4: ChamberRow is now a GridContainer (3 columns),
+	# laying the 6 chambers out as two rows of three -- see
+	# scenes/player.tscn -- rather than one long horizontal row. This
+	# function still just appends D/E/F as children in order; the
+	# GridContainer places them into the grid automatically (A,B,C fill
+	# row 1, D,E,F wrap onto row 2), no positioning math needed here.
+	var row: GridContainer = get_node("Panel/VBox/ChamberRow")
 	var template_reading: Label = get_node("Panel/VBox/ChamberRow/ChamberA/Inner/ReadingLabel")
 	var template_status: Label = get_node("Panel/VBox/ChamberRow/ChamberA/Inner/StatusChip")
 	var template_pointer: ColorRect = get_node("Panel/VBox/ChamberRow/ChamberA/Inner/Knob/Pointer")
@@ -375,7 +422,7 @@ func _build_chamber_d_to_f() -> void:
 
 		var gauge_stack := Control.new()
 		gauge_stack.name = "GaugeStack"
-		gauge_stack.custom_minimum_size = Vector2(0, 130)
+		gauge_stack.custom_minimum_size = Vector2(0, 108)
 		gauge_stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		gauge_stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		inner.add_child(gauge_stack)
@@ -433,7 +480,7 @@ func open_station(station: Node) -> void:
 	# see this file's class doc comment). _debug_forced_count overrides
 	# this for deterministic tests, same "test-only forced value" contract
 	# every other randomized system in this project already uses.
-	var fault_count: int = _debug_forced_count if _debug_forced_count != -1 else _random_required_count(difficulty)
+	var fault_count: int = _debug_forced_count if _debug_forced_count != -1 else _random_required_count()
 	var active: Array = CHAMBERS.slice(0, fault_count)
 	for ch in CHAMBERS:
 		# Only this attempt's active (faulty) chambers start away from
@@ -600,6 +647,7 @@ static func _solve_equilibrium(matrix: Array, targets: Dictionary) -> Dictionary
 func _commit_success() -> void:
 	_done = true
 	_station.mark_complete()
+	_completions_this_session += 1
 	if _sfx != null:
 		_sfx.play_kind(&"success")
 

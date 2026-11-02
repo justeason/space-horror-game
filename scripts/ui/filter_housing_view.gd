@@ -84,6 +84,16 @@ func _on_old_cartridge_clicked() -> void:
 	var result: Dictionary = _station.remove_old_cartridge()
 	if not result.get("ok", false):
 		return
+	if not result.get("removed", false):
+		# Round 20 Priority 4: the player hasn't retrieved the real
+		# replacement cartridge from Storage yet -- harmless, recoverable,
+		# same "nothing visibly changes, just a status message" contract
+		# as a wrong-rotation insert attempt below. _refresh() surfaces
+		# the actual message via consume_missing_part_flash().
+		if _sfx != null:
+			_sfx.play_kind(&"fail")
+		_refresh()
+		return
 	_diorama.animate_remove_old_cartridge()
 	_diorama.set_cartridge_angle(_station.cartridge_angle_deg())
 	if _sfx != null:
@@ -151,7 +161,7 @@ func _refresh() -> void:
 			_controls_label.text = "Click both latches to release the housing cover."
 		Stage.REMOVE_OLD:
 			_stage_label.text = "STAGE 3 / 6 — REMOVE OLD CARTRIDGE"
-			_controls_label.text = "Click the old cartridge to pull it from the housing."
+			_controls_label.text = "Retrieve a replacement cartridge from Storage, then click the old cartridge to pull it from the housing."
 		Stage.ALIGN_INSERT:
 			_stage_label.text = "STAGE 4 / 6 — ALIGN AND INSERT SPARE CARTRIDGE"
 			var base_text: String = "Click the cartridge to rotate it. [Enter] to insert once its tab lines up with the housing's keyway mark."
@@ -170,5 +180,7 @@ func _refresh() -> void:
 		_status_label.text = "Seal nominal — airflow restored."
 	elif _station.consume_failed_insert_flash():
 		_status_label.text = "Keyway misaligned — rotate the cartridge to match the housing's mark, then try again."
+	elif _station.consume_missing_part_flash():
+		_status_label.text = "No replacement cartridge on hand — retrieve one from Storage first."
 	else:
 		_status_label.text = ""

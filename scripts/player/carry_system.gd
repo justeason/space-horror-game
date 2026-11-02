@@ -26,11 +26,20 @@ extends Node
 ## Radius of the clearance check at the candidate landing spot (catches
 ## "that point is inside a wall/prop", not just "is there a floor").
 @export var drop_clearance_radius: float = 0.12
+## Round 20 Priority 8: shared procedural sound bank (scripts/audio/
+## mechanical_sfx.gd), the same one every focused repair view already
+## uses -- picking up or placing a physical item is small mechanical
+## feedback of the exact same kind those views already play, so this
+## reuses that one bank rather than introducing a second sound system.
+## Routed through carry_system.gd itself (not each item's own script)
+## so every current and future carryable item gets it for free.
+@export var sfx_path: NodePath
 
 @onready var _carry_anchor: Node3D = get_node(carry_anchor_path)
 @onready var _player: Node3D = get_node_or_null(player_path)
 @onready var _interaction_controller: Node = get_node_or_null(interaction_controller_path)
 @onready var _message_label: Label = get_node_or_null("../HUD/TaskMessageLabel")
+@onready var _sfx: Node = get_node_or_null(sfx_path)
 
 var _carried_item: Node3D = null
 var _carried_item_id: StringName = &""
@@ -66,6 +75,8 @@ func pick_up(item: Node3D) -> bool:
 	item.reparent(_carry_anchor, true)
 	item.position = held_local_position
 	item.rotation_degrees = held_local_rotation_degrees
+	if _sfx != null:
+		_sfx.play_kind(&"click")
 	return true
 
 
@@ -83,6 +94,8 @@ func drop() -> void:
 	_carried_item = null
 	_carried_item_id = &""
 	item.return_to_rest()
+	if _sfx != null:
+		_sfx.play_kind(&"click")
 
 
 func _process(delta: float) -> void:
@@ -192,6 +205,8 @@ func _attempt_drop_at_feet() -> void:
 		item.place_in_world(Transform3D(Basis.IDENTITY, landing))
 	else:
 		item.return_to_rest()
+	if _sfx != null:
+		_sfx.play_kind(&"click")
 
 
 func _show_message(text: String) -> void:

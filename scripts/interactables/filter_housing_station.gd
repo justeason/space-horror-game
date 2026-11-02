@@ -38,16 +38,42 @@ const _SHOW_GUIDE_BY_DIFFICULTY := {
 
 @export var day_plan_path: NodePath
 @export var filter_view_path: NodePath
+## Round 20 Priority 4: the replacement cartridge must now be physically
+## retrieved from Storage (StorageCabinet2/FilterCartridge) and carried
+## here before the swap can proceed -- same "gate the existing
+## procedure on carry_system state, don't duplicate its logic" pattern
+## electrical_panel.gd already uses for the electrical spare wire.
+@export var carry_system_path: NodePath
+const _REQUIRED_ITEM_ID: StringName = &"filter_cartridge"
+
+## Round 21 Priority 4: the physical old/dirty cartridge this station
+## ejects once remove_old_cartridge() actually succeeds -- see
+## used_filter_cartridge.gd's own class doc comment for the full
+## "not just magically deleted" rationale. Optional (get_node_or_null):
+## a harmless no-op if left unwired, same defensive convention as
+## carry_system_path above.
+@export var used_cartridge_path: NodePath
+## World-space offset (in THIS station's own local space, so it stays
+## correct regardless of room orientation) where the ejected cartridge
+## lands -- a nearby floor spot in front of the housing, not inside its
+## own collision. Local -Z is this station's own "front" (see
+## get_interact_prompt()'s camera-facing convention elsewhere in this
+## project); -1.55 in Y reaches down to the Life Support floor from the
+## station's own eye-height anchor.
+@export var eject_local_offset: Vector3 = Vector3(0.0, -1.55, 0.4)
 
 @onready var _day_plan: Node = get_node(day_plan_path)
 @onready var _filter_view: Node = get_node_or_null(filter_view_path)
 @onready var _world_diorama: Node = get_node_or_null("WorldDiorama")
+@onready var _carry_system: Node = get_node_or_null(carry_system_path)
+@onready var _used_cartridge: Node = get_node_or_null(used_cartridge_path)
 
 var _stage: Stage = Stage.ISOLATE
 var _latch_open := {1: false, 2: false}
 var _cartridge_angle_deg: float = _START_ANGLE_DEG
 var _active_difficulty: int = -1
 var _failed_insert_flash: bool = false
+var _missing_part_flash: bool = false
 
 
 func _ready() -> void:
@@ -141,14 +167,36 @@ func toggle_latch(index: int) -> Dictionary:
 	return {"ok": true, "stage": _stage, "latch_open": _latch_open.duplicate()}
 
 
-## STAGE 3: pull the old (contaminated) cartridge.
+## STAGE 3: pull the old (contaminated) cartridge -- gated on actually
+## carrying the real replacement part retrieved from Storage (Round 20
+## Priority 4), the same "no part, no progress, but harmless/
+## recoverable" contract electrical_panel.gd's own _attempt_install()
+## already uses. A missing-part attempt is explicitly flagged (rather
+## than silently returning {"ok": false} like an out-of-stage call) so
+## the view can surface a clear, distinct message instead of the
+## generic "nothing happened" a player would otherwise see.
 func remove_old_cartridge() -> Dictionary:
 	if _stage != Stage.REMOVE_OLD:
 		return {"ok": false}
+	if not _has_required_part():
+		_missing_part_flash = true
+		return {"ok": true, "removed": false}
 	_stage = Stage.ALIGN_INSERT
 	_cartridge_angle_deg = _START_ANGLE_DEG
 	_sync_world_diorama()
-	return {"ok": true, "stage": _stage}
+	if _used_cartridge != null and _used_cartridge.has_method("eject_at"):
+		_used_cartridge.eject_at(global_transform * Transform3D(Basis(), eject_local_offset))
+	return {"ok": true, "removed": true, "stage": _stage}
+
+
+func _has_required_part() -> bool:
+	return _carry_system != null and _carry_system.is_carrying() and _carry_system.carried_item_id() == _REQUIRED_ITEM_ID
+
+
+func consume_missing_part_flash() -> bool:
+	var v: bool = _missing_part_flash
+	_missing_part_flash = false
+	return v
 
 
 ## STAGE 4a: rotates the new cartridge by one fixed step -- the actual
@@ -172,6 +220,10 @@ func attempt_insert() -> Dictionary:
 		return {"ok": false}
 	var diff: float = abs(wrapf(_cartridge_angle_deg - _TARGET_ANGLE_DEG, -180.0, 180.0))
 	if diff <= tolerance_deg():
+		if _carry_system != null:
+			var item: Node3D = _carry_system.take_carried_item_if_matches(_REQUIRED_ITEM_ID)
+			if item != null and item.has_method("mark_installed"):
+				item.mark_installed(self, Transform3D(Basis(), Vector3(0, -0.6, 0)))
 		_stage = Stage.CLOSE_LATCHES
 		_sync_world_diorama()
 		return {"ok": true, "seated": true, "stage": _stage}

@@ -72,11 +72,14 @@ script = ExtResource("11_carry")
 carry_anchor_path = NodePath("../PlayerBody/CarryAnchor")
 player_path = NodePath("..")
 interaction_controller_path = NodePath("../LookPivot/PitchPivot/Camera3D")
+sfx_path = NodePath("../HUD/MechanicalSfx")
 
 [node name="Wristwatch" type="Node" parent="."]
 script = ExtResource("12_wristwatch")
 interaction_controller_path = NodePath("../LookPivot/PitchPivot/Camera3D")
 watch_rig_path = NodePath("../LookPivot/PitchPivot/Camera3D/FirstPersonWatchRig")
+player_body_path = NodePath("../PlayerBody")
+carry_system_path = NodePath("../CarrySystem")
 
 [node name="Footsteps" type="AudioStreamPlayer3D" parent="."]
 script = ExtResource("4_steps")
@@ -267,16 +270,19 @@ text = "ENVIRONMENTAL PRESSURE CALIBRATION — SIX-CHAMBER SYSTEM"
 mouse_filter = 2
 
 [node name="StatusLabel" type="Label" parent="HUD/SensorCalibrationView/Panel/VBox"]
+custom_minimum_size = Vector2(0, 56)
 theme_override_colors/font_color = Color(0.88, 0.94, 0.9, 1)
-theme_override_font_sizes/font_size = 36
+theme_override_font_sizes/font_size = 26
 autowrap_mode = 2
 mouse_filter = 2
 
-[node name="ChamberRow" type="HBoxContainer" parent="HUD/SensorCalibrationView/Panel/VBox"]
-custom_minimum_size = Vector2(0, 290)
+[node name="ChamberRow" type="GridContainer" parent="HUD/SensorCalibrationView/Panel/VBox"]
+custom_minimum_size = Vector2(0, 380)
 layout_mode = 2
 size_flags_vertical = 3
-theme_override_constants/separation = 18
+columns = 3
+theme_override_constants/h_separation = 18
+theme_override_constants/v_separation = 18
 
 [node name="ChamberA" type="Panel" parent="HUD/SensorCalibrationView/Panel/VBox/ChamberRow"]
 layout_mode = 2
@@ -307,7 +313,7 @@ theme_override_font_sizes/font_size = 17
 mouse_filter = 2
 
 [node name="GaugeStack" type="Control" parent="HUD/SensorCalibrationView/Panel/VBox/ChamberRow/ChamberA/Inner"]
-custom_minimum_size = Vector2(0, 130)
+custom_minimum_size = Vector2(0, 108)
 layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
@@ -369,7 +375,7 @@ theme_override_font_sizes/font_size = 17
 mouse_filter = 2
 
 [node name="GaugeStack" type="Control" parent="HUD/SensorCalibrationView/Panel/VBox/ChamberRow/ChamberB/Inner"]
-custom_minimum_size = Vector2(0, 130)
+custom_minimum_size = Vector2(0, 108)
 layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
@@ -431,7 +437,7 @@ theme_override_font_sizes/font_size = 17
 mouse_filter = 2
 
 [node name="GaugeStack" type="Control" parent="HUD/SensorCalibrationView/Panel/VBox/ChamberRow/ChamberC/Inner"]
-custom_minimum_size = Vector2(0, 130)
+custom_minimum_size = Vector2(0, 108)
 layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2

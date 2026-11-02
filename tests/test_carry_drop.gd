@@ -52,7 +52,19 @@ func _init() -> void:
 	# 0. Space picks up whatever is actually hovered/targeted -- the
 	# SAME object interaction_controller.gd's own raycast resolves,
 	# not a second independent one. Aim at the wire first.
+	#
+	# Round 19 Priority 3: the wire now rests inside a real closed
+	# storage cabinet (scripts/interactables/storage_cabinet.gd) -- its
+	# own collision is disabled and it is invisible until that cabinet's
+	# door is opened (see test_storage_cabinet.gd for dedicated
+	# coverage of the gate itself). Open it here first so this file's
+	# OWN focus -- the Space pickup/drop action -- is exercised exactly
+	# as a real player would reach it, not a pre-Priority-3 shortcut.
 	# ============================================================
+	var cabinet := main.get_node("Geometry/StorageCabinet1")
+	cabinet.interact()
+	await create_timer(0.7).timeout
+
 	var original_resting_transform: Transform3D = wire.transform
 	var wire_eye: Vector3 = wire.global_position + Vector3(0.3, 1.6 - wire.global_position.y, 0.3)
 	_place(wire_eye)
@@ -156,10 +168,17 @@ func _init() -> void:
 	_send_key(KEY_SPACE)
 	await process_frame
 	_check("no safe floor found: item is NOT lost (still carrying)", carry.is_carrying())
+	# Round 20 Priority 4: Storage now also holds a second, unrelated
+	# carryable item (FilterCartridge, also duck-typed with its own
+	# get_display_name()) alongside the wire -- count only objects that
+	# actually identify as "Wire Component" (same match line 108 above
+	# already uses), not every object this duck-typed interface happens
+	# to match, so this stays a genuine duplicate-WIRE check rather than
+	# an incidental total-carryable-item count.
 	var total_wires := 0
 	for n in [main.get_node("Interactables"), player.get_node("PlayerBody/CarryAnchor")]:
 		for child in n.get_children():
-			if child.has_method("get_display_name"):
+			if child.has_method("get_display_name") and child.get_display_name() == "Wire Component":
 				total_wires += 1
 	_check("no safe floor found: no duplicate wire exists (count=%d)" % total_wires, total_wires == 1)
 

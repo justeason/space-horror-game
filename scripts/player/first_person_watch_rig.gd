@@ -84,6 +84,8 @@ const _LOWERED_OFFSET: Vector3 = Vector3(0.0, -0.95, 0.25)
 @onready var _arm_group: Node3D = $ArmGroup
 @onready var _watch_face_text: Label3D = $ArmGroup/WatchAssembly/WatchFaceText
 
+const _HandMeshBuilder = preload("res://scripts/player/hand_mesh_builder.gd")
+
 var _raised: bool = false
 var _tween: Tween
 
@@ -91,6 +93,59 @@ var _tween: Tween
 func _ready() -> void:
 	visible = false
 	_arm_group.position = _LOWERED_OFFSET
+	_build_fingers()
+
+
+## Round 20 Priority 2: this rig's fingers/thumb used to be a CSG chain
+## (a knuckle sphere + one cylinder segment + a tip sphere, per digit) --
+## the literal "looks like several cylinders connected together" the
+## player's own feedback named (this is the RAISED hand their screenshot
+## showed). Replaced with one smoothly-lofted tube per digit
+## (hand_mesh_builder.gd), reusing this rig's OWN already-tuned knuckle/
+## tip anchor positions (so the hand's size/spacing/angle against the
+## palm is unchanged -- only the discrete-primitive-vs-smooth-mesh
+## technique changes) rather than re-deriving a new layout. The SAME
+## builder is used for the world-body hand (player_body.gd), satisfying
+## "shared appearance between first-person and world-body models."
+func _build_fingers() -> void:
+	var mat: Material = _arm_group.get_node("Palm").material
+	var arm: Node3D = _arm_group
+	var defs: Array = [
+		{"n": "Index", "base": Vector3(0.118, -0.1, -0.462), "tip": Vector3(0.118, -0.13, -0.5)},
+		{"n": "Middle", "base": Vector3(0.098, -0.104, -0.468), "tip": Vector3(0.098, -0.14, -0.511)},
+		{"n": "Ring", "base": Vector3(0.078, -0.102, -0.465), "tip": Vector3(0.078, -0.133, -0.503)},
+		{"n": "Pinky", "base": Vector3(0.06, -0.098, -0.456), "tip": Vector3(0.06, -0.118, -0.486)},
+	]
+	for def in defs:
+		var finger: MeshInstance3D = _HandMeshBuilder.build_finger_from_anchors(
+			"Finger" + def["n"], def["base"], def["tip"], 0.0095, 0.0045, Vector3(0, -1, 0.3), 0.006, mat
+		)
+		# Round 21 Priority 1: ROOT CAUSE of "the mirror still shows a
+		# tan/skin-colored floating hand+fingers even after excluding
+		# this rig's layer 2 from the mirror camera" -- ArmGroup itself
+		# (a CSGCombiner3D) correctly carries `layers = 2`, and every
+		# CSG primitive child (palm/forearm/sleeve/watch) is folded into
+		# that ONE combined render instance for free. These finger/thumb
+		# MeshInstance3D nodes are NOT CSG shapes though -- Godot only
+		# merges CSGShape3D children into a parent CSGCombiner3D's own
+		# render instance; a plain MeshInstance3D child renders as its
+		# OWN independent VisualInstance3D, with its OWN `layers`
+		# property defaulting to 1 (the default/shared layer) unless set
+		# explicitly. Round 20 added these without ever setting that,
+		# so the fingers/thumb -- the exact geometry this project spent
+		# two rounds improving -- silently leaked onto the shared layer
+		# and rendered in every camera regardless of any cull_mask
+		# exclusion of layer 2, confirmed directly by render (see the
+		# Round 21 report). Explicitly matching ArmGroup's own layer
+		# fixes it.
+		finger.layers = 2
+		arm.add_child(finger)
+
+	var thumb: MeshInstance3D = _HandMeshBuilder.build_finger_from_anchors(
+		"Thumb", Vector3(0.118, -0.082, -0.408), Vector3(0.155, -0.068, -0.408), 0.0115, 0.0055, Vector3(0, 1, 0.2), 0.005, mat
+	)
+	thumb.layers = 2
+	arm.add_child(thumb)
 
 
 func is_raised() -> bool:

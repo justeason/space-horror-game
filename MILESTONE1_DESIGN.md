@@ -5098,3 +5098,1500 @@ they are deliberately not part of). `tests/test_workstation_room_discoverability
 - As in every prior round, real-rendered verification covered the
   specific states each priority's brief named, not an exhaustive sweep
   of every difficulty × state × camera-angle combination.
+
+# ROUND 17: KEYBOARD-PRIMARY SIGNAL CALIBRATION, READABILITY, AND A LIVING QUARTERS MIRROR
+
+## Scope
+
+A readability/font-consistency pass across every focused minigame;
+keyboard-primary controls plus randomized difficulty profiles for
+Signal Calibration; a fix for a hardcoded DISCONNECT-stage bug in
+`electrical_repair_view.gd`; rendering verification of a widened
+5-wire electrical panel; a Living Quarters wash-station mirror
+(SubViewport-based reflection feed); a player `HeadGroup` geometry
+addition (head/neck/visor, on its own render layer) so third-person
+viewpoints such as the new mirror show a head instead of a headless
+torso; and a wristwatch/hand geometry tuning pass. No commits/pushes
+performed as part of this round's own work.
+
+The mirror was built as a live SubViewport feed (the same pattern
+`surveillance_camera.gd` already established), painted onto the
+physical glass CSG surface in `main.tscn`. Its first version used a
+plain `look_at(player_eye)` camera placed a small fixed distance in
+front of the glass -- later found in Round 19 to be the actual root
+cause of "behaves like a fixed camera, not a real mirror," since
+`look_at` always re-centers on the player regardless of where they
+stand. Round 17 itself did not identify this; it is recorded here only
+so this document's own history stays accurate about when the mirror's
+real architecture changed (see Round 19 Section B).
+
+## Known limitations carried forward
+
+- `test_locked_graph`/`test_living_quarters_room` remained unresolved,
+  same as every prior round.
+- The mirror's left/right and up/down orientation had not yet been
+  render-verified with asymmetric markers at the end of this round --
+  that verification, and the upside-down/left-right bugs it found, are
+  Round 18's own work (Section below).
+
+# ROUND 18: SIX-CHAMBER CALIBRATION, A 10-WIRE PANEL, THE MIRROR'S FIRST ORIENTATION FIX, AND READABILITY
+
+## Scope
+
+Ten priorities, delivered selectively given the brief's own size: (1)
+fix the Living Quarters mirror's upside-down/left-right orientation,
+confirmed via asymmetric marker-cube renders -- two independent bugs
+found and fixed (a 2D UV left/right flip on the glass material, and an
+independent V-axis inversion in the glass CSGBox3D's own default UV
+mapping); (2) redesign the electrical repair panel from 5 to 10 wires
+(two physical rows, A hand-authored + B built procedurally from the
+same per-role data tables, so the two rows can never drift out of
+sync); (3) expand Chamber Calibration from 3 to 6 chambers (a general
+NxN Gaussian-elimination equilibrium solver replacing the old
+hardcoded 3x3 case), with required-fault-count tied to global
+difficulty (EASY 1-2, NORMAL 3-4, HARD 5-6 of 6) -- a choice Round 19's
+own audit later reversed (see Round 19 Section G); (4) Signal Tuning
+completion-feedback states (SEARCHING -> ACQUIRED -> FINE TUNING ->
+STABILIZING -> LOCKED); (7) a readability pass (36/26/20pt targets)
+across every focused minigame; (9) resolution of several Round 17
+quality issues, including a transient raycast-miss-after-adjacent-
+collider-move flaky-test root cause (fixed via retry-on-miss in the
+affected tests' own click-dispatch helpers). Priorities 5
+(wristwatch/hand/arm redesign), 6 (full-body geometry), 8 (overall
+difficulty audit), and 10 (additional polish) were explicitly deferred
+given the scope already delivered, and documented as deferred rather
+than silently dropped. Commit `9bc03b6` (preceded by checkpoint commit
+`d2612eb` covering all prior uncommitted Round 5-17 work) was pushed,
+with the user's own explicit authorization that round.
+
+## Known limitations carried forward
+
+- The mirror's ORIENTATION bugs were fixed and render-verified this
+  round, but its underlying CAMERA MODEL was still a plain `look_at`
+  camera placed in front of the glass -- genuinely improved from
+  "upside down," but still not a true planar reflection (see Round 19
+  Section B for the actual parallax fix).
+- Priorities 5, 6, 8, and 10 were not attempted this round at all.
+- `test_locked_graph`/`test_living_quarters_room` remained unresolved.
+
+# ROUND 19: ACCURATE MIRROR PARALLAX, A REAL HAND/WATCH, PHYSICAL STORAGE, AND STATION POLISH
+
+## Scope
+
+A large brief covering: (1) a genuine view-angle-dependent mirror
+reflection (not just correct orientation); (2) real hand and
+wristwatch geometry on the world-body character, replacing bare
+primitive blobs; (3) a physical storage cabinet so a maintenance spare
+is retrieved from an openable container instead of sitting on an open
+shelf; (4) a 3x2 (two rows of three) calibration-gauge layout, plus
+separating required-fault-count from global difficulty; (5) closing a
+real structural gap in the Control Room walkway; (6) a small visual
+realism pass on the electrical panel's wire entry points; full
+regression coverage throughout; and this documentation entry. Given
+the brief's own enormous size, Priority 7 (work-order/task-progression
+coherence review) and Priority 8 (one or two small complementary
+additions) were NOT attempted this round, and the Priority 3 storage
+work was deliberately scoped to the single existing retrievable item
+(the electrical spare wire) rather than the full multi-category (A/B/C)
+cabinet system the brief described, plus the filter-cartridge-from-
+storage integration -- both explicitly deferred, not silently dropped
+(see "Known limitations" below). No commit or push was performed this
+round; the brief did not explicitly authorize one (unlike Round 18's
+own brief, which did).
+
+## A. Genuine mirror parallax: an off-axis portal projection
+
+**Root cause of "behaves like a fixed camera, not a real mirror"**:
+`_update_reflection()` called `_mirror_camera.look_at(eye, UP)` every
+frame -- this ALWAYS re-centers the camera's gaze on the player
+regardless of where they stand, which is a tracking-camera behavior,
+not a mirror (a real mirror's reflected viewpoint translates with you
+but does not re-center on you). A first attempt replaced `look_at`
+with the player's own forward/up vectors reflected across the mirror
+plane -- confirmed by render to make the content change with player
+position (the original bug's defining symptom gone), but a 3-position
+parallax sweep (rendered, not just asserted) showed the reflected
+character's own screen position/scale barely moved between positions,
+revealing a deeper limitation: a flat SubViewport texture painted onto
+the glass with a plain (symmetric-frustum) camera can only depend on
+where the camera is POINTED, never on the real viewer's angle to the
+FIXED glass rectangle -- which is what a true mirror or window
+requires.
+
+**The actual fix**: a genuine off-axis ("asymmetric frustum" / portal-
+style) projection. The virtual eye is the same true in-plane (left/
+right, up/down) reflection of the player's own eye Round 17/18 already
+used, but now placed a small fixed distance BEHIND the glass (toward
+the wall) instead of in front of it, so it can look back THROUGH the
+glass at the room -- viable because a solid, single-sided CSGBox3D
+(the wall/cabinet) is backface-culled from the inside, so it does not
+actually occlude the virtual eye's view (confirmed by render: nothing
+beyond that geometry is modelled, so extreme frustum edges show void,
+not the wall itself blocking things). The camera's ORIENTATION is now
+fixed to the glass's own plane basis (a portal's viewing axis does not
+rotate with the viewer) rather than reflecting player gaze; the
+frustum's ASYMMETRY (Godot `Camera3D.PROJECTION_FRUSTUM`'s `size` +
+`frustum_offset` + `near`) is computed each frame from the glass
+rectangle's four corners as seen from the virtual eye -- standard
+portal-rendering derivation, verified both symbolically and against
+Godot's own documented `frustum_offset` semantics.
+
+**Render verification** (all real `--write-movie`/direct-viewport
+captures, not headless-only inspection): a left/center/right lateral
+sweep showing genuinely different scene content at each position (the
+right position's extreme angle shows mostly void at the frame edges --
+an honest, documented limitation, not a bug, since the player's own
+body fills most of the frame at normal viewing distance); close/far
+captures showing correct zoom-with-distance; an oblique-angle capture
+showing real asymmetric reframing (content shifts toward one side of
+the glass, exactly as a real window would); a centered capture clearly
+showing the reflected full-body silhouette. A new
+`test_mirror_reflection.gd` assertion set covers: the virtual eye sits
+BEHIND the glass (not in front, the opposite of Round 17/18's
+approach); the camera uses `PROJECTION_FRUSTUM`; `frustum_offset`
+genuinely shifts with player position; camera orientation stays FIXED
+to the glass plane even as the player turns their head (the key
+behavioral difference from the first, superseded gaze-reflecting
+attempt).
+
+**Honest limitation**: there is currently no distinct WORLD-BODY watch-
+inspection pose -- render-verified directly (a "watch raised" capture
+of the world body was pixel-identical to the unraised one) before any
+fix was attempted. `wristwatch_view.gd` now also calls a new
+`player_body.set_watch_raise_pose()` (Section C) so the mirror DOES
+show a modest arm-raise while C is held, addressing this gap as part
+of Section C's own work rather than leaving it purely documented.
+
+## B. Real hand and wristwatch geometry on the world body
+
+**Investigation finding**: the first-person watch-rig
+(`first_person_watch_rig.tscn`) already had a genuinely detailed palm/
+4-finger/separately-articulated-thumb/watch-case design (built in an
+earlier round) -- it did NOT need rebuilding. The actual gap was
+entirely on the WORLD body (`player_body.tscn`): `HandL`/`HandR` in
+every pose (Standing, Sitting) were a single bare `CSGSphere3D` each --
+no fingers, no thumb, no joints -- and the world body had no
+wristwatch model anywhere, even though it is what the new mirror (and
+any future third-person/multiplayer view) actually renders.
+
+**Fix**: `HandL`/`HandR` in `player_body.tscn` were converted from
+`CSGSphere3D` to empty `CSGCombiner3D` anchors; `player_body.gd` now
+builds a real hand (a two-box tapered palm, four fingers each with a
+knuckle sphere + two tapered cylinder segments + a matched-radius tip,
+and a separately-angled thumb attached to the palm's own side, not the
+knuckle row) procedurally at `_ready()` -- reusing this project's
+established "procedural node generation for geometry too repetitive to
+hand-author in `.tscn` text" pattern -- for both Standing and Sitting
+poses, mirrored correctly per hand via a single builder function. A
+compact case/bezel/face/strap/crown/lugs wristwatch, at the same
+physical dimensions as the first-person rig's own watch case, is now
+built onto the StandingPose/SittingPose right wrist too, visible at
+all times (not only while C is held, unlike the camera-relative
+first-person rig) -- a real third-person view should always show a
+watch on the arm, exactly like a real wristwatch never disappears.
+
+**Render verification**: a hand close-up clearly shows the palm,
+four fingers with visible knuckle segmentation, and the watch case/
+bezel/crown attached directly to the wrist (not floating); a sitting-
+pose capture shows both jointed hands clearly in the seated/resting
+pose; a side-angle capture shows a connected head/shoulder/torso/arm
+silhouette. Several camera-placement iterations were needed to get
+clean external captures in this specific tight alcove (an early
+attempt's camera landed embedded in nearby walls, invisible-from-
+inside CSG producing solid-black renders) -- resolved by anchoring the
+diagnostic camera to a real body part (Chest) at a modest offset
+rather than a large offset from an assumed-clear stage position.
+
+**Known limitation**: a full Skeleton3D migration was explicitly
+considered (per the brief's own framing of it as "justified now") but
+NOT attempted -- `player_body.gd`'s existing leg-swing/arm-gesture/lean
+animation logic is built entirely around named CSG-node POSITION/
+TRANSFORM tweens (a two-bone law-of-cosines leg solve, a falloff-
+weighted arm-gesture reach), none of which is compatible with
+skeleton-bone-pose animation without a full reimplementation, and
+CSGShape3D nodes cannot be skeleton-skinned in Godot at all (a true
+rigged mesh would require hand-authoring an `ArrayMesh` with per-
+vertex bone weights, a fundamentally different and much larger
+undertaking than this round's remaining scope allowed). Per the
+brief's own explicit escape valve ("provide a strong mesh-based
+improvement and document the exact blocking dependency" rather than
+silently substituting more CSG blocks), this round took the documented
+mesh-based path instead.
+
+## C. World-body watch-raise pose
+
+`player_body.gd` gained `set_watch_raise_pose(raised, duration)`: a
+modest standing-only right-arm raise toward the chest/lower-face,
+using the same falloff-from-rest-position tween technique
+`animate_hand_laptop_gesture()` already established for the sitting
+pose's laptop-reach gesture (not a new animation system).
+`wristwatch_view.gd` now calls it alongside its existing first-person
+`_watch_rig.set_raised()` call, so holding C shows a believable world-
+body "looking at my wrist" pose in the mirror for exactly as long as
+the first-person presentation is also shown -- addressing the gap
+Section A's own render verification found.
+
+## D. Physical storage for the electrical spare wire
+
+**Investigation finding**: the Storage room already exists in
+`main.tscn` (`StorageFloor`/`StorageRack1`/`StorageRack1Shelf`/etc.),
+and `Interactables/WireComponent` was ALREADY physically positioned on
+`StorageRack1Shelf` inside it -- the "parts appear magically on
+countertops" complaint was not about the part's location, but that
+nothing enclosed it: it sat on an open shelf beside a solid decorative
+rack, directly raycast-hittable with a single click, no door or
+opening ritual of any kind.
+
+**Fix**: a new `scripts/interactables/storage_cabinet.gd` plus a small
+five-panel shell (back/top/bottom/two sides) and a real hinged door
+(tweened rotation, same pivot-Node3D technique the breaker/latch
+hinges elsewhere in this project already use) built around the
+existing shelf/wire position in `main.tscn`. The wire's own visibility
+and collision are gated by the cabinet's open/closed state (hidden and
+non-raycastable while shut, shown and clickable once open) -- the
+wire's own `interact()`/pickup/carry logic in `wire_component.gd` is
+completely unmodified; the cabinet only controls whether a raycast can
+reach it at all, the same "gate the existing object, don't duplicate
+its logic" pattern this project already uses for `HeadGroup`'s render-
+layer gating.
+
+**Render verification**: a closed-door capture shows an opaque door
+panel with a visible handle, fully hiding the interior; an open-door
+capture (door swung open, visible at an angle) shows the interior
+shelf with the yellow coiled wire genuinely sitting on it, visible and
+reachable only now.
+
+**A real regression found and fixed during this work**: the cabinet's
+own side walls, authored flush with the front opening plane, created a
+tight grazing corner that blocked a realistic diagonal approach-angle
+raycast (confirmed by debug coordinate printing, not guessed) --
+`test_interaction_prompts.gd` and `test_carry_drop.gd`, which raycast
+at the wire from a natural nearby stance, started failing. Fixed by
+recessing the side walls 0.05m back from the opening (more raycast
+clearance at the corners) and updating both tests to open the cabinet
+first, reflecting the new correct flow, rather than reverting the
+cabinet. A new `test_storage_cabinet.gd` covers the door gate itself
+directly via a genuine `PhysicsRayQueryParameters3D` query (not just
+calling `interact()` on the object directly, which every pre-existing
+wire-related test does and which deliberately bypasses this new gate).
+
+**Known limitations, explicitly deferred, not silently dropped**: the
+filter-housing task's replacement cartridge is still not a physical
+Storage pickup at all (no cartridge prop exists in the scene); the
+broader multi-category (A: electrical components, B: environmental/
+life-support, C: tools/spares) cabinet system the brief described was
+not built -- only the one existing retrievable item (the electrical
+spare wire) was enclosed. Both are real, scoped-out gaps given this
+round's remaining time budget, not oversights.
+
+## E. 3x2 calibration layout, and separating count from difficulty
+
+`ChamberRow` (`scenes/player.tscn`) changed from a single 6-wide
+`HBoxContainer` to a 3-column `GridContainer` -- A/B/C fill row one,
+D/E/F wrap onto row two automatically, since
+`sensor_calibration_view.gd`'s own `_build_row_b()` already just
+appends children in order (no positioning math needed). Fitting two
+rows in the existing panel required shrinking `StatusLabel`'s font
+(36pt -> 26pt, with an explicit minimum-height reservation so a two-
+line wrapped status message can never overlap the chamber row below
+it -- a real overlap bug found and fixed via render, not assumed) and
+each `GaugeStack`'s own minimum height (130px -> 108px). Render-
+verified: all six gauges visible in two clean rows of three, with the
+shared damping control and the full keybind legend both fully visible
+below, no clipping or overlap at the default 1152x648 resolution.
+
+**Difficulty/progression separation** (this round's own explicit audit
+instruction, reversing part of Round 18's Section 3/Priority 3):
+required-fault-count no longer depends on the global EASY/NORMAL/HARD
+setting at all. `sensor_calibration_view.gd` now keys it on a new
+`_completions_this_session` counter (incremented once per real
+`_commit_success()`) against a 3-tier progression table (first attempt
+ever: 1-2 of 6; a few completions in: 2-4; experienced: 3-6, the full
+complex range) -- deliberately NOT added to `DayPlan` (that script's
+own class doc comment documents "no calendar, no day counter, no
+simulation-time system" as an explicit prior Approved Decision; adding
+a persistent cross-day counter there would reverse it), so it lives
+entirely on this one view instead, the same "plain per-session state"
+convention every other focused-view script here already uses.
+Difficulty's role is now exclusively tolerance/stability/coupling-
+strength (unchanged from Round 18) -- never count. A new
+`test_sensor_calibration_layout_progression.gd` proves BOTH halves
+concretely: HARD with zero completions still only ever produces 1-2 of
+6 (not its old 5-6), and EASY with 3+ completions can reach 5-6 --
+the exact two symptoms the brief's own audit instruction named.
+
+## F. Control Room walkway: a real structural gap, not a texture bug
+
+**Investigation, via actual rendering, not transform-math alone**: an
+oblique/upward-pitched render from inside the corridor approaching
+Main Junction A showed large solid BLACK regions at the frame's upper
+corners -- genuine void, not a UV/lighting artifact. Coordinate
+analysis of every `CSGBox3D` in that z-range confirmed a real 0.3m gap
+(z=3.20 to z=3.50) where NEITHER the corridor's own floor/ceiling/
+walls (ending at z=3.20) NOR Main Junction A's own floor/ceiling/west
+wall (starting at z=3.50) provided any coverage at all -- floor,
+ceiling, and both side walls were all missing simultaneously in that
+band.
+
+**Fix**: `CorridorFloor`/`CorridorCeiling`/`CorridorWestWall`/
+`CorridorEastWall` extended from z=3.20 to z=3.50 (keeping the same
+near edge at z=2.10 and the same 1.6m passable width, so the doorway's
+usable width is unchanged), closing the gap directly. The now-
+redundant `CorridorEndWallWest`/`CorridorEndWallEast` end-caps (which
+would otherwise sit embedded mid-wall once the real walls extended
+past them) were removed.
+
+**Render verification**: the same oblique/upward-pitched viewpoint
+that originally showed the black void now shows a fully enclosed,
+continuous ceiling/wall transition with no visible gaps.
+`test_station_capsule_sweep` confirms the exact same 5 known pre-
+existing navigation-clearance failures as the established baseline,
+zero new regressions; a new `test_control_room_walkway_seal.gd` asserts
+the z-continuity directly from scene geometry (floor/ceiling/wall far-
+edge >= the next segment's near-edge, for every piece on both sides of
+the seam) so a future edit shrinking either side back below the
+overlap cannot silently reopen the gap.
+
+## G. Electrical panel: cable entry brackets
+
+A small clamp/gland bracket (a `CSGBox3D`, reusing the terminal
+housing's own material) now caps each of the 10 installed wires' own
+TOP entry point, addressing the specific "cables ending openly toward
+the top" complaint -- purely decorative, added once per role in
+`electrical_repair_diorama.gd`'s own `_ready()` (never on the staged
+`ReplacementWire` variants, which are not anchored to anything yet).
+Deliberately minimal given this round's remaining scope: the fixed-10-
+wire-identity architecture itself was not touched, and a fuller cable-
+bundle/sleeve treatment described in the brief was not attempted.
+Render-verified via the real repair-procedure view (door open, wire
+picked up, terminal clicked through to the procedure) -- small grey
+bracket caps visible at each wire's own entry point.
+
+## H. Not attempted this round
+
+Priority 7 (work-order/task-progression coherence review) and Priority
+8 (small complementary additions beyond what Sections D/E/G already
+include) were not attempted, given this round's remaining time budget
+after Sections A-G. Both are genuine, scoped-out gaps against the
+brief, documented here rather than silently dropped.
+
+## Known limitations
+
+- The mirror's extreme-oblique-angle frame edges show void (nothing is
+  modelled behind the wall/cabinet) -- an honest, render-confirmed
+  limitation of the off-axis approach given this station's real hull
+  geometry, not a bug (see Section A).
+- No full Skeleton3D character rig -- a documented, deliberate
+  mesh-based path per the brief's own escape valve (see Section B).
+- The filter-housing task still has no physical Storage-retrieved
+  replacement cartridge; the broader multi-category storage system was
+  not built (see Section D).
+- Work-order coherence (Priority 7) and additional small polish
+  (Priority 8) were not attempted this round (see Section H).
+- `test_locked_graph`/`test_living_quarters_room` remain genuinely
+  unresolved, consistent with every prior round's own re-audit.
+- As in every prior round, real-rendered verification covered the
+  specific states each section's own work named, not an exhaustive
+  sweep of every difficulty x state x camera-angle combination.
+
+# ROUND 20: MIRROR FOV, HAND GEOMETRY, THE JUNCTION-ENGINEERING DOORWAY, PHYSICAL STORAGE, AND WORK-ORDER COHERENCE
+
+## Scope
+
+Ten priorities from a player-feedback-driven brief. Addressed this
+round: (1) the Living Quarters mirror's fisheye distortion, a real
+root-cause fix (virtual-eye depth), not a reversal of Round 19's
+parallax work; (2) a shared, reusable finger/thumb mesh builder
+(`hand_mesh_builder.gd`) replacing the old per-finger CSG-primitive
+chain on both the world body and the first-person rig; (3) a second,
+previously-unaddressed structural gap at the Junction-Engineering
+doorway (downstream of Round 19's own Control-Room-to-Junction-A seal,
+confirmed by direct raycast to be a real void, not a lighting/texture
+issue); (4) a second physical storage cabinet and a new carryable
+Filter Cartridge item, replacing the filter-housing task's "part
+appears beside the housing" placeholder behavior with a real
+Storage-retrieval requirement; (5) a wristwatch glance hint ("GET
+PART / STORAGE") when the electrical task's required component is
+known but not yet in hand; (6) an audit confirming the six-chamber
+calibration layout and its global-difficulty-vs-technician-progression
+split (already correctly separated as of Round 19 Priority 4) needed
+no further change; (7) cable-entry collars, mid-run routing clips,
+terminal strain-relief collars, and paired-wire bundle ties on the
+electrical panel, extending Round 19's single entry bracket; (8) small
+storage-door and item-pickup/drop sound feedback, routed through the
+existing shared `mechanical_sfx.gd` bank. Priorities 9 (verification)
+and 10 (this section) close out the round. No commits or pushes were
+performed.
+
+## A. Mirror FOV: a virtual-eye depth bug, not a projection-math bug
+
+Round 19's off-axis portal projection (`Camera3D.PROJECTION_FRUSTUM` +
+fixed `size` + per-frame `frustum_offset`) was algebraically correct;
+the complaint ("distorted/stretched, especially at oblique angles") had
+a different, narrower cause. The off-axis frustum's vertical `size` is
+constant by construction (see Round 19 Section A's own derivation), so
+the half-angle of view is set entirely by `half_angle = atan(half_height
+/ depth)`, where `depth` is `_VIRTUAL_EYE_DEPTH_BEHIND_GLASS` --
+Round 19 had left this at `0.05`, giving a ~77 degree half-angle (a
+fisheye) rather than a normal mirror's view. Raised to `0.4`, this
+yields ~28 degrees, a normal reflection field of view. A second, much
+smaller residual stretch (~0.8%) came from the SubViewport's pixel size
+(`480x400`, aspect 1.2) not exactly matching the physical glass
+rectangle's own aspect (0.5/0.42 = ~1.19); corrected to `500x420` (exact
+match). No frustum-offset/near-plane/handedness/culling logic was
+touched -- confirmed via `tests/test_hand_mesh_and_mirror_fov.gd`, which
+asserts the viewport aspect now matches the glass aspect exactly and
+the frustum half-angle lands in a normal 10-45 degree range (measured:
+~27.7 degrees, versus the old ~77 degrees). Render-verified across
+near/far/left/right/oblique camera placements with asymmetric marker
+objects in frame (continuing Round 18/19's own verification approach);
+no stretching or fisheye artifact at any tested angle. The previously
+noted "mirror edge-void" limitation (nothing modelled behind the
+wall/cabinet, visible only at extreme oblique angles) was re-examined
+and remains an honest, unchanged limitation of the off-axis approach
+given this station's real hull geometry -- not something this round's
+fix touches or could touch without modelling behind-wall geometry that
+does not otherwise need to exist.
+
+## B. A shared, reusable hand-mesh builder
+
+The previous per-finger geometry (four CSG cylinder/sphere chains per
+hand, hand-placed per joint) was replaced with `hand_mesh_builder.gd`,
+a `RefCounted` utility providing `build_tube()` (the core technique: a
+`SurfaceTool`-lofted tube along a sampled, smoothstep-radius spine,
+with per-vertex radial normals set explicitly before each vertex so
+lighting reads as a genuinely rounded, continuous limb rather than a
+faceted cylinder stack) and two callers: `build_fingers_and_thumb()`
+(a canonical hand frame, used by the world body) and
+`build_finger_from_anchors()` (lofts a tube between two arbitrary,
+already-existing anchor points -- used by the first-person rig, which
+has its own, different arm geometry and anchor placement). Both
+`player_body.gd` and `first_person_watch_rig.gd` now build their
+fingers/thumb through this one shared path instead of two independently
+hand-tuned CSG chains, so the two representations cannot visually drift
+apart the way two separately-authored primitive chains eventually
+would. `preload()` is used (not a bare `class_name` reference) because
+a freshly-added script's global class is not reliably resolvable
+project-wide without a prior editor scan -- the same constraint
+documented elsewhere in this project for scripts that must work
+identically under `godot --headless --script`.
+
+The Skeleton3D migration question (re-asked this round, with an
+explicit escape valve) was evaluated again: this project's characters
+have no bone-weighted skin, no animation state machine, and no existing
+rig to migrate onto -- building one from scratch, correctly, with real
+weight painting and without breaking the mesh-level first-/third-person
+split Round 19's watch-raise work depends on, is a multi-round
+undertaking on its own, not a same-round addition on top of eight other
+priorities. The blocker is architectural, not a lack of effort: this
+project's meshes are procedurally generated CSG/SurfaceTool geometry
+assembled fresh at `_ready()`, not imported, weight-painted assets --
+Skeleton3D's value (bone-driven deformation of a fixed mesh) has no
+fixed mesh to deform here yet. Per the brief's own escape valve, the
+meaningful, reusable improvement actually delivered is Section B's
+shared mesh-lofting architecture, not a few more primitives -- it is
+the first hand/limb geometry in this project built from a real swept
+surface rather than assembled CSG primitives, and it is now shared
+rather than duplicated between representations. Render-verified across
+both hands, both representations, multiple grip/pose states; no
+regressions in `test_hand_mesh_and_mirror_fov.gd`,
+`test_standing_body_composition.gd`, or `test_wristwatch_screen_stability.gd`.
+
+## C. The Junction-Engineering doorway: a second, separate structural gap
+
+Round 19 Section F closed one real gap (Control Room corridor to
+Junction A, a z=3.2-vs-3.5 mismatch). Player feedback this round that
+the walkway was "only partially fixed" led to re-investigating the rest
+of that same route rather than re-touching the already-fixed segment --
+a direct `PhysicsRayQueryParameters3D` sweep through the Junction's own
+doorway into Engineering (the same decisive technique Round 19 used to
+distinguish "real hole" from "under-lit room") found a second,
+independent gap: the doorway opening itself had no header/jamb framing
+at all, reading as an unbounded black void from oblique and
+upward-pitched angles even though the floor/ceiling on both sides were
+already continuous there. Closed by adding `JunctionEngineeringLintel`
+(header) and `JunctionEngineeringJambSouth`/`JunctionEngineeringJambNorth`
+(side framing) plus `Light_JunctionEngineeringDoorway`, framing the
+opening the same way every other doorway in the station already is.
+This is a framing/lighting fix, not a width change --
+`tests/test_junction_engineering_doorway.gd` asserts floor/ceiling stay
+continuous through the opening, a header-height ray now hits the new
+lintel within 1m, and the clear passable width after the new jambs
+remains above 0.9m (i.e. the fix did not narrow the opening). Render-
+verified from 5+ angles (straight-through, both oblique approaches, a
+from-below look-up at the header, and a far approach); no remaining
+visible void at any tested angle. This doorway is unrelated to any of
+the five historically-known capsule-clearance failures (it is a
+visual-framing fix, not a width fix); none of those five entries
+changed status this round (see Section I).
+
+## D. Physical storage, part two: a second cabinet and a real filter cartridge
+
+Extended Round 19 Section D's pattern (a real hinged cabinet gating a
+physical item's own visibility/collision, never touching the item's
+own pickup logic) to the filter-replacement task. Added
+`FilterCartridge` (a new carryable item, `filter_cartridge.gd` --
+near-identical to the existing wire component's contract:
+`interact()`/`get_interact_prompt()`/`is_installed()`/`return_to_rest()`/
+`place_in_world()`/`mark_installed()`) and `StorageCabinet2`, a second
+instance of the same `storage_cabinet.gd` script introduced in Round 19
+(door-gated visibility/collision, independent of the first cabinet).
+`filter_housing_station.gd`'s `remove_old_cartridge()` now requires the
+player to actually be carrying a cartridge with `item_id ==
+&"filter_cartridge"` before advancing past REMOVE_OLD -- an attempt
+without the part fails harmlessly and recoverably (same nonpunishing
+contract as every other "missing required item" case in this project),
+surfacing a distinct "No replacement cartridge on hand -- retrieve one
+from Storage first" status rather than silently doing nothing. This
+directly removes the "appears beside/beneath the housing" placeholder
+behavior the brief named: the cartridge now has one real, physical
+origin (`StorageCabinet2`, closed by default) and is consumed
+(`take_carried_item_if_matches` + `mark_installed`) exactly once,
+mirroring `electrical_panel.gd`'s own established consume-on-success
+pattern for the wire.
+
+`StorageCabinet2` was initially placed with its shelf/cabinet assembly
+too close to the `StorageB` navigation waypoint, reopening two of the
+pre-existing (not newly-broken) capsule-clearance edges
+(`storage_a<->storage_b`, `storage_b<->storage_elbow_ls`); relocated
+0.9m along Z to clear them, confirmed by `test_station_capsule_sweep`
+returning to its known-failures-only baseline. Render-verified: cabinet
+closed (cartridge hidden, no collider), cabinet open (cartridge visible
+and reachable). `tests/test_storage_cabinet2_filter.gd` and
+`tests/test_filter_housing.gd`'s extended REMOVE_OLD coverage both
+pass; `tests/test_carry_drop.gd`'s pre-existing "no duplicate wire"
+check was narrowed to the wire's own specific display name (it had been
+matching ANY carryable with a `get_display_name()` method, a latent
+test bug the new, second carryable item exposed rather than caused).
+
+## E. Work-order integration: a wristwatch hint for the missing part
+
+The wristwatch's glanced status (Round 12's deliberately terse one-line
+room+action summary) previously named the task's room even when the
+player could not actually do anything useful there yet -- diagnosed but
+empty-handed. `wristwatch_view.gd` now checks, before formatting the
+normal room+action text, whether `DayPlan.required_component_id` is set
+AND the task that set it (`e05`) is still outstanding AND the player is
+not currently carrying a matching item; if so it shows "GET PART /
+STORAGE" instead, directing the player to retrieve the part before
+heading to the work site. Deliberately gated on `e05` specifically
+(not merely on `required_component_id != ""`) because that field is
+never reset mid-day (`day_plan.gd`'s own `reset_for_new_day()` is the
+only place it clears) -- an earlier version of this check, gated only
+on the field being non-empty, would have kept showing "GET PART" even
+after the repair was already complete, since the field simply lingers.
+`tests/test_wristwatch_part_hint.gd` specifically exercises that
+regression scenario (diagnose, confirm the hint, pick up the part,
+confirm it disappears, complete the full repair, confirm the hint does
+NOT reappear afterward) in addition to the straightforward cases.
+Scoped to the electrical task only -- the filter task's own existing
+"No replacement cartridge on hand" message (Section D) already serves
+the equivalent purpose for that chain, so no second copy of this same
+idea was added there. `carry_system_path` wired onto `player.tscn`'s
+`Wristwatch` node; no other work-order plumbing (task IDs, DayPlan
+fields, workstation screen text) was touched.
+
+## F. Calibration/difficulty audit: no change needed
+
+Re-audited the six-chamber 3x2 calibration layout and the global-
+difficulty-vs-technician-progression split the brief asked about.
+Confirmed, by reading `sensor_calibration_view.gd` directly and
+re-running its full regression coverage, that Round 19 Priority 4
+already implemented exactly the split this round's brief describes:
+required active-fault COUNT is keyed to `_completions_this_session`
+(three tiers -- `[1,2]`/`[2,4]`/`[3,6]` -- independent of difficulty),
+while EASY/NORMAL/HARD exclusively governs tolerance band width,
+required stability-hold duration, and coupling strength (how forgiving
+a given attempt is). A HARD player with zero completions gets the same
+manageable 1-2-chamber introduction an EASY player would; an EASY
+player who keeps playing eventually reaches the full 3-6-chamber case,
+same as HARD -- confirmed directly via
+`test_sensor_calibration_layout_progression.gd`'s own forced-seed
+assertions. The layout itself (a `GridContainer`, 3 columns, A/B/C row
+1 and D/E/F row 2) is unchanged. No code changes were made for this
+priority; this section exists to record that the audit was performed
+and found the existing implementation already correct, per the brief's
+own explicit instruction not to redesign a layout that is "working
+well... without a clear reason."
+
+## G. Electrical panel: cable hardware beyond the single entry bracket
+
+Round 19 Section G added one small bracket per wire at its own entry
+point. This round extends the same per-wire `VisualGroup`-parented
+approach (same pivot behavior as the existing, already-verified
+bracket -- no new disconnect/reconnect swing assumptions) with three
+more pieces, all derived from the same `_WIRE_CURVE_POINTS` data
+`_build_wire_curve()` already uses, so none of it can drift out of sync
+with the actual cable path: an `EntryCollar` (a grommet ring around the
+wire, oriented along its own real initial tangent via the same
+`_basis_with_y()` helper the curve segments themselves use, so the
+cable visibly threads through its mount instead of merely overlapping a
+floating box); a `RoutingClip` partway down the run (t=0.32, well short
+of the terminal end that actually swings on disconnect); and a
+`TerminalCollar` at the lug end, giving the terminal connection its own
+strain-relief treatment to match the entry end. A fourth addition,
+`_add_bundle_tie()`, is NOT per-wire: it adds one small tie bar between
+each row's one genuinely adjacent, near-parallel wire pair (backup+
+ground in row A, auxiliary+relay in row B -- their entry points sit
+~0.3m apart at identical height/depth, the only pair in each row close
+enough that a shared tie reads as physically correct rather than
+arbitrary). Deliberately parented to the diorama's own `Wires` node,
+not to either wire's `VisualGroup`, so it never has to pick a side to
+swing with if one of the pair disconnects while the other stays
+connected -- it is panel-mounted hardware, not part of either
+individual cable. All eleven electrical-system regression suites
+(`test_electrical_panel_chain`, `test_electrical_repair_procedure`,
+`test_electrical_repair_diorama`, the three reconnect-bug regression
+tests, `test_wire_geometry`, `test_electrical_panel_terminal`,
+`test_electrical_panel_hatch_visual`, `test_electrical_wire_randomization`,
+`test_circuit_tracer`) pass unchanged -- this is purely decorative
+geometry, never part of `ROLES`/`_collider_action`, never touched by
+the disconnect/reconnect/replace logic. Render-verified via a direct
+instantiation of `electrical_repair_diorama.tscn` with its own camera:
+a wide shot of the full 10-wire panel, a closeup on the backup/ground
+bundle-tie pair (the tie bar reads as a real mounting rail bridging two
+cable glands), and a closeup on a single wire's full run from entry
+collar through routing clip to terminal collar (no wire visibly begins
+or ends in open space at either end).
+
+## H. Small polish: storage and item-handling sound
+
+Two small, physical additions, both routed through the existing shared
+`mechanical_sfx.gd` procedural sound bank (the same one every focused
+repair view already uses) rather than a new audio system: `carry_system.gd`
+now plays a short "click" on pickup, on a plain drop, and on the
+Space-drop-at-feet path -- added once, centrally, in `carry_system.gd`
+itself (not in each item's own script), so every current carryable item
+(wire, filter cartridge) and any future one gets it automatically;
+`storage_cabinet.gd` now plays a "clunk" on door toggle, shared by both
+cabinet instances since they already share one script. Both `sfx_path`
+exports are optional (`get_node_or_null`, harmless no-op if left
+unwired) and wired this round onto `player.tscn`'s `CarrySystem` and
+both `StorageCabinet` instances in `main.tscn`. No new minigame, no new
+scope beyond these two items, per the brief's own "one or two small
+complementary items only" instruction.
+
+## I. Testing and verification
+
+The full suite was reconfirmed at 69/69 passing before this round's own
+changes (matching the last reported baseline exactly), then run twice,
+clean, after all nine addressed priorities (70/70 -- the one additional
+test is `test_wristwatch_part_hint.gd`, Section E's own new coverage).
+A headless startup smoke test (`godot --headless --path . --quit-after
+3`) produced no errors both before and after. The capsule-clearance
+sweep (`test_station_capsule_sweep.gd`) stayed at its known-failures-
+only baseline throughout -- the five historically-known edges
+(`junction_node_1<->comms_tunnel_elbow`, `comms_a<->comms_alcove`,
+`comms_a<->comms_window`, `engineering_tunnel_1<->engineering_a`,
+`engineering_b<->storage_elbow_e`) remain exactly as before, tracked
+separately and not conflated with anything new; the one transient
+regression this round's own work caused (Section D's cabinet placement
+intruding on `storage_a<->storage_b`/`storage_b<->storage_elbow_ls`)
+was found and fixed before being reported here, not left as a "known"
+failure.
+
+A full test-inventory audit compared every `tests/*.gd` file on disk
+against `run_tests.sh`'s own registered list: the only file on disk and
+not registered is `manual_verify_real_input_reconnect.gd`, which is
+correct and intentional -- its own class doc comment documents that it
+requires a real rendering context (SubViewportContainer GUI-input
+forwarding does not function under plain `--headless`) and is kept as a
+permanent, deliberately-manual artifact, not an oversight.
+`test_locked_graph.gd` and `test_living_quarters_room.gd`, both named
+in this round's own brief for re-checking, no longer exist on disk at
+all (superseded by other, currently-registered coverage in an earlier
+round); per the brief's own explicit instruction, no replacement was
+invented for either, since their original intended behavior is no
+longer known with confidence.
+
+Three small, genuine regressions were found and fixed during this
+round's own work (none left unresolved): the `StorageCabinet2`
+placement described in Section D; a pre-existing wire-counting bug in
+`test_carry_drop.gd` exposed (not caused) by the new second carryable
+item, also Section D; and a watch-rig input-polling conflict between a
+direct `set_raised()` call and `wristwatch_view.gd`'s own continuous
+`Input.is_key_pressed(KEY_C)` poll, fixed by simulating a genuinely
+held key via `Input.parse_input_event()` rather than bypassing the real
+input system.
+
+One non-blocking, cosmetic observation: calling `mechanical_sfx.gd`'s
+`play_kind()` shortly before a test script's own `quit()`/scene
+teardown occasionally leaves an `AudioStreamPlaybackWAV` instance
+reported as "leaked at exit" in Godot's own engine-level cleanup
+diagnostics (confirmed pre-existing and already present, intermittently,
+in `test_electrical_panel_chain.gd` and other views that already called
+`play_kind()` before this round -- Section H's new call sites in
+`carry_system.gd`/`storage_cabinet.gd` simply exercise the same existing
+path in two more tests). It does not affect any test's PASS/FAIL result,
+and does not occur during normal gameplay (the audio server only fails
+to finish its own async cleanup when the process exits immediately
+after a sound starts, which only ever happens in a short-lived headless
+test script that calls `quit()` right after). Not treated as a
+regression to chase given its pre-existing, cosmetic, non-deterministic
+nature; recorded here for completeness.
+
+## Known limitations
+
+- The mirror's extreme-oblique-angle frame edges still show void
+  (nothing is modelled behind the wall/cabinet) -- unchanged from
+  Round 19, re-examined this round and confirmed to be an honest
+  limitation of the off-axis approach given this station's real hull
+  geometry, not a bug (see Section A).
+- No full Skeleton3D character rig -- re-evaluated this round against
+  its own explicit escape valve; the architectural blocker (procedural
+  CSG/SurfaceTool meshes with no fixed, weight-paintable mesh to bind a
+  skeleton to) is unchanged from Round 19, and a real reusable mesh
+  improvement was delivered in its place (see Section B).
+- `manual_verify_real_input_reconnect.gd` remains intentionally outside
+  the automated suite (requires real rendering -- see Section I).
+  `test_locked_graph`/`test_living_quarters_room` no longer exist on
+  disk and were not recreated (see Section I).
+- The occasional "leaked at exit" audio diagnostic described in Section
+  I is pre-existing, cosmetic, and does not affect gameplay or test
+  results.
+- As in every prior round, real-rendered verification covered the
+  specific states each section's own work named, not an exhaustive
+  sweep of every difficulty x state x camera-angle combination.
+
+# ROUND 21: FIX CURRENT REGRESSIONS, A PHYSICAL FILTER-DISPOSAL LOOP, AND SIX CONFIRMED-ROOT-CAUSE FIXES
+
+## Scope
+
+A fix-and-polish round driven by fresh manual playtest feedback: the
+mirror still felt stretchy, the reflected raised hand still looked like
+cylinders, the storage cabinets added in Round 20 could not actually be
+opened, the filter task had no physical used-part loop, the Control
+Room passage still had a void on one side, and the in-world electrical
+cabinet showed two unexplained cube blocks the minigame never did. Each
+of these six items turned out to have a specific, confirmable root
+cause -- none were cosmetic guesses, and in two cases (the mirror depth
+tuning, the "both sides" gap) the real cause was the OPPOSITE of what
+the brief's own guess suggested. Also added, time permitting: the same
+lofted-tube limb treatment for the world body's LEGS (Priority 7), and
+the Storage disposal container doubles as this round's Priority 8 item
+(a readable, real physical disposal interaction, required anyway by
+Priority 4's own loop). No commits or pushes were performed.
+
+## A. The raised hand "still looks like cylinders": two real bugs, not one shape problem
+
+Two genuinely separate root causes, both confirmed by reading code and
+by render -- not by re-touching the geometry Round 20 already fixed:
+
+1. **The world-body arm itself WAS still three raw CSG primitives**
+   (UpperArm cylinder + Elbow sphere + LowerArm cylinder, unioned by
+   the parent CSGCombiner3D) -- Round 20 only rebuilt the FINGERS this
+   way. Replaced with one continuously-lofted tube per arm
+   (`HandMeshBuilder.build_tube()`, the same technique/builder Round 20
+   introduced), spine sampled from the SAME five anchor nodes
+   (Shoulder/UpperArm/Elbow/LowerArm/Hand) the existing
+   `set_watch_raise_pose()`/`animate_hand_laptop_gesture()` falloff-
+   tween system already animates -- no gesture-code changes at all,
+   only what gets rendered through those live, possibly mid-tween
+   positions. Rebuilt only when the spine has actually changed (not
+   unconditionally every frame) to avoid real per-frame mesh-resource
+   churn -- confirmed directly: an early unconditional-rebuild version
+   left stray RenderingServer RIDs at process exit under a
+   `--quit-after` headless run; the change-detection guard (and fixing
+   a separate leak where `HandMeshBuilder.build_tube()`'s returned
+   wrapper `MeshInstance3D` was never freed after extracting its
+   `.mesh`, since `MeshInstance3D` is a `Node`, not a `RefCounted`,
+   and is not reference-counted) made both runs clean again. The watch
+   was ALSO fixed to actually move with the raised hand -- see Section
+   B below.
+
+2. **The actual, dominant thing the mirror was showing was not the
+   world body's arm at all.** The mirror camera's `cull_mask` had
+   never been set, so it kept `Camera3D`'s own default (every render
+   layer) -- including layer 2, the layer `first_person_watch_rig.tscn`'s
+   `ArmGroup`/`WatchAssembly` live on. That rig is a plain child of the
+   PLAYER'S OWN `Camera3D`, positioned at the eye point, meant to be
+   seen only by the player's own first-person view while the watch is
+   raised. With no exclusion, the mirror (and every other non-player
+   camera) rendered it too -- and since it sits right at the player's
+   own head position, in the mirror it appeared as a disembodied,
+   literally skin-colored (its own `Mat_skin` material, never a glove)
+   hand floating near the reflection's head/chest, which is what was
+   actually being reported as "still looks like cylinders." Fixed by
+   excluding layer 2 from the mirror camera's `cull_mask` -- the exact
+   mirror image of how `player.tscn`'s own camera already excludes
+   `HeadGroup`'s layer (4) so the player never sees their own head.
+   A SECOND, deeper instance of the same class of bug was found while
+   verifying this: the first-person rig's own finger/thumb
+   `MeshInstance3D` nodes (added in Round 20) and its `WatchFaceText`
+   `Label3D` were never given `layers = 2` themselves -- only the CSG
+   primitives under `ArmGroup` inherit that layer for free (a
+   `CSGCombiner3D` folds `CSGShape3D` children into its own one render
+   instance; a plain `MeshInstance3D`/`Label3D` child does not, and
+   defaults to layer 1). Those two leaks were still visible in the
+   mirror (floating fingers + "NO SIGNAL" text) even after the
+   cull_mask fix, until `layers = 2` was set explicitly on each.
+   Render-verified: the mirror and an external diagnostic camera both
+   now show a consistent, correctly dark-gloved world-body arm with no
+   skin-toned or floating-text artifacts.
+
+Regression coverage: `tests/test_hand_mesh_and_mirror_fov.gd` gained
+checks for the new `ArmMeshR` architecture, the hidden old CSG arm
+primitives, the mirror's layer-2 exclusion, and the first-person rig's
+finger/thumb/label layer correctness; `tests/test_mirror_reflection.gd`
+gained the mirror-camera-excludes-layer-2 check alongside its existing
+HeadGroup-layer-4 checks.
+
+## B. The watch "floating/clipped": a real attachment bug
+
+Confirmed by reading `player_body.gd`: the world-body wristwatch was
+built as a SIBLING of `HandR` under the pose root, at a position fixed
+in the pose root's own local space -- `set_watch_raise_pose()` tweens
+`HandR`'s own position (and the other arm anchors), but never touched
+this sibling at all, so raising the arm moved the hand away while the
+watch stayed behind at its original rest spot. Fixed by making the
+watch a CHILD of `HandR` instead, at the equivalent local offset
+(computed from the two poses' own previously-authored positions) --
+it now inherits `HandR`'s live position for free, exactly like the
+palm/fingers already did. Verified by a new regression check that
+reads the watch's actual `global_position` before and after
+`set_watch_raise_pose(true, ...)` and asserts it moved by a believable
+amount (previously it would not have moved at all).
+
+## C. Mirror stretch: the fix is the OPPOSITE of the brief's own suggestion
+
+Playtest feedback suggested reducing the virtual-eye depth further to
+fix the remaining "stretchy" feel. Round 20's own derivation already
+on file (`mirror.gd`'s class doc comment) shows this is backwards:
+`half_angle = atan(half_height / depth)` means a SMALLER depth gives a
+WIDER half-angle -- exactly the same relationship that made the
+original `depth=0.05` fisheye-stretched in the first place. There is
+also a second, independent reason the same direction helps: the
+virtual eye's total distance to the player's own reflected body is
+(real distance in front of the glass) + depth, so a LARGER depth also
+pushes the apparent subject distance further away, directly reducing
+the near-field "selfie" perspective stretching a close-up subject gets
+regardless of lens angle. Depth was raised from 0.4 to 0.8 (half-angle
+~28deg -> ~14.7deg, full vertical FOV ~56deg -> ~29deg, a flattering
+portrait-length framing rather than a wide-angle one) -- render-
+verified at multiple distances/angles; the reflection reads noticeably
+less stretched, and parallax (confirmed by the existing, unchanged
+off-axis frustum math and its own regression suite) is unaffected --
+only the lens angle changed, not the projection technique.
+`test_mirror_reflection.gd`'s own hardcoded near-plane upper bound
+(previously tuned to the old 0.4 depth) was updated to match.
+
+## D. Storage cabinets: unreachable by any real player action
+
+Two independent, confirmed root causes, matching the brief's two
+separate complaints exactly:
+
+1. **The door genuinely could not be opened.** `storage_cabinet.gd`'s
+   `interact()`/`get_interact_prompt()` live on the cabinet's plain
+   Node3D ROOT, but every collidable surface (Back/Top/Bottom/
+   SideNear/SideFar/DoorPanel) is a SEPARATE child `CSGBox3D` --
+   `interaction_controller.gd`'s raycast resolution required the HIT
+   COLLIDER ITSELF to have `interact()`, which none of those children
+   do, so `get_hovered()` always resolved to `null` and no prompt ever
+   appeared; this was not a missing prompt string, it was a genuinely
+   unreachable interaction. Fixed centrally, not per-cabinet: a new,
+   strictly ADDITIVE ancestor-walk fallback in
+   `interaction_controller.gd`'s own raycast resolution -- if the
+   direct collider lacks `interact()`, walk up a bounded number of
+   parents looking for one that has it. Every other interactable in
+   this project already puts its script directly on the one collidable
+   node, so for them the existing direct check still resolves
+   immediately and this fallback never triggers -- it can only make a
+   previously-dead raycast hit resolve to a real target, never take
+   away one that already worked, so it carries no regression risk for
+   anything that already worked. A new real-raycast regression test
+   (in `test_interaction_prompts.gd`, not a direct `.interact()` call
+   like the older coverage) proves the full path: aiming at the door,
+   `get_hovered()` resolving to the cabinet, the real open/close
+   prompt text, and the door actually opening via the resolved hover
+   target's own `interact()`.
+2. **The cabinets read as small boxes bolted onto the side of the big
+   decorative rack, not part of it.** Both `StorageCabinet1`/`2` were
+   rebuilt to share their own rack's exact footprint (0.3m wide,
+   matching `StorageRack1`/`2`) as a true middle section of one
+   continuous built-in unit -- each rack was split into Upper/Lower
+   pieces flanking the cabinet door vertically (same combined height
+   as before), so the door now sits flush within the larger unit's own
+   silhouette instead of protruding past it. One real placement bug
+   surfaced while doing this and was fixed before it ever shipped: the
+   room's own west/east walls are THICKER than their center position
+   alone suggests (their own stated half-width), so the cabinet's
+   naive "match the rack's full depth" first draft put the carried
+   item's resting spot PARTIALLY EMBEDDED INSIDE the real wall's own
+   solid collision -- confirmed by a real raycast test hitting
+   `StorageWestWall` instead of the wire, at a position matching the
+   wall's own inner face exactly. Items were repositioned to the
+   cabinet's genuinely clear interior band (`WireComponent` x=-7.43,
+   `FilterCartridge` x=-5.57) and the whole round's test suite re-run
+   clean. Render-verified: cabinet closed and open, the wire visible
+   and reachable inside the now-integrated unit; `test_station_capsule_sweep`
+   confirms no new navigation regression from the resize.
+
+## E. The full physical filter disposal loop (Priority 4)
+
+Implements the complete desired sequence as real, physical, state-
+tracked steps -- not auto-completed shortcuts:
+
+1. **`used_filter_cartridge.gd`/`.tscn`** (new): the old/dirty
+   cartridge. Starts hidden and non-collidable (there is no used
+   cartridge in the world until a real repair produces one) --
+   `filter_housing_station.gd`'s `remove_old_cartridge()` calls its
+   new `eject_at(world_transform)` the moment the old cartridge
+   actually comes out (same stage-gated call that already required
+   carrying the real replacement part, see Round 20 Section D),
+   placing it, visible and collidable, on the Life Support floor near
+   the housing. Same duck-typed carry contract as every other
+   carryable in this project; a dirtier, grimier material variant of
+   `filter_cartridge.gd`'s own geometry so it reads as the USED one at
+   a glance.
+2. **`trash_disposal.gd`/`.tscn`** (new): a labelled ("WASTE DISPOSAL"),
+   hazard-striped bin in Storage, in the open walkway near the filter
+   supply cabinets. Duck-typed `interact()`: carrying an accepted item
+   (currently only `used_filter_cartridge`) and interacting consumes it
+   via `carry_system.gd`'s existing `take_carried_item_if_matches()`
+   and calls the item's own `dispose()` (a real `queue_free()` -- the
+   ONE place this object is ever actually removed from the game, only
+   reachable after the full carry loop); carrying nothing, or the wrong
+   item, is rejected with a distinct, readable message, never a silent
+   no-op. Plays the existing shared `mechanical_sfx.gd` "success" tone
+   and tracks a session-only `disposed_count()`.
+3. **L02's own completion gate is UNCHANGED** -- it still completes
+   exactly when the new cartridge is installed and airflow restored,
+   same as every prior round. The disposal loop is a parallel physical
+   layer on top of that, not a new blocking requirement, preserving
+   existing working gameplay per this round's own explicit instruction.
+
+New dedicated regression coverage, `tests/test_used_filter_disposal.gd`
+(21 assertions): the used cartridge stays hidden/non-collidable/prompt-
+less until a real removal ejects it; ejection lands it on the floor,
+visible and collidable; L02 still completes on the original gate; the
+cartridge is pickable via its own real `interact()`; the disposal bin
+correctly rejects an empty-handed attempt (count stays 0, no crash);
+picking the cartridge back up and disposing it for real consumes it,
+increments the count to 1, and the node is genuinely gone
+(`is_queued_for_deletion()`), not merely hidden. Render-verified: the
+ejected cartridge sitting on the Life Support floor near the housing,
+and the labelled disposal bin in Storage.
+
+## F. Control Room passage: a second, independent gap -- confirmed, not assumed
+
+Round 19's own corridor-to-junction seal (Section F of that round) is
+still intact and unchanged (reconfirmed by its own regression suite,
+still passing). The player's fresh report of a remaining gap was
+investigated from scratch with real `PhysicsRayQueryParameters3D`
+probes (the same decisive technique established in Round 19/20) rather
+than assumed to be the same spot -- and it was not: a genuinely
+different, previously-unknown gap exists right at the Control Room's
+own doorway (z~1.8-2.0), not at the corridor/junction boundary (z=3.5).
+`ControlRoomEastWallNorth` stopped at z=1.8 while
+`ControlRoomDoorwayWallEast` only started at z=2.0 -- a real,
+confirmed-by-raycast 0.2m unwalled gap, floor to ceiling, on the EAST
+side only. The WEST wall (`ControlRoomWestWall`) already reached
+z=2.2, past the doorway, with no corresponding gap -- probed and
+confirmed solid at the same z values for direct comparison. Fixed by
+extending `ControlRoomEastWallNorth`'s own far Z edge to meet the
+doorway wall's near edge exactly (same "extend the short side to meet
+the other, don't narrow the passage" fix pattern as Round 19's own
+corridor seal). `tests/test_control_room_walkway_seal.gd` gained real-
+raycast checks at the gap's exact former location (now solid) plus the
+same edge-continuity math check Round 19's own fix already uses.
+Render-verified from the open doorway looking straight through (both
+jambs now read as solid, continuous framing) and from an oblique angle
+inside the former gap's own position (a solid wall column, no void).
+
+## G. The in-world electrical cabinet's "2 unexplained cube blocks"
+
+Root cause confirmed by a real raycast picked at the blocks' own exact
+screen position (not guessed from reading code alone): `Terminal`/
+`IntactTerminal` (the two independent `StaticBody3D` raycast targets
+`terminal_connector.gd` provides for the damaged/intact connection
+points) report `visible = true` at runtime despite being AUTHORED as
+`visible = false` in `main.tscn`. The cause was `terminal_connector.gd`'s
+own `set_reachable(reachable)`, called by `electrical_panel.gd`
+whenever the cabinet door opens: it set `visible = reachable` ALONGSIDE
+disabling/enabling the collision shape -- so the moment the door
+opened, these two small, UNSCALED `BoxMesh` placeholders became
+visible right next to (and noticeably cruder/larger than) the panel's
+own correctly-scaled `WorldDiorama` twin, which is shown by that exact
+same door-open condition and already provides the real, minigame-
+matching visual. This fully explains both halves of the complaint:
+"two cube-like blocks" in the normal cabinet view (exactly 2 terminal
+hitboxes, exactly matching the door-open condition) and "they do not
+appear in the minigame view" (the focused minigame is a wholly separate
+scene instance that never touches these world-space nodes at all).
+Fixed by removing the `visible` assignment from `set_reachable()`
+entirely -- these nodes are, and now stay, permanently invisible
+collision-only targets, matching their own class doc comment's already-
+stated intent; reachability (the collision shape) is unaffected.
+`tests/test_electrical_panel_terminal.gd` gained checks that both
+terminals stay invisible while reachable/door-open, and that
+`WorldDiorama` is the one actually-visible twin. Render-verified: the
+cabinet interior now shows only the wire/terminal assembly, matching
+the minigame's own presentation, with no stray geometry.
+
+## H. Priority 7: the same lofted-leg treatment, time permitting
+
+With the six fixes above complete and fully verified, StandingPose's
+legs got the same treatment Section A gave the arms: one continuous
+lofted tube per leg (hip cap -> upper leg -> knee -> lower leg ->
+ankle), replacing the same class of CSG sphere/cylinder primitive chain
+(confirmed in `player_body.tscn`). Unlike the arms, this is built ONCE,
+not rebuilt per frame -- StandingPose's legs are never tweened by
+anything in this script (only SittingPose's own get-up sequence
+animates legs, a different pose, untouched here), so there is no live
+anchor movement to track after the initial build from each anchor's
+rest position. The Foot itself stays a plain `CSGBox3D` (a flat-
+surfaced shoe silhouette was never part of the complaint, same
+reasoning `_build_hand()` already applies to the palm). Render-
+verified: a close, well-lit shot shows a single smooth, continuously-
+tapered leg from hip through knee to ankle with no hard seam at the
+knee, alongside the already-improved arm/hand/watch and torso/shoulder
+silhouette in the same frame. Full regression suite re-run clean after
+this addition (structural checks only this round; no dedicated new
+test file -- this is a pure geometry swap using the exact same, already
+-tested `HandMeshBuilder.build_tube()` path Section A's own tests
+already cover).
+
+## I. Priority 8: the disposal container doubles as this round's extra feature
+
+Section E's `trash_disposal.gd`/`.tscn` -- a labelled, hazard-striped,
+readable-prompt disposal container with real accept/reject feedback and
+a session-tracked disposed count -- is both a REQUIRED part of
+Priority 4's own loop and, per the brief's own Priority 8 candidate
+list ("a proper space-trash/disposal container interaction with
+readable prompt and feedback"), satisfies this round's "one extra
+meaningful feature" on its own merits. No separate, additional feature
+was added beyond this given the round's already-substantial scope
+across six confirmed fixes plus the Priority 7 leg work.
+
+## J. Testing and verification
+
+Baseline reconfirmed clean (70/70, matching Round 20's own final
+count) before this round's own changes began. Full suite run clean
+TWICE after all work completed: 71/71 (the one addition is
+`test_used_filter_disposal.gd`, Section E's own new coverage) --
+no failures, no regressions, on both runs. Headless smoke test
+(`godot --headless --path . --quit-after 3`) clean throughout, checked
+repeatedly between major changes, not just at the end. The capsule-
+clearance sweep stayed at its known-failures-only baseline throughout
+every change this round (confirmed after the storage cabinet resize
+specifically, the change with the most plausible nav-footprint impact):
+the same five historically-known edges (`junction_node_1<->comms_tunnel_elbow`,
+`comms_a<->comms_alcove`, `comms_a<->comms_window`,
+`engineering_tunnel_1<->engineering_a`, `engineering_b<->storage_elbow_e`)
+remain exactly as before, tracked separately, zero new regressions.
+
+Six new/extended regression test files or sections this round, each
+targeting the specific confirmed root cause rather than the symptom:
+`test_hand_mesh_and_mirror_fov.gd` (arm-mesh architecture, mirror
+layer-2 exclusion, first-person rig layer correctness, watch-moves-
+with-hand), `test_mirror_reflection.gd` (mirror layer-2 exclusion,
+updated near-plane bound), `test_interaction_prompts.gd` (real-raycast
+storage-cabinet-door coverage), `test_control_room_walkway_seal.gd`
+(the new east-doorway gap), `test_electrical_panel_terminal.gd`
+(terminal invisibility), and the new `test_used_filter_disposal.gd`
+(the full physical disposal loop, 21 assertions). All genuinely new
+coverage proves the ACTUAL confirmed root cause, not a restatement of
+the symptom.
+
+Several diagnostic dead ends during investigation are worth recording
+for future reference, since real findings came from ruling them out,
+not from the first guess: the "tan arm" symptom was first suspected to
+be a material/lighting bug (ruled out by an isolated-scene render with
+a known-correct material, which rendered correctly) before the real
+cause (the first-person rig leaking through the mirror's unfiltered
+cull_mask) was found via a direct scene-tree light/layer audit; the
+"both sides" Control Room gap was first probed at the ALREADY-FIXED
+Round 19 corridor/junction seam (z=3.5, confirmed still solid, both
+sides) before the real, different gap (z=1.8-2.0, east side only) was
+found by directly probing the Control Room's own doorway instead.
+
+## Known limitations
+
+- The mirror's extreme-oblique-angle frame edges still show void
+  (nothing modelled behind the wall/cabinet) -- unchanged, an honest
+  limitation of the off-axis approach, not touched this round.
+- No full Skeleton3D character rig -- unchanged from Round 20's own
+  evaluation; this round's arm/leg work is the same lofted-mesh
+  architecture, not a skeletal migration.
+- The disposal bin currently accepts only `used_filter_cartridge` --
+  deliberately narrow (reads as a specific parts-disposal point, not a
+  catch-all trash can for the whole game), per this round's own
+  explicit "do not add an unrelated major feature" scope discipline.
+- Priority 7's leg improvement covers StandingPose only (matching
+  where the mirror/reflection complaint actually lives); SittingPose's
+  own legs, LyingPose, and the torso/shoulder silhouette beyond what
+  Section A's arm work already touches were not further revisited this
+  round.
+- The pre-existing, cosmetic "leaked at exit" audio/mesh diagnostic
+  under a hard `--quit-after` headless kill (documented in Round 20's
+  own report) remains a known, non-blocking artifact of short-lived
+  test processes; does not affect gameplay or any test's PASS/FAIL
+  result.
+- As in every prior round, real-rendered verification covered the
+  specific states each section's own work named, not an exhaustive
+  sweep of every difficulty x state x camera-angle combination; some
+  camera framings attempted during investigation (e.g. a few leg/body
+  angles in the tight Living Quarters bathroom) did not produce a
+  usable image on the first few attempts and were re-positioned or
+  replaced with a cleaner open-area shot rather than reported as
+  verified from a failed attempt.
+
+# ROUND 22: WATCH-CASE REDESIGN, THE CONTROL ROOM DOORWAY SEAM, AND SPACE-STATION STORAGE/DISPOSAL COHERENCE
+
+## Scope
+
+Fresh playtest feedback: the raised wristwatch still looked boxy/
+oversized and non-human, the Control Room doorway still showed a
+visible void near its east jamb, the Storage waste bin sat on the
+floor blocking the walkway and read as an Earth trash can, and the
+Storage cabinets read as flat/shallow with items pasted to the wall.
+Each item's root cause was investigated before any geometry changed,
+per standing instruction, and two produced real surprises: the
+doorway "gap" turned out to be a grazing-angle rendering seam between
+two solid, non-overlapping CSG boxes (not a hole -- a direct raycast
+at the same spot always hit solid geometry), and a `.tscn` parser
+fragility was discovered and fixed along the way (see below). No
+commits or pushes were performed this round.
+
+## A. Watch case: box to cylinder
+
+The wristwatch case (both the first-person raised-hand rig and the
+world-body wrist watch) was a `CSGBox3D`, which cannot read as a round
+watch case no matter how its dimensions are tuned -- the "boxy/
+oversized" complaint was a shape problem, not a sizing problem.
+Rebuilt both as `CSGCylinder3D` (radius/height/sides/smooth_faces),
+roughly 40% smaller in cross-section than the old box, with repositioned
+lugs, bezel, face plate, crown, and four rim screws placed by simple
+trigonometry around the case's circumference instead of the old four
+square corner fasteners. Confirmed by render, both first-person and on
+the world body.
+
+## B. The Control Room doorway seam
+
+The real geometry (`ControlRoomEastWallNorth` ending exactly where a
+second piece `ControlRoomDoorwayWallEast` began) was solid -- raycasts
+at the seam always hit something -- but two independent CSGBox3D
+pieces meeting at an exactly coplanar edge produced a real, reproducible
+dark hairline at grazing viewing angles, confirmed by render and
+confirmed to vanish at a near-perpendicular angle. The fix was
+architectural, not cosmetic: made the wider doorway-jamb piece
+OVERLAP and fully enclose the narrower wall piece's end (rather than
+merely abut it), so the narrower piece's own faces inside the overlap
+are entirely interior to the wider piece's solid volume and can never
+be exposed to an exterior camera angle. A first attempt (fully merging
+the two pieces into one) removed the seam but caused new
+`test_station_capsule_sweep.gd` regressions near a diagonal room
+traversal; reverted to the overlap-enclosure design, which has zero
+regressions and no seam.
+
+A `.tscn` parser fragility was found and worked around during this
+investigation: a long (~15-20 line) `##` comment block placed directly
+before a `[node ...]` declaration caused that node and all its
+children to silently fail to load (`Parent path '...' has vanished`,
+resolving to null at runtime) with no parse error reported. Confirmed
+by removing the comment, which immediately fixed it, in two unrelated
+files. Going-forward project convention: avoid long multi-line `.tscn`
+comments; keep any such comment short, and put detailed rationale here
+in this document instead.
+
+## C. Waste disposal: floor bin to wall-mounted hatch
+
+The disposal container previously sat on the Storage floor almost
+exactly on top of the `storage_b` movement node, reading as (and
+functioning as) an Earth-style trash can blocking the walkway.
+Rebuilt as a wall-mounted recessed hatch on `StorageSouthWallEast`:
+dark housing, amber hazard trim top/bottom, a green status indicator,
+a "WASTE PROCESSING" label plate, and a hinged flap that plays a real
+open/hold/close tween on a successful disposal (adopted as this
+round's one new small feature -- Priority 6 option C, "sealed
+compartment treatment, latch").
+
+## D. Storage cabinet depth (first pass)
+
+Added a `Shelf` node inside each cabinet and increased interior depth
+from 0.3m to 0.36m, with items (`WireComponent`, `FilterCartridge`)
+repositioned to rest on the shelf instead of floating at the box's
+vertical center. A first attempt also deepened the flanking
+`StorageRack1/2Upper/Lower` pieces to the same depth, which caused
+`test_station_capsule_sweep.gd` regressions on the `storage_a`/
+`storage_b` movement nodes (their width-spanning front face closed
+clearance from 0.35m to 0.29m, under the 0.3m capsule radius);
+reverted the rack depth, kept the cabinet itself deeper, confirmed
+zero regressions. This pass turned out to be insufficient -- see Round
+23 Section A, which redesigns the cabinets again after further
+playtest feedback that they still read as shallow.
+
+## E. Testing and verification
+
+Full suite (`tests/run_tests.sh`, no args) ALL PASS (71/71 at the time
+this round concluded); `test_station_capsule_sweep` at the same
+five-edge known baseline, zero new regressions, reconfirmed after both
+the doorway overlap-enclosure fix and the cabinet depth change
+specifically. Real renders (not headless/geometry reasoning alone)
+inspected for: the watch case (first-person close-up and world-body),
+the Control Room doorway before/after at the original grazing angle,
+the disposal hatch closed/flap-open/wide-walkway shots, and both
+storage cabinets open with items on the shelf.
+
+## Known limitations carried forward
+
+- The hand/fingers were not yet addressed this round (see Round 19/20
+  for the lofted-tube finger work); the raised-watch pose's forearm-to-
+  hand transition still showed a visible seam -- addressed in Round 23.
+- Storage cabinet depth (Section D) was a partial fix, later found
+  still insufficient by fresh playtest feedback -- see Round 23
+  Section A for the real redesign.
+- No full Skeleton3D character rig -- unchanged.
+
+# ROUND 23: STORAGE CABINET REDESIGN, THE FLOATING-CARTRIDGE BUG, AND A REAL CHARACTER-POSE FIX
+
+## Scope
+
+Continuing directly from Round 22's working tree, with fresh playtest
+feedback on three fronts: the storage cabinets still read as shallow
+with the filter cartridge "half embedded in the wall," the filter
+replacement loop left a second, floating, never-carryable cartridge
+visible at the station after a real swap, and the raised-watch pose
+still looked awkward with forearms reading too long. All three had a
+specific, confirmable root cause, found by reading the actual code/
+geometry rather than guessing from the symptom description alone (no
+screenshots were received this round despite being referenced in the
+brief; the round proceeded on the detailed written feedback, which was
+specific enough to act on, and every visual claim below was confirmed
+by this round's own fresh renders, not assumed from the text). This
+round also added one bounded, same-technique silhouette improvement to
+the torso (a lofted-sphere bridge, the same non-uniform-CSGSphere
+bridging technique already proven for Round 22's TrapeziusBase). No
+unrelated scope was added.
+
+## A. Storage cabinets: real depth, correct door-swing direction, a frame and latch
+
+Two real, separate root causes, both confirmed directly rather than
+assumed:
+
+1. **The disposal hatch had been mounted with its housing geometry
+   embedded inside the solid wall slab** (an unrelated discovery made
+   while investigating the storage complaint, worth recording here
+   since it was the same class of mistake): the node origin sat at
+   z=6.98 while the wall spans z=6.8-7.0, so most of the hatch's own
+   CSG pieces were fully enclosed by the wall's own solid front face,
+   invisible from the room. Fixed by moving the origin to z=7.05
+   (flush/proud of the room-facing surface).
+2. **The storage cabinets' real problem was never raw depth** -- the
+   math shows Round 22's 0.36m interior was not dramatically shallow.
+   The actual "pasted to the wall" read came from two compounding
+   issues: (a) still not deep enough to feel like real recessed
+   furniture, and (b) **the cabinet door opened in the wrong
+   direction**. Computing the door's own swept rotation (not just
+   reading the authored `door_open_degrees` value) showed both
+   cabinets' open door swinging AWAY from the room and back INTO the
+   solid wall/recess behind them -- the door was never visible as a
+   real opening door from the player's side, which likely compounded
+   the "feels like a wall niche, not a cabinet" impression. Root cause:
+   wrong sign on `door_open_degrees` for each hinge's position
+   (`StorageCabinet1`: -110 -> +110; `StorageCabinet2`: +110 -> -110,
+   mirrored because the cabinets sit on opposite walls).
+
+Fix: real interior depth increased to 0.55m, achieved entirely by
+extending the BACK of each cabinet further into the (confirmed empty)
+void beyond the station's outer hull on that side -- not by
+protruding further into the room, which is what caused Round 22's
+nav-clearance regression. The flanking rack sections were left at
+their safe Round 22 depth (the actual source of that regression, not
+the cabinet itself). Added a proud `FrameTop`/`FrameBottom` trim
+bezel around each opening and a two-piece `LatchPlate`/`LatchLever`
+replacing the old plain handle cube, for a real "frame, door, hinge,
+shelf depth, latch" read per the brief's own explicit checklist.
+Confirmed by render: both cabinets now show a visibly deep interior
+behind a framed opening, with the wire coil and filter cartridge
+resting on a real shelf with headroom above, and a top-down render
+confirms both doors now swing outward into the room between the two
+cabinets, not into the wall.
+
+New regression test: `test_storage_cabinet_door_direction.gd` --
+computes each door's actual open-position tip coordinate and asserts
+it lands on the room side of its own hinge and never past the
+cabinet's own back wall.
+
+## B. The floating duplicate cartridge
+
+Root cause: `filter_housing_diorama.gd`'s `sync_full_state()`
+unconditionally set `_new_cartridge.visible = true` (and
+`_old_cartridge` per-stage) on BOTH instances of the diorama scene --
+the focused procedure view's own diorama, where those small decorative
+props are the real interactive target the player rotates/clicks, AND
+the separate, permanently-present, scaled-down `WorldDiorama` twin
+that sits in the actual 3D world right next to the REAL, full-scale,
+carryable `FilterCartridge`/`UsedFilterCartridge` objects. The world
+twin's own cartridge meshes were never meant to double as a second
+physical cartridge -- the real pickups already represent that
+state in the world. Showing them there too produced exactly the
+reported symptom: after a real swap, the real installed cartridge is
+visible at the housing AND the diorama's own decorative "new
+cartridge" prop is also sitting there, permanently, since it was never
+hidden at any stage including before the player had even started.
+
+Fix: both cartridge props are now force-hidden whenever
+`world_display_mode` is true (the world twin's own flag, already used
+elsewhere in the same script to disable its colliders), leaving the
+focused view's own diorama instance fully unaffected. The valve and
+latches are unaffected -- they have no real-world physical duplicate,
+so the world twin's own small decorative copies of those remain
+correctly visible as a from-a-distance status read.
+
+Verified by driving the real procedure end-to-end through the
+station's own API (isolate, open latches, retrieve+carry the real
+cartridge, remove old, align+insert, close latches, restore) and
+rendering the station at each stage: no second cartridge mesh visible
+at any point, the real installed cartridge reads sensibly at the
+housing, and the real ejected used cartridge can still be picked up
+and carried to disposal independently.
+
+New regression test: `test_filter_no_duplicate_cartridge.gd` -- 17
+assertions covering the world diorama's cartridge props staying hidden
+through every stage of a real procedure, while the real carryable
+objects behave correctly.
+
+## C. The raised-watch pose: a real rotation bug, not just numbers
+
+`set_watch_raise_pose()` tweened only each arm joint's POSITION
+(`UpperArmR`/`ElbowR`/`LowerArmR`/`HandR`), never any rotation. The
+forearm's own TUBE mesh already re-derives its orientation live from
+the joint positions each frame (`_rebuild_arm_mesh()`'s tangent just
+follows wherever the joints end up), so the forearm itself always
+looked directionally correct -- but `HandR` is also the parent of the
+actual rigid CSG geometry (palm, fingers, the wristwatch itself, built
+once in `_build_hand()`/`_build_wrist_watch()`). That whole assembly's
+rotation never changed, so it kept facing exactly the way it faces at
+rest (arm hanging straight down) even once dragged up near the chest --
+landing with the palm/watch pointed in a direction that no longer
+matched the raised forearm at all. This is very likely the actual
+mechanism behind "the raised watch pose looks awkward" rather than a
+pure geometry/proportion problem.
+
+Fixed by rotating `HandR` to the shortest-arc quaternion from the rest
+forearm direction (Elbow->Hand at rest) to the raised forearm
+direction, tweened in parallel with the existing position tweens and
+back to identity on lowering -- the same "derive orientation from the
+two live joint endpoints" principle the tube mesh already uses,
+applied once to the rigid hand assembly instead of continuously to a
+lofted spine.
+
+Separately, computed the actual joint-to-joint arm proportions rather
+than guessing: upper arm ~0.38m, forearm ~0.30m, a ~1.27:1 ratio
+already close to the real anatomical ~1.27:1 (shoulder-to-elbow
+~0.186 x height, elbow-to-wrist ~0.146 x height) -- shortening the
+forearm's LENGTH further would have made it read as stubby rather
+than more human. The actual "too long" READ is better explained by (a)
+the rotation bug above visually distorting the limb in the one pose
+where it was reported, and (b) a thin, uniformly-tapered tube reading
+as "stretched" regardless of its real length. Nudged `LowerArm`/`Hand`
+radii up slightly (0.032/0.024 -> 0.036/0.028) for a less noodle-like
+read without touching the anatomically-sound length ratio.
+
+Also added `TorsoBridgeUpper`/`TorsoBridgeLower` -- two non-uniformly-
+scaled `CSGSphere3D` nodes bridging the Chest-Waist and Waist-Hips
+cylinder junctions, the same already-proven technique as Round 22's
+`TrapeziusBase` (chest-to-neck). Purely additive: the existing Chest/
+Waist/Hips cylinder nodes and their radii (which `test_standing_body_
+composition.gd` directly asserts on) are completely untouched, so this
+silhouette improvement carried zero risk to that test's existing
+invariants. Confirmed by render: the torso now shows a visibly
+rounder, less stepped taper from chest to waist to hips.
+
+New regression assertions added to `test_hand_mesh_and_mirror_fov.gd`:
+confirms `HandR`'s quaternion actually changes (not just stays
+identity) when the arm raises, and returns to identity on lowering.
+
+## D. Honest assessment: what's still primitive, and the real next step
+
+The hand itself (palm + four fingers + thumb) is ALREADY a genuinely
+lofted-tube mesh per finger (`hand_mesh_builder.gd`'s
+`build_fingers_and_thumb()`, from Round 20) with smoothstep radius
+tapering and rounded tip caps -- not raw CSG primitives. What still
+reads as stiff/claw-like in a close raised-pose render is the fixed,
+un-curled, parallel arrangement of four short (0.044-0.06m) finger
+tubes with no per-pose variation -- a real hand curls differently at
+rest vs. gripping vs. a relaxed watch-check gesture, and this
+construction only ever builds one static curl. The torso is still
+fundamentally three separate CSG cylinders (now bridged at the seams,
+not lofted into one continuous taper the way the limbs are) -- a
+genuinely smoother torso would mean replacing Chest/Waist/Hips with a
+single lofted spine the same way the arms/legs/fingers already work,
+which this round deliberately did NOT do: `test_standing_body_
+composition.gd` asserts directly on those three nodes' own radii and
+vertical-overlap relationships (chest wider than waist, hips flaring
+back out, shoulder/waist/hip overlap amounts), and swapping them for a
+continuous mesh would require rewriting that test's whole approach,
+not just adding assertions -- a larger, riskier change than this
+round's remaining time budget allowed to do safely alongside the three
+primary fixes above.
+
+**Concrete next step**: convert the torso (Chest/Waist/Hips) to the
+same lofted-tube-with-interpolated-radius technique the limbs already
+use (`HandMeshBuilder.build_tube()`), rewriting `test_standing_body_
+composition.gd`'s torso assertions to check equivalent properties of
+the new mesh (radius-at-height samples instead of discrete node
+radii) rather than the current node-by-node reads. This is the
+single highest-leverage remaining step toward the torso not reading as
+"a stack of shapes," using an already-proven technique, not a new
+risky system -- genuinely scoped for its own dedicated round rather
+than squeezed in alongside this round's other fixes.
+
+A full Skeleton3D migration remains evaluated and declined again this
+round, for the same reason as every prior round: the existing sitting/
+lying/laptop-gesture/leg-swing/watch-raise animation logic is built
+entirely around named-node position/rotation tweens on independently-
+authored pose subtrees, not bone poses -- migrating would mean
+reimplementing all of that animation logic in the same round as
+switching the underlying representation, which is a substantially
+larger, riskier change than this round's time budget allows to ship
+green and verified.
+
+## E. Testing and verification
+
+Full suite (`tests/run_tests.sh`, no args): 76/76 PASS (two new test
+files this round: `test_storage_cabinet_door_direction.gd`,
+`test_filter_no_duplicate_cartridge.gd`, plus new assertions added to
+`test_hand_mesh_and_mirror_fov.gd`), reconfirmed after every major
+change (cabinet redesign, diorama fix, hand rotation/torso bridge) and
+once more as a final combined check before this document was updated.
+`test_station_capsule_sweep`: same five known pre-existing edges,
+zero new regressions -- specifically reconfirmed after the cabinet
+depth increase, since that was the exact change that caused a
+regression in Round 22 before the back-extension approach was chosen
+instead of a room-ward extension.
+
+Real renders (not headless/geometry reasoning alone) inspected for:
+both storage cabinets open (depth, shelf, item placement, frame/latch
+detail), a top-down shot confirming both doors swing outward into the
+room, the disposal hatch re-confirmed undisturbed by the nearby
+storage changes, the filter procedure at four stages (before, old-
+cartridge-removed, new-cartridge-installed, final) confirming no
+duplicate cartridge at any point, the raised-watch pose close-up and
+wide shot, and a (dimly, single-sided lit) mirror-reflection shot of
+the raised pose for a real reflected view, not just a direct camera.
+
+## Known limitations
+
+- The hand still reads as stiff/claw-like in a close raised-pose view
+  (Section D) -- a lofted-tube mesh, not raw primitives, but with no
+  per-pose curl variation.
+- The torso remains three separate CSG cylinders, now bridged at the
+  seams but not a single continuous lofted taper like the limbs --
+  Section D names the concrete next step and the specific blocker
+  (the existing composition test's node-by-node assertions would need
+  rewriting, not just extending).
+- No full Skeleton3D character rig -- unchanged, evaluated and
+  declined again this round for the reason given in Section D.
+- No screenshots were actually received this round despite being
+  referenced in the brief; proceeded on the detailed written feedback
+  instead, which was specific enough to act on, and confirmed every
+  visual claim via this round's own fresh renders rather than assuming
+  the text description matched what a screenshot would have shown.
+- The mirror render captured for Section C's raised-pose check was
+  dim/single-sided lit (a diagnostic-light placement limitation, not a
+  gameplay lighting issue) -- the clearer, better-lit direct-camera
+  renders were the primary basis for this round's visual assessment of
+  body/watch quality, with the mirror shot as supplementary
+  confirmation that the same geometry reads consistently reflected.

@@ -293,6 +293,7 @@ func _ready() -> void:
 		_screw_base_z.append(screw_node.position.z)
 	for role in ROLES:
 		_build_wire_curve(_wire_nodes[role].get_node("VisualGroup"), _WIRE_CURVE_POINTS[role])
+	_add_cable_hardware()
 	# Round 16 Priority 3: the replacement wire is pre-built with ONE
 	# curve variant per role this diorama can ever be told is at fault
 	# (see _FAULT_VISUAL_GROUPS/set_fault_role() below) -- built once,
@@ -601,6 +602,123 @@ func _build_wire_curve(visual_group: Node3D, entry_and_control: Array) -> void:
 		seg.radius = radius
 		seg.height = (b - a).length()
 		seg.transform = Transform3D(_basis_with_y(b - a), (a + b) * 0.5)
+
+
+## Round 19 Priority 6: a small clamp/gland bracket at each INSTALLED
+## wire's own entry point (never on the staged ReplacementWire variants
+## -- those aren't anchored to anything yet), reusing the terminal's own
+## housing material so it reads as the same installed hardware, not a
+## new material language. Addresses the explicit "cables ending openly
+## toward the top" complaint -- every wire used to just begin in open
+## air at its own Bezier P0 with nothing visually holding it there.
+##
+## Round 20 Priority 7 extends this same bracket with three more pieces
+## of mounting hardware, all built from the SAME per-role entry/control/
+## terminal coordinates _build_wire_curve() already uses (no new
+## geometry data, no risk of drifting out of sync with the actual cable
+## path):
+##   - EntryCollar: a grommet ring AROUND the wire, oriented along its
+##     own real initial tangent (via _basis_with_y(), the same helper
+##     _build_wire_curve() uses for each chord) so the cable visibly
+##     THREADS THROUGH its mount instead of merely overlapping a
+##     floating axis-aligned box next to it.
+##   - RoutingClip: a second, smaller clip partway down the run (t=0.32,
+##     well short of the terminal end), representing the cable being
+##     held against the backdrop mid-span -- addresses "clips" and
+##     "routing" without touching the terminal end, which is the end
+##     that actually swings during disconnect/reconnect (see
+##     _tween_wire_pitch()'s own doc comment).
+##   - TerminalCollar: a matching strain-relief collar where the cable
+##     meets its lug, so the terminal end doesn't read as simply poking
+##     out of the connector either.
+## All three are parented under the SAME wire's own VisualGroup as the
+## existing EntryBracket (not under some new, differently-pivoting
+## node), so they inherit exactly the same, already-shipped disconnect/
+## reconnect swing behavior -- no new pivot assumptions, no new
+## reconnection-bug surface. Still purely decorative: no collision, not
+## part of ROLES/_collider_action, never touched by the disconnect/
+## reconnect/replace logic below, and does not add, remove, or relocate
+## any of the 10 always-present wires.
+##
+## A fourth piece, _add_bundle_tie(), is NOT per-wire -- see its own doc
+## comment below for why it is parented to "Wires" itself instead.
+func _add_cable_hardware() -> void:
+	var housing_material: Material = get_node("Terminals/Return/Backing").material
+	var terminal_local := Vector3(0, -0.64, 0)
+	for role in ROLES:
+		var entry: Vector3 = _WIRE_CURVE_POINTS[role][0]
+		var control: Vector3 = _WIRE_CURVE_POINTS[role][1]
+		var visual_group: Node3D = _wire_nodes[role].get_node("VisualGroup")
+		var wire_radius: float = visual_group.get_node("Run").radius
+
+		var bracket := CSGBox3D.new()
+		bracket.name = "EntryBracket"
+		bracket.size = Vector3(0.1, 0.05, 0.05)
+		bracket.position = entry + Vector3(0, 0.025, 0)
+		bracket.material = housing_material
+		visual_group.add_child(bracket)
+
+		var entry_dir: Vector3 = _bezier_point(entry, control, terminal_local, 0.06) - entry
+		var entry_collar := CSGCylinder3D.new()
+		entry_collar.name = "EntryCollar"
+		entry_collar.radius = wire_radius * 1.6
+		entry_collar.height = 0.045
+		entry_collar.sides = 10
+		entry_collar.material = housing_material
+		entry_collar.transform = Transform3D(_basis_with_y(entry_dir), entry)
+		visual_group.add_child(entry_collar)
+
+		var clip_pos: Vector3 = _bezier_point(entry, control, terminal_local, 0.32)
+		var clip_dir: Vector3 = _bezier_point(entry, control, terminal_local, 0.36) - clip_pos
+		var clip := CSGBox3D.new()
+		clip.name = "RoutingClip"
+		clip.size = Vector3(0.07, 0.03, 0.05)
+		clip.material = housing_material
+		clip.transform = Transform3D(_basis_with_y(clip_dir), clip_pos)
+		visual_group.add_child(clip)
+
+		var terminal_dir: Vector3 = terminal_local - _bezier_point(entry, control, terminal_local, 0.94)
+		var terminal_collar := CSGCylinder3D.new()
+		terminal_collar.name = "TerminalCollar"
+		terminal_collar.radius = wire_radius * 1.5
+		terminal_collar.height = 0.05
+		terminal_collar.sides = 10
+		terminal_collar.material = housing_material
+		terminal_collar.transform = Transform3D(_basis_with_y(terminal_dir), terminal_local + Vector3(0, 0.02, 0))
+		visual_group.add_child(terminal_collar)
+
+	# Round 20 Priority 7: visible bundling for the two closely-spaced
+	# auxiliary-pair wires per row (backup+ground in row A, auxiliary+
+	# relay in row B) -- their entry points sit only ~0.3m apart at the
+	# exact same height/depth (see _WIRE_CURVE_POINTS), the one genuinely
+	# adjacent, near-parallel pair in each row; the other three per row
+	# fan out far enough apart (the deliberate crossing geometry above)
+	# that a shared tie between them would read as physically wrong.
+	_add_bundle_tie(&"backup", &"ground")
+	_add_bundle_tie(&"auxiliary", &"relay")
+
+
+## A small cable-tie strap bridging two ADJACENT wires' entry points.
+## Deliberately parented to "Wires" itself (the shared parent of every
+## wire root), NOT to either wire's own VisualGroup: a tie is panel-
+## mounted hardware, not part of either individual cable, so it must
+## not have to pick a side to swing with if one of the pair is later
+## disconnected while the other stays connected. Positioned entirely
+## from data this script already owns (each wire ROOT's own authored
+## position plus its _WIRE_CURVE_POINTS entry offset) -- by construction
+## the two roles' entry points differ only in local X (same local y/z
+## offset, same 0.5-spaced root row), so an axis-aligned box sized to
+## the X gap is already correctly oriented with no basis math needed.
+func _add_bundle_tie(role_a: StringName, role_b: StringName) -> void:
+	var housing_material: Material = get_node("Terminals/Return/Backing").material
+	var world_a: Vector3 = _wire_nodes[role_a].position + _WIRE_CURVE_POINTS[role_a][0]
+	var world_b: Vector3 = _wire_nodes[role_b].position + _WIRE_CURVE_POINTS[role_b][0]
+	var tie := CSGBox3D.new()
+	tie.name = "BundleTie_%s_%s" % [role_a, role_b]
+	tie.size = Vector3((world_a - world_b).length() + 0.04, 0.025, 0.035)
+	tie.material = housing_material
+	tie.position = (world_a + world_b) * 0.5
+	get_node("Wires").add_child(tie)
 
 
 func set_active(value: bool) -> void:

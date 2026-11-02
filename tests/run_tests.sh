@@ -65,6 +65,7 @@ TESTS=(
   test_electrical_panel_terminal
   test_electrical_panel_hatch_visual
   test_wristwatch
+  test_wristwatch_part_hint
   test_station_map
   test_focused_interaction_state
   test_electrical_repair_procedure
@@ -77,6 +78,13 @@ TESTS=(
   test_sensor_calibration_knob
   test_sensor_calibration_difficulty
   test_sensor_calibration_coupling
+  test_sensor_calibration_layout_progression
+  test_control_room_walkway_seal
+  test_storage_cabinet
+  test_storage_cabinet_door_direction
+  test_hand_mesh_and_mirror_fov
+  test_junction_engineering_doorway
+  test_storage_cabinet2_filter
   test_workstation_visual_overview
   test_wristwatch_screen_stability
   test_e06_contextual_guidance
@@ -87,6 +95,8 @@ TESTS=(
   test_flashlight_hard_mode
   test_valve_routing
   test_filter_housing
+  test_used_filter_disposal
+  test_filter_no_duplicate_cartridge
   test_circuit_tracer
   test_electrical_wire_randomization
   test_valve_routing_dual_outlet

@@ -80,6 +80,22 @@ func _init() -> void:
 	_check("terminal is reachable while open", not terminal.get_node("Collision").disabled)
 
 	# ============================================================
+	# Round 21 Priority 6 regression: Terminal/IntactTerminal are pure,
+	# invisible raycast targets -- the real visual the player sees is
+	# the panel's separate, correctly-scaled WorldDiorama twin (shown/
+	# hidden by the SAME door-open condition). set_reachable() used to
+	# also set `visible = reachable`, which exposed these two small,
+	# unscaled BoxMesh placeholders as "two unexplained cube-like
+	# blocks" the instant the door opened -- confirmed by render (see
+	# the Round 21 report). They must stay invisible regardless of
+	# reachability/door state.
+	# ============================================================
+	var world_diorama: Node3D = panel.get_node("WorldDiorama")
+	_check("terminal stays invisible while reachable (door open) -- the real visual is WorldDiorama, not this raw hitbox", not terminal.visible)
+	_check("intact terminal stays invisible while reachable (door open) too", not intact_terminal.visible)
+	_check("WorldDiorama is the one actually visible twin while the door is open", world_diorama.visible)
+
+	# ============================================================
 	# 3. Wrong terminal preserves the carried wire and explains why.
 	# ============================================================
 	panel.terminal_interact(&"damaged") # advance to TRACED

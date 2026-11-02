@@ -70,8 +70,23 @@ func _init() -> void:
 	_check("both latches open -> advances to REMOVE_OLD", station.stage() == 2) # Stage.REMOVE_OLD
 
 	# ============================================================
-	# STAGE 3: remove the old cartridge.
+	# STAGE 3: remove the old cartridge -- Round 20 Priority 4: now
+	# gated on actually carrying the real replacement part retrieved
+	# from Storage. Confirm the harmless, recoverable missing-part
+	# rejection FIRST (same "attempt with nothing/wrong part changes
+	# nothing" contract electrical_panel.gd's own install already
+	# proves), then retrieve the cartridge and confirm the real path.
 	# ============================================================
+	var carry := player.get_node("CarrySystem")
+	_check("not carrying the cartridge yet", not carry.is_carrying())
+	await _click(diorama, &"old_cartridge")
+	_check("removing the old cartridge WITHOUT the part fails harmlessly (still REMOVE_OLD)", station.stage() == 2) # Stage.REMOVE_OLD
+	_check("l02 untouched by the failed attempt", not day_plan.is_task_done(&"l02"))
+
+	var cartridge := main.get_node("Interactables/FilterCartridge")
+	cartridge.interact()
+	_check("filter cartridge picked up from Storage", carry.is_carrying() and carry.carried_item_id() == &"filter_cartridge")
+
 	await _click(diorama, &"old_cartridge")
 	_check("removing the old cartridge advances to ALIGN_INSERT", station.stage() == 3) # Stage.ALIGN_INSERT
 	_check("valve handle STILL renders CLOSED (unaffected by cartridge removal)", valve_handle_mat.albedo_color.is_equal_approx(diorama.COLOR_VALVE_CLOSED))

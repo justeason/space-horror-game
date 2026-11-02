@@ -42,11 +42,24 @@ extends Node
 @export var interaction_controller_path: NodePath
 @export var watch_rig_path: NodePath
 @export var raise_duration: float = 0.28
+## Round 19 Priority 1/2: the world body, so holding C also plays its
+## own distinct "looking at my wrist" pose (see player_body.gd's
+## set_watch_raise_pose()) alongside the existing camera-relative
+## first-person rig -- addressing the mirror brief's explicit
+## requirement that the mirror show a believable world-body inspection
+## pose, not just the unchanged standing pose, while C is held.
+@export var player_body_path: NodePath
+## Round 20 Priority 5: so the glanced watch can tell the player "go get
+## the part first" instead of just naming the task's room -- the actual
+## gap the work-order-coherence brief named ("clear required part").
+@export var carry_system_path: NodePath
 
 @onready var _day_plan: Node = get_node_or_null(day_plan_path)
 @onready var _electrical_panel: Node = get_node_or_null(electrical_panel_path)
 @onready var _interaction_controller: Node = get_node_or_null(interaction_controller_path)
 @onready var _watch_rig: Node = get_node(watch_rig_path)
+@onready var _player_body: Node = get_node_or_null(player_body_path)
+@onready var _carry_system: Node = get_node_or_null(carry_system_path)
 
 
 func _process(_delta: float) -> void:
@@ -57,6 +70,8 @@ func _process(_delta: float) -> void:
 
 	if should_raise != was_raised:
 		_watch_rig.set_raised(should_raise, raise_duration)
+		if _player_body != null:
+			_player_body.set_watch_raise_pose(should_raise, raise_duration)
 
 	if should_raise:
 		# Keep it live while held -- e.g. marking a task done elsewhere
@@ -90,9 +105,29 @@ func _refresh_text() -> void:
 	if room == &"":
 		_watch_rig.set_watch_text("ALL CLEAR")
 		return
+	# Round 20 Priority 5: if a part is already known to be required
+	# (diagnosed, but not yet in hand) for the STILL-OPEN electrical
+	# fault, send the player to Storage FIRST rather than naming the
+	# work-site room they can't actually finish the job in yet -- the
+	# glanceable equivalent of get_work_order_lines()'s own "Required
+	# part:" line. Gated on e05 (the repair task itself) being
+	# outstanding, not just on required_component_id being non-empty --
+	# that field is never reset mid-day (see reset_for_new_day()), so
+	# without this gate the hint would wrongly keep showing "GET PART"
+	# after the repair is already done and the real next step is to
+	# head back and verify it at the Control Room.
+	if _day_plan.required_component_id != &"" and not _day_plan.is_task_done(&"e05") and not _has_required_part():
+		_watch_rig.set_watch_text("GET PART\nSTORAGE")
+		return
 	var action: String
 	if room == &"control_room":
 		action = "CHECK IN" if not _day_plan.is_task_done(&"c01") else "VERIFY REPAIR"
 	else:
 		action = "TASK: %s" % String(_day_plan.assignment_task_id).to_upper() if _day_plan.assignment_task_id != &"" else "IN PROGRESS"
 	_watch_rig.set_watch_text("%s\n%s" % [action, String(room).replace("_", " ").to_upper()])
+
+
+func _has_required_part() -> bool:
+	if _carry_system == null:
+		return true # unknown -- don't block the normal message if unwired
+	return _carry_system.is_carrying() and _carry_system.carried_item_id() == _day_plan.required_component_id

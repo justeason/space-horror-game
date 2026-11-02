@@ -1,4 +1,5 @@
 extends Node3D
+const _HandMeshBuilder = preload("res://scripts/player/hand_mesh_builder.gd")
 ## Visible first-person body: a reusable, non-colliding cosmetic model.
 ## It tracks the player's look yaw every frame while standing (so
 ## turning around visibly turns the body, a standard first-person
@@ -123,6 +124,15 @@ enum Pose { STANDING, SITTING, LYING }
 @onready var _head_group: Node3D = $HeadGroup
 @onready var _watch_rig: Node = get_node_or_null(watch_rig_path)
 
+## Round 19 Priority 2: StandingPose arm nodes whose rest position is
+## captured once in _ready(), the same pattern _arm_rest_pos already
+## uses for SittingPose's laptop-reach gesture -- needed so
+## set_watch_raise_pose() has a known rest pose to tween the standing
+## right arm away from and back to.
+const _STANDING_ARM_NODES: Array = ["UpperArmR", "ElbowR", "LowerArmR", "HandR"]
+var _standing_arm_rest_pos: Dictionary = {}
+var _watch_raise_tweens: Array = []
+
 var _pose: Pose = Pose.STANDING
 var _hand_rest_pos: Vector3
 
@@ -152,7 +162,11 @@ func _ready() -> void:
 	for entry in _ARM_GESTURE_NODES:
 		var node_name: String = entry[0]
 		_arm_rest_pos[node_name] = _sitting_pose.get_node(node_name).position
+	_build_hands_and_watch()
+	for node_name in _STANDING_ARM_NODES:
+		_standing_arm_rest_pos[node_name] = _standing_pose.get_node(node_name).position
 	_apply_pose()
+	_update_arm_meshes()
 
 
 func _process(_delta: float) -> void:
@@ -160,6 +174,7 @@ func _process(_delta: float) -> void:
 		rotation.y = _look_pivot.rotation.y
 		_pitch_follow_current = standing_pitch_follow
 		rotation.x = _pitch_pivot.rotation.x * _pitch_follow_current
+	_update_arm_meshes()
 
 
 func is_sitting() -> bool:
@@ -428,6 +443,470 @@ func lean_forward(amount: float, duration: float) -> void:
 		if not _lean_rest_pos.has(node_name):
 			_lean_rest_pos[node_name] = node.position
 		_lean_tween.tween_property(node, "position", _lean_rest_pos[node_name] + offset, duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+
+## ============================================================
+## Round 19 Priority 2: real hand geometry + a world-worn wristwatch.
+##
+## ROOT PROBLEM (confirmed by reading player_body.tscn, not assumed):
+## HandL/HandR in every pose were a single CSGSphere3D each -- a bare
+## blob with no fingers, thumb, or joints at all -- and the world body
+## had no wristwatch model anywhere, even though the first-person
+## watch-rig (first_person_watch_rig.tscn) already has a genuinely
+## detailed palm/4-finger/thumb/watch-case design. That first-person
+## rig is NOT rebuilt here (it already meets this round's hand/watch
+## requirements); this is the missing other half -- giving the WORLD
+## body (what the mirror and any future third-person/multiplayer view
+## actually show) comparable hand and watch detail, built procedurally
+## (this project's established pattern for geometry too repetitive to
+## hand-author in .tscn text -- see e.g. the Round 18 electrical panel
+## wire/terminal generation) so the same two builder functions serve
+## both HandL/HandR and both StandingPose/SittingPose without 4x
+## duplicated .tscn node trees.
+## ============================================================
+
+var _mat_glove_main: StandardMaterial3D
+var _mat_glove_dark: StandardMaterial3D
+var _mat_watch_strap: StandardMaterial3D
+var _mat_watch_case: StandardMaterial3D
+var _mat_watch_metal: StandardMaterial3D
+var _mat_watch_face: StandardMaterial3D
+
+
+## Round 21 Priority 1: ROOT PROBLEM (confirmed by reading
+## player_body.tscn, not assumed): StandingPose/SittingPose's
+## UpperArm/Elbow/LowerArm were THREE SEPARATE CSG primitives (cylinder
+## + sphere + cylinder) unioned together by the parent CSGCombiner3D --
+## a boolean union of differently-curved primitives meeting at a shared
+## plane does not blend their surfaces, so every joint reads as a hard
+## seam. This is the literal "raised hand/arm still looks like a bunch
+## of cylinders" feedback, and it is specifically visible in the mirror
+## because that is the one place the WORLD body's raised arm (not the
+## first-person rig, which Round 20 already rebuilt) is actually seen
+## up close. Fixed the same way Round 20 fixed the equivalent finger
+## seam: one continuously-lofted tube mesh (HandMeshBuilder.build_tube)
+## per arm, spine sampled through the SAME anchor positions
+## (Shoulder/UpperArm/Elbow/LowerArm/Hand) the existing falloff-tween
+## gesture system (animate_hand_laptop_gesture(), set_watch_raise_pose())
+## already animates -- so no tween/gesture code changes at all, only
+## what gets RENDERED through those live anchor positions changes. The
+## old CSG primitives are hidden (not deleted -- CSGShape3D with
+## visible=false is also excluded from its parent combiner's boolean
+## operation, confirmed Godot behavior, so hiding them cleanly removes
+## the old seamed geometry) but kept as the tween targets they already
+## were, so _STANDING_ARM_NODES/_ARM_GESTURE_NODES and every caller that
+## reads/writes their `.position` is completely unchanged.
+## Round 23 Priority 3: LowerArm/Hand nudged up slightly (0.032/0.024 ->
+## 0.036/0.028) -- player feedback was "forearms are too long"; the
+## actual joint-to-joint LENGTH here is already close to anatomical
+## (upper arm ~0.38 vs forearm ~0.30, roughly the real ~1.27:1 ratio),
+## so shortening it further would have made it read as stubby instead.
+## A thin, long, uniformly-tapered tube reads as "stretched" regardless
+## of its real length -- a touch more thickness is the more honest fix
+## for that specific visual impression without distorting the actual
+## proportions.
+const _ARM_RADII_STANDING: Dictionary = {"Shoulder": 0.052, "UpperArm": 0.048, "Elbow": 0.04, "LowerArm": 0.036, "Hand": 0.028}
+const _ARM_RADII_SITTING: Dictionary = {"Shoulder": 0.048, "UpperArm": 0.044, "Elbow": 0.038, "LowerArm": 0.03, "Hand": 0.022}
+var _arm_mesh_instances: Dictionary = {}
+## Last spine this key's mesh was actually rebuilt from -- rebuilding a
+## full ArrayMesh (SurfaceTool.commit()) is not free, and the anchors
+## only ever move during the handful of seconds an actual tween
+## (set_watch_raise_pose()/animate_hand_laptop_gesture()) is in flight;
+## skipping the rebuild once the spine has settled avoids allocating a
+## brand-new mesh resource 60 times a second forever for a static pose,
+## which is both wasted per-frame work and (confirmed directly: a
+## headless run churning through several real seconds of unconditional
+## every-frame rebuilds left stray rendering-server RIDs at process
+## exit) the kind of constant resource churn worth actually avoiding
+## rather than shrugging off.
+var _arm_last_spine: Dictionary = {}
+
+
+## Hides the old 3-primitive CSG arm chain for one pose/side and adds a
+## persistent (reused, not recreated per-frame) MeshInstance3D in its
+## place, reusing the SAME material the CSG primitives already had so
+## this is a geometry change only, not a re-skin. The mesh itself is
+## filled in every frame by _update_arm_meshes() from the anchors' live
+## (possibly mid-tween) positions.
+func _setup_arm_limb(pose_root: Node3D, suffix: String, key: String) -> void:
+	for part in ["UpperArm", "Elbow", "LowerArm"]:
+		var old: Node = pose_root.get_node_or_null(part + suffix)
+		if old != null and "visible" in old:
+			old.visible = false
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.name = "ArmMesh" + suffix
+	pose_root.add_child(mesh_instance)
+	_arm_mesh_instances[key] = mesh_instance
+
+
+func _rebuild_arm_mesh(pose_root: Node3D, suffix: String, key: String, radii_by_part: Dictionary) -> void:
+	var mesh_instance: MeshInstance3D = _arm_mesh_instances.get(key)
+	if mesh_instance == null:
+		return
+	var shoulder: Node3D = pose_root.get_node_or_null("Shoulder" + suffix)
+	var upper: Node3D = pose_root.get_node_or_null("UpperArm" + suffix)
+	var elbow: Node3D = pose_root.get_node_or_null("Elbow" + suffix)
+	var lower: Node3D = pose_root.get_node_or_null("LowerArm" + suffix)
+	var hand: Node3D = pose_root.get_node_or_null("Hand" + suffix)
+	if shoulder == null or upper == null or elbow == null or lower == null or hand == null:
+		return
+	var spine: Array = [shoulder.position, upper.position, elbow.position, lower.position, hand.position]
+	var last_spine: Array = _arm_last_spine.get(key, [])
+	if last_spine.size() == spine.size():
+		var unchanged := true
+		for i in spine.size():
+			if not (spine[i] as Vector3).is_equal_approx(last_spine[i]):
+				unchanged = false
+				break
+		if unchanged:
+			return
+	_arm_last_spine[key] = spine.duplicate()
+	var radii: Array = [radii_by_part["Shoulder"], radii_by_part["UpperArm"], radii_by_part["Elbow"], radii_by_part["LowerArm"], radii_by_part["Hand"]]
+	# build_tube() returns a ready-to-add MeshInstance3D (its normal
+	# contract -- see every OTHER caller, which does add it to the
+	# tree); this caller only wants the Mesh RESOURCE to assign onto the
+	# already-in-tree `mesh_instance` above, so the wrapper node itself
+	# is immediately freed rather than left as an orphaned, un-parented
+	# Node -- MeshInstance3D is a Node, not a RefCounted, so simply
+	# letting the local variable go out of scope does NOT free it
+	# (confirmed directly: without this, a `--quit-after` run left
+	# exactly one orphaned, path-less MeshInstance3D + its ArrayMesh
+	# leaked per rebuild call).
+	var built: MeshInstance3D = _HandMeshBuilder.build_tube("ArmMesh" + suffix, spine, radii, 6, _arm_material)
+	mesh_instance.mesh = built.mesh
+	built.free()
+
+
+## Only the currently-active pose's two arms are rebuilt each frame
+## (LyingPose keeps its own simple CSGSphere3D hands/cylinder arms
+## unchanged -- it is not the pose this feedback was about, and is
+## rarely seen up close). Cheap: ~5 control points x 6 segments x 10
+## sides per arm, two arms, rebuilt from already-known positions, no
+## different from any other per-frame tween read in this script.
+func _update_arm_meshes() -> void:
+	match _pose:
+		Pose.STANDING:
+			_rebuild_arm_mesh(_standing_pose, "R", "standing_R", _ARM_RADII_STANDING)
+			_rebuild_arm_mesh(_standing_pose, "L", "standing_L", _ARM_RADII_STANDING)
+		Pose.SITTING:
+			_rebuild_arm_mesh(_sitting_pose, "R", "sitting_R", _ARM_RADII_SITTING)
+			_rebuild_arm_mesh(_sitting_pose, "L", "sitting_L", _ARM_RADII_SITTING)
+		Pose.LYING:
+			pass
+
+
+## Round 21 Priority 7: builds one continuous lofted tube for a
+## StandingPose leg (hip -> upper leg -> knee -> lower leg -> ankle),
+## replacing the same kind of CSG sphere/cylinder primitive chain the
+## arms had (HipCap sphere, UpperLeg cylinder, Knee sphere, LowerLeg
+## cylinder, Ankle sphere -- confirmed in player_body.tscn). The Foot
+## itself stays a plain CSGBox3D (a flat-surfaced shoe silhouette was
+## never part of the "looks like cylinders" complaint, same reasoning
+## _build_hand() already applies to the palm). Built once from each
+## anchor's own rest position -- StandingPose's legs are never tweened
+## by anything in this script, unlike the arms, so there is no live
+## position to track after this initial build.
+const _LEG_RADII: Dictionary = {"Hip": 0.095, "UpperLeg": 0.085, "Knee": 0.072, "LowerLeg": 0.058, "Ankle": 0.045}
+
+
+func _build_leg_mesh(pose_root: Node3D, suffix: String) -> void:
+	var hip: Node3D = pose_root.get_node_or_null("HipCap" + suffix)
+	var upper: Node3D = pose_root.get_node_or_null("UpperLeg" + suffix)
+	var knee: Node3D = pose_root.get_node_or_null("Knee" + suffix)
+	var lower: Node3D = pose_root.get_node_or_null("LowerLeg" + suffix)
+	var ankle: Node3D = pose_root.get_node_or_null("Ankle" + suffix)
+	if hip == null or upper == null or knee == null or lower == null or ankle == null:
+		return
+	var material: Material = upper.material
+	for part in ["UpperLeg", "Knee", "LowerLeg", "Ankle"]:
+		var old: Node = pose_root.get_node_or_null(part + suffix)
+		if old != null and "visible" in old:
+			old.visible = false
+	var spine: Array = [hip.position, upper.position, knee.position, lower.position, ankle.position]
+	var radii: Array = [_LEG_RADII["Hip"], _LEG_RADII["UpperLeg"], _LEG_RADII["Knee"], _LEG_RADII["LowerLeg"], _LEG_RADII["Ankle"]]
+	var built: MeshInstance3D = _HandMeshBuilder.build_tube("LegMesh" + suffix, spine, radii, 6, material)
+	pose_root.add_child(built)
+
+
+var _arm_material: Material
+
+
+func _build_hands_and_watch() -> void:
+	# Reuses this body's own existing "dark" material language (boots,
+	# belt) for the glove rather than introducing a skin tone -- these
+	# coveralls read as a work glove, consistent with the rest of the
+	# uniform's material palette already authored here.
+	_mat_glove_main = StandardMaterial3D.new()
+	_mat_glove_main.albedo_color = Color(0.13, 0.13, 0.14, 1)
+	_mat_glove_main.roughness = 0.75
+	_mat_glove_dark = StandardMaterial3D.new()
+	_mat_glove_dark.albedo_color = Color(0.09, 0.09, 0.1, 1)
+	_mat_glove_dark.roughness = 0.75
+
+	_mat_watch_strap = StandardMaterial3D.new()
+	_mat_watch_strap.albedo_color = Color(0.11, 0.11, 0.12, 1)
+	_mat_watch_strap.roughness = 0.8
+	_mat_watch_case = StandardMaterial3D.new()
+	_mat_watch_case.albedo_color = Color(0.14, 0.15, 0.16, 1)
+	_mat_watch_case.roughness = 0.55
+	_mat_watch_case.metallic = 0.3
+	_mat_watch_metal = StandardMaterial3D.new()
+	_mat_watch_metal.albedo_color = Color(0.58, 0.59, 0.62, 1)
+	_mat_watch_metal.roughness = 0.25
+	_mat_watch_metal.metallic = 0.82
+	_mat_watch_face = StandardMaterial3D.new()
+	_mat_watch_face.albedo_color = Color(0.03, 0.04, 0.04, 1)
+	_mat_watch_face.roughness = 0.5
+
+	_build_hand(_standing_pose.get_node("HandL"), false)
+	_build_hand(_standing_pose.get_node("HandR"), true)
+	_build_hand(_sitting_pose.get_node("HandL"), false)
+	_build_hand(_sitting_pose.get_node("HandR"), true)
+
+	# Round 21 Priority 1: all four arms (StandingPose/SittingPose x L/R)
+	# get the lofted-tube limb treatment -- see _setup_arm_limb()'s own
+	# doc comment. The CSG primitives being replaced all share this one
+	# SubResource (confirmed in player_body.tscn: every Upper/Elbow/
+	# Lower-Arm node uses the same "Mat_uniform"), captured here, once,
+	# before any of them are hidden.
+	_arm_material = _standing_pose.get_node("UpperArmR").material
+	_setup_arm_limb(_standing_pose, "R", "standing_R")
+	_setup_arm_limb(_standing_pose, "L", "standing_L")
+	_setup_arm_limb(_sitting_pose, "R", "sitting_R")
+	_setup_arm_limb(_sitting_pose, "L", "sitting_L")
+
+	# Round 21 Priority 7: the same lofted-tube treatment for
+	# StandingPose's legs (Hip cap -> UpperLeg -> Knee -> LowerLeg ->
+	# Ankle), the other half of "assembled from cylinders" this round's
+	# brief asked for if time allowed after the higher-priority arm/
+	# mirror/storage/doorway/cabinet fixes. Built ONCE (not rebuilt per
+	# frame like the arms): StandingPose's legs have no tween/gesture
+	# system at all (only SittingPose's own get-up sequence animates
+	# legs, and that pose is untouched here), so there is no live anchor
+	# movement to track -- a single static mesh built from each anchor's
+	# REST position is already correct for the whole pose's lifetime.
+	_build_leg_mesh(_standing_pose, "R")
+	_build_leg_mesh(_standing_pose, "L")
+
+	# Round 21 Priority 1: ROOT PROBLEM for "the watch looks floating/
+	# clipped" (confirmed by reading this code, not assumed) -- the
+	# watch was built as a SIBLING of HandR under the pose root, at a
+	# position FIXED in the pose root's own local space. set_watch_raise_pose()
+	# tweens HandR's own `.position` (and the other arm anchors), but
+	# never touched this sibling at all -- so raising the arm moved the
+	# hand/fingers away while the watch stayed behind at its original
+	# rest spot. Fixed by making the watch a CHILD of HandR instead (the
+	# anchor that already correctly carries the palm/fingers through
+	# every gesture), at the equivalent local offset -- it now inherits
+	# HandR's own live, possibly mid-tween position for free, the same
+	# way the hand/fingers already did.
+	_build_wrist_watch(_standing_pose.get_node("HandR"), Vector3(0, 0.08, 0.03), Vector3(0, 0, 0), true)
+	_build_wrist_watch(_sitting_pose.get_node("HandR"), Vector3(0, -0.079, -0.003), Vector3(0, 0, 0), true)
+
+
+## Builds a palm + 4 fingers (each knuckle + two tapered segments + a
+## matched-radius tip, not a floating sphere) + a separately-angled
+## thumb on the palm's own side, as children of `root`. Canonical local
+## frame: -Y points toward the fingertips, -Z is the palm's front face,
+## X is hand width -- callers place/rotate `root` itself so that frame
+## lines up with each pose's own arm (see the two StandingPose/
+## SittingPose rotation choices in _build_hands_and_watch()). `is_right`
+## mirrors the thumb side and finger X-fan so the same builder produces
+## correct chirality for either hand.
+func _build_hand(root: Node3D, is_right: bool) -> void:
+	var side: float = 1.0 if is_right else -1.0
+
+	var palm_wrist := CSGBox3D.new()
+	palm_wrist.name = "PalmWrist"
+	palm_wrist.size = Vector3(0.05, 0.03, 0.035)
+	palm_wrist.position = Vector3(0, -0.018, 0)
+	palm_wrist.material = _mat_glove_dark
+	root.add_child(palm_wrist)
+
+	var palm := CSGBox3D.new()
+	palm.name = "Palm"
+	palm.size = Vector3(0.066, 0.03, 0.06)
+	palm.position = Vector3(0, -0.05, -0.005)
+	palm.material = _mat_glove_main
+	root.add_child(palm)
+
+	# Round 20 Priority 2: the fingers/thumb are now ONE continuously
+	# lofted tube mesh each (HandMeshBuilder), not a CSG chain of
+	# knuckle-sphere + cylinder-segment + tip-sphere -- that CSG chain
+	# produced a visible hard seam at every junction (CSG union does
+	# not blend surfaces), which is the literal "looks like several
+	# cylinders connected together" the player's own feedback named.
+	# See hand_mesh_builder.gd's own class doc comment for the full
+	# technique. The palm itself stays CSG boxes below (flat surfaces
+	# were never the complaint).
+	_HandMeshBuilder.build_fingers_and_thumb(root, is_right, _mat_glove_main)
+
+
+## Builds a compact case/bezel/face/strap/crown/lugs wristwatch as
+## children of `root` at `local_pos`/`local_rot_degrees` -- the same
+## physical object the first-person rig shows up close, at matching
+## real-world dimensions (same WatchCase/Bezel/FacePlate sizes as
+## first_person_watch_rig.tscn), just seen from the outside on the
+## actual wrist instead of raised to the camera.
+func _build_wrist_watch(root: Node3D, local_pos: Vector3, local_rot_degrees: Vector3, is_right: bool) -> void:
+	var group := Node3D.new()
+	group.name = "WristWatch"
+	group.position = local_pos
+	group.rotation_degrees = local_rot_degrees
+	root.add_child(group)
+
+	var strap := CSGCylinder3D.new()
+	strap.name = "Strap"
+	strap.radius = 0.062
+	strap.height = 0.05
+	strap.sides = 14
+	strap.material = _mat_watch_strap
+	group.add_child(strap)
+
+	# Round 22 Priority 1: ROOT CAUSE of "the watch is still too boxy/
+	# oversized" (confirmed by render, not assumed) -- WatchCase was a
+	# CSGBox3D with a half-diagonal (~0.067) well past the round
+	# Bezel's own radius (0.042), so the box's square corners visibly
+	# stuck out past the dial sitting on its face -- a round dial on a
+	# visible square slab, not a wearable device. Rebuilt as a genuinely
+	# round case (a CSGCylinder3D, matching the first-person rig's own
+	# Round 22 fix -- see first_person_watch_rig.tscn's WatchCase class
+	# doc comment for the full before/after), with four small rim
+	# screws instead of the old box's exposed corners.
+	var watch_case := CSGCylinder3D.new()
+	watch_case.name = "WatchCase"
+	watch_case.radius = 0.045
+	watch_case.height = 0.026
+	watch_case.sides = 24
+	watch_case.smooth_faces = true
+	watch_case.rotation_degrees = Vector3(90, 0, 0)
+	watch_case.position = Vector3(0, 0, -0.02)
+	watch_case.material = _mat_watch_case
+	group.add_child(watch_case)
+
+	var lug_top := CSGBox3D.new()
+	lug_top.name = "LugTop"
+	lug_top.size = Vector3(0.024, 0.018, 0.016)
+	lug_top.position = Vector3(0, 0.043, -0.006)
+	lug_top.material = _mat_watch_metal
+	watch_case.add_child(lug_top)
+
+	var lug_bottom := CSGBox3D.new()
+	lug_bottom.name = "LugBottom"
+	lug_bottom.size = Vector3(0.024, 0.018, 0.016)
+	lug_bottom.position = Vector3(0, -0.043, -0.006)
+	lug_bottom.material = _mat_watch_metal
+	watch_case.add_child(lug_bottom)
+
+	var bezel := CSGCylinder3D.new()
+	bezel.name = "Bezel"
+	bezel.radius = 0.045
+	bezel.height = 0.011
+	bezel.sides = 24
+	bezel.rotation_degrees = Vector3(90, 0, 0)
+	bezel.position = Vector3(0, 0, -0.018)
+	bezel.material = _mat_watch_metal
+	watch_case.add_child(bezel)
+
+	var face := CSGCylinder3D.new()
+	face.name = "FacePlate"
+	face.radius = 0.036
+	face.height = 0.006
+	face.sides = 24
+	face.rotation_degrees = Vector3(90, 0, 0)
+	face.position = Vector3(0, 0, -0.013)
+	face.material = _mat_watch_face
+	watch_case.add_child(face)
+
+	for angle_deg in [45.0, 135.0, 225.0, 315.0]:
+		var screw := CSGSphere3D.new()
+		screw.name = "RimScrew"
+		screw.radius = 0.0055
+		var rad: float = deg_to_rad(angle_deg)
+		screw.position = Vector3(0.039 * cos(rad), 0.039 * sin(rad), -0.01)
+		screw.material = _mat_watch_metal
+		watch_case.add_child(screw)
+
+	var crown := CSGCylinder3D.new()
+	crown.name = "Crown"
+	crown.radius = 0.008
+	crown.height = 0.013
+	crown.sides = 8
+	crown.rotation_degrees = Vector3(0, 0, 90)
+	crown.position = Vector3(0.047, 0, -0.008)
+	crown.material = _mat_watch_metal
+	watch_case.add_child(crown)
+
+
+## Round 19 Priority 1/2: the standing world body's own "looking at my
+## wrist" pose, distinct from the camera-relative first-person rig --
+## called by wristwatch_view.gd ALONGSIDE (not instead of) its existing
+## first-person _watch_rig.set_raised() call, so the mirror shows a
+## believable world-body inspection pose for exactly as long as the
+## first-person presentation is also shown, using the same
+## falloff-from-rest-position tween approach animate_hand_laptop_gesture
+## already established for SittingPose's arm. Only acts while STANDING
+## (the only pose from which raising a wrist to look at it makes sense);
+## a no-op otherwise, so no SittingPose/LyingPose arm is ever disturbed
+## by holding C in those states.
+func set_watch_raise_pose(raised: bool, duration: float) -> void:
+	if _pose != Pose.STANDING:
+		return
+	for tw in _watch_raise_tweens:
+		if tw != null and tw.is_valid():
+			tw.kill()
+	_watch_raise_tweens.clear()
+
+	# A modest raise toward the chest/lower-face, not full eye level --
+	# this is a static-pose approximation (see the class doc comment's
+	# own "no continuous IK solver" limitation), chosen so the forearm
+	# swings plausibly up and inward without the hand needing to reach
+	# convincingly all the way to eye height.
+	var target: Vector3 = Vector3(0.08, -0.46, -0.32)
+	var rest_hand: Vector3 = _standing_arm_rest_pos.get("HandR", Vector3.ZERO)
+	var hand_delta: Vector3 = target - rest_hand
+	var falloff: Dictionary = {"UpperArmR": 0.2, "ElbowR": 0.5, "LowerArmR": 0.75, "HandR": 1.0}
+	for node_name in _STANDING_ARM_NODES:
+		var node: Node3D = _standing_pose.get_node_or_null(node_name)
+		if node == null:
+			continue
+		var rest: Vector3 = _standing_arm_rest_pos[node_name]
+		var dest: Vector3 = rest + hand_delta * falloff[node_name] if raised else rest
+		var tw: Tween = create_tween()
+		tw.tween_property(node, "position", dest, duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT if raised else Tween.EASE_IN)
+		_watch_raise_tweens.append(tw)
+
+	# Round 23 Priority 3 fix: the loop above only ever tweened each
+	# joint's POSITION -- the actual root cause of "the raised watch
+	# pose looks awkward". _rebuild_arm_mesh() already re-derives the
+	# forearm TUBE's own orientation live from the joint positions each
+	# frame (its tangent just follows wherever Elbow/Hand end up), so
+	# the forearm itself always looks right. But HandR is also the
+	# parent of the actual rigid CSG geometry (Palm/fingers/WristWatch,
+	# built once in _build_hand()/_build_wrist_watch()) -- that whole
+	# assembly's ROTATION never changed, so it kept facing exactly the
+	# way it faces at rest (arm hanging straight down) even once
+	# dragged up near the chest, landing with the palm/watch pointed in
+	# a direction that no longer matches the raised forearm at all.
+	# Fixed by rotating HandR itself to match the forearm's new
+	# direction: the shortest-arc rotation from the REST forearm
+	# direction (Elbow->Hand at rest) to the RAISED one, applied as
+	# HandR's own quaternion. This is the same "derive orientation from
+	# the two live joint endpoints" principle _rebuild_arm_mesh()
+	# already uses for the tube mesh, just applied once to the rigid
+	# hand assembly instead of continuously to a lofted spine.
+	var hand_node: Node3D = _standing_pose.get_node_or_null("HandR")
+	var elbow_node: Node3D = _standing_pose.get_node_or_null("ElbowR")
+	if hand_node != null and elbow_node != null:
+		var rest_elbow: Vector3 = _standing_arm_rest_pos.get("ElbowR", Vector3.ZERO)
+		var dest_elbow: Vector3 = rest_elbow + hand_delta * falloff["ElbowR"] if raised else rest_elbow
+		var dest_hand: Vector3 = rest_hand + hand_delta * falloff["HandR"] if raised else rest_hand
+		var rest_dir: Vector3 = (rest_hand - rest_elbow).normalized()
+		var dest_dir: Vector3 = (dest_hand - dest_elbow).normalized()
+		var target_quat: Quaternion = Quaternion(rest_dir, dest_dir) if raised else Quaternion.IDENTITY
+		var rot_tw: Tween = create_tween()
+		rot_tw.tween_property(hand_node, "quaternion", target_quat, duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT if raised else Tween.EASE_IN)
+		_watch_raise_tweens.append(rot_tw)
 
 
 func _apply_pose() -> void:
