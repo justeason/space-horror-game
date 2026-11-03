@@ -114,7 +114,19 @@ func _init() -> void:
 	# under 1.0 (the near plane stays "small", not accidentally plain-
 	# symmetric-camera-sized).
 	_check("mirror camera's near plane distance is positive and small (the virtual eye's fixed depth behind the glass)", mirror_cam.near > 0.0 and mirror_cam.near < 1.0)
-	_check("mirror camera's frustum vertical size matches the physical glass rectangle's full height", is_equal_approx(mirror_cam.size, 0.42))
+	# Round 24 Priority 3: the glass was enlarged and mirror.gd now reads
+	# its extents from the glass node itself -- compare against the REAL
+	# glass size, not a hard-coded number.
+	var glass_size: Vector3 = (glass as CSGBox3D).size
+	_check("mirror camera's frustum vertical size matches the physical glass rectangle's full height", is_equal_approx(mirror_cam.size, glass_size.y))
+	_check("Round 24: mirror glass enlarged (>= 0.85m tall, >= 0.55m wide) for full-torso character review", glass_size.y >= 0.85 and glass_size.x >= 0.55)
+	var glass_bottom: float = glass.global_position.y - glass_size.y * 0.5
+	var counter: CSGBox3D = main.get_node("Geometry/WashCounterTop")
+	var faucet: CSGBox3D = main.get_node("Geometry/WashFaucetBase")
+	_check("Round 24: mirror extends down toward the basin (bottom %.2f within 0.2m of the counter top)" % glass_bottom, glass_bottom - (counter.global_position.y + counter.size.y * 0.5) < 0.2)
+	_check("Round 24: enlarged mirror still clears the faucet (no clipping)", glass_bottom > faucet.global_position.y + faucet.size.y * 0.5)
+	var feed_size: Vector2i = mirror_vp.size
+	_check("Round 24: feed texture aspect matches the glass aspect (no stretched reflection)", absf(float(feed_size.x) / float(feed_size.y) - glass_size.x / glass_size.y) < 0.01)
 
 	# The off-axis frustum's own asymmetry (frustum_offset) must shift
 	# with the player's lateral position -- this is the actual mechanism

@@ -6595,3 +6595,260 @@ the raised pose for a real reflected view, not just a direct camera.
   renders were the primary basis for this round's visual assessment of
   body/watch quality, with the mirror shot as supplementary
   confirmation that the same geometry reads consistently reflected.
+
+# ROUND 24: REAL STORAGE DEPTH, THE DUPLICATE-CARTRIDGE ROOT CAUSES, A LARGER MIRROR, AND CHARACTER SILHOUETTE
+
+(Documented retroactively in Round 25, alongside the checkpoint commit that
+first records this work.)
+
+## Root causes and fixes
+
+- **Storage cabinets too shallow / contents clipping the wall.** Both cabinet
+  shells extended behind the Storage room's wall face, but
+  `StorageWestWall`/`StorageEastWall` were single solid slabs, so the wall
+  itself filled the back of each cabinet (visible "back" only ~0.2 m in;
+  wire and filter embedded in it). Each wall is now split into four pieces
+  around a real opening (`StorageWestWall`, `...North`, `...BelowCabinet`,
+  `...AboveCabinet`, same for East), and each cabinet is a 0.62 m-deep
+  recessed locker in the hull void. Items sit mid-shelf; the wire coil
+  (which floated 3.5 cm above its shelf because its collision box is taller
+  than the flat coil) now rests on it. Doors still swing outward.
+- **Floating duplicate filter cartridge** (three causes, all proven by
+  running the new test against the old code):
+  1. `filter_housing_station.gd` seated the real cartridge at a hard-coded
+     `Vector3(0, -0.6, 0)` -- 0.6 m below the station, in open air -- and
+     `filter_cartridge.gd`'s `mark_installed()` left it visible. It now goes
+     inside the housing tube and is hidden, mirroring the wire's contract.
+  2. `storage_cabinet.gd` re-applied visibility/collision gating to every
+     listed item on every door swing regardless of where the item was:
+     closing the cabinet hid the cartridge in the player's hand, and
+     re-opening it resurrected an installed cartridge as a visible copy
+     (same for an installed wire). Gating now applies only to items still
+     physically stowed (`is_item_stowed()`).
+  3. The world housing was a 0.3-scale model whose tube (r 0.039 m) could
+     not hold the real cartridge (r 0.074 m). Now 0.6 scale (r 0.078 m),
+     mounted flush to the wall; filter station moved to z 10.33, valve
+     station to z 11.45; a 0.3 m void gap in `LifeSupportEastWall` behind the
+     station was closed.
+- **Mirror enlarged** 0.50 x 0.42 -> 0.56 x 0.90 m, extended down toward the
+  basin (bottom at 1.08 m, clear of the faucet). `mirror.gd` now reads the
+  portal extents and feed resolution from the glass node itself.
+- **Character silhouette** (standing pose + head): head raised to sit
+  around the eye line (it had been entirely below it), ovoid skull + jaw +
+  wraparound visor + headset pads, shorter/thicker neck + collar, flatter
+  sloped shoulders, elliptical torso cross-sections, higher tessellation;
+  head group no longer casts shadows (cannot occlude the flashlight).
+- **Additions:** live stock placards on the cabinet doors (QTY 1 / QTY 0 --
+  RESTOCK), retaining hardware (strap + posts for the wire, clamp ring for
+  the filter, shelf lips), interior cabinet lamps (on while open) and
+  stencils.
+
+Tests: new `test_storage_cabinet_depth.gd`; rewritten
+`test_filter_no_duplicate_cartridge.gd` (asserts the exact visible set of
+cartridge representations at every step); mirror test checks the real
+glass size. Full suite 77/77; capsule sweep 38 edges, 5 known, 0 new.
+
+# ROUND 25: A REAL WATCH-INSPECTION POSE, FIRST-PERSON/WORLD SEPARATION, AND RIG MIGRATION PREP
+
+## A. Root cause of the "unnaturally long" reflected arm
+
+Measured with a diagnostic that reads the actual StandingPose joint
+positions (body space: eye at origin, -Z forward, +X right) at rest and
+while C is held -- not inferred from screenshots:
+
+| measurement | rest | old raised |
+|---|---|---|
+| shoulder -> elbow | 0.377 m | **0.143 m** |
+| elbow -> wrist | 0.300 m | **0.193 m** |
+| elbow interior angle | 159.5 deg | 132.7 deg |
+| forearm direction | down | **(-0.35, -0.08, -0.93): straight forward** |
+| watch face vs eye | -- | 131 deg off |
+
+The old `set_watch_raise_pose()` never rotated anything. It *translated*
+each arm anchor toward one fixed hand target by a different fraction
+(UpperArm 0.2, Elbow 0.5, LowerArm 0.75, Hand 1.0) with the shoulder fixed.
+Answers to the diagnosis questions:
+
+1. The shoulder did not rotate; 2. the upper arm did not follow any
+rotation -- it was squashed (0.377 -> 0.143 m) as its two ends were
+translated by different amounts; 3. the elbow barely bent; 4. the forearm
+did not keep its length (0.300 -> 0.193 m, varying mid-tween); 5. the wrist
+stayed attached (the hand is the tube's end anchor); 6. the watch followed
+the hand; 7. **yes, a transform was inherited twice**, in the watch: its
+`Bezel`/`FacePlate`/screws were children of a `WatchCase` already rotated
+90 deg about X and each carried its own 90 deg X rotation, so the dial discs
+lay along the forearm (face axis (0, -1, 0) at rest), slicing through a
+case that itself sat *inside* a 0.062 m-radius cuff on a ~0.03 m-radius
+forearm; 8. the apparent length was **transform/animation**, compounded by
+geometry: with the upper arm collapsed into the shoulder and the forearm
+pointing straight at the glass, the mirror showed one long limb thrusting
+out of the shoulder. Camera projection was not the cause (the mirror's
+off-axis frustum was unchanged and correct).
+
+Separately documented, deliberately NOT changed this round (the brief
+forbids fixing this by shortening limbs or scaling the body): the rest
+proportions are off -- shoulders 0.335 m below the eye (anatomically
+~0.20 m), upper arm 0.377 m / forearm 0.300 m (~18% long for this
+stature), fingertips at roughly knee height. This belongs to the rig
+migration (Section F), whose prototype already uses anatomical values.
+
+## B. The new shoulder / elbow / wrist pose
+
+`player_body.gd` `_setup_watch_raise_rig()` / `_apply_watch_raise(p)`:
+
+- **Raised target** solved once by analytic two-bone IK: wrist at body
+  (0.0, -0.42, -0.40), elbow pole (1, -0.4, -0.3) (out, slightly down and
+  forward). Both are exported (`watch_wrist_target`, `watch_elbow_pole`).
+  Result: forearm lies across the chest rising 14 deg, elbow out and
+  forward at lower-chest height, 13 cm clearance from the chest.
+- **Shoulder:** the upper-arm segment (ShoulderR -> UpperArmR -> ElbowR,
+  plus the deltoid cap `ShoulderCapR`, which previously stayed behind as a
+  floating sphere) rotates rigidly about the fixed shoulder point
+  (quaternion slerp between rest and raised limb frames).
+- **Elbow:** the forearm hinges about the elbow axis (upper-arm x forearm
+  normal); flexion interpolates 20.5 -> 109 deg (interior 159.5 -> 70 deg).
+- **Wrist:** the forearm then rolls (pronates) about its own axis by the
+  angle that turns the watch face toward the eye; HandR (palm, fingers,
+  watch) takes exactly the forearm's rotation.
+- **No 180-degree twist:** the first version needed a -173.5 deg roll
+  because the standing hand rested fully supinated (palm forward). A
+  relaxed standing hand hangs neutral (palm toward the thigh), so both
+  standing hands now rest pre-rotated 90 deg about their forearm axis; the
+  visible pronation during the gesture is -89 deg and the watch face ends
+  7 deg off the eye line.
+- **Sequencing:** one progress value is tweened; the shoulder leads
+  (smoothstep 0..0.8), the elbow flexes almost with it (0.05..0.85 -- a
+  shoulder-only lead swung the wrist 0.54 m out into a forward reach), the
+  wrist rolls last (0.4..1.0). Release runs the same path backwards from
+  wherever the pose currently is. World duration = first-person duration
+  x 1.5 (0.42 s at the 0.28 s default).
+- **Watch rebuilt:** one frame per watch (local +Y = face normal on the
+  dorsal forearm, +Z up the forearm), strap radius = arm-tube radius + 3 mm,
+  every dial part an unrotated child. Applied to the sitting pose's watch
+  too.
+
+## C. Limb lengths
+
+Forward kinematics from rotations only: shoulder->elbow 0.377 m and
+elbow->wrist 0.300 m are constant to < 0.5 mm at every sampled frame of
+the real C-key tween (74 samples, max error 0.00000 m), and the joints
+return exactly to rest on release.
+
+## D. First-person vs world body
+
+- The camera-relative first-person rig (`first_person_watch_rig.tscn`,
+  layer 2, excluded from every non-player camera) is unchanged: readable
+  "CHECK IN / CONTROL ROOM" face, stable framing. (It has the same
+  doubly-inherited Bezel/FacePlate rotation; its readable display is the
+  separate `WatchFaceText` Label3D, so it was left untouched as instructed.)
+- New: while the watch is raised, the WORLD body's right forearm tube and
+  every hand/watch visual move to the head's mirror-only layer (4: hidden
+  from the player's own camera, rendered by the mirror and surveillance).
+  Renders showed that looking down with C held previously displayed both
+  the first-person rig's hand and the world glove beside it. Standing
+  `HandR` became a plain `Node3D` (not a CSG child merged into the torso
+  combiner) so its palm/watch can carry their own layer. At rest the arm
+  returns to the default layer.
+- No torso rotation, no limb stretching, no FOV or camera-distance change;
+  the player's position is unchanged while holding C.
+
+## E. Rendered verification (Godot `--write-movie`, frames inspected)
+
+Captured with `--write-movie ... --fixed-fps 30` driving the real KEY_C
+input path; stills saved per step (player POV, raw mirror feed, external
+front-three-quarter and side cameras placed in the body's own frame):
+rest, half-raised, fully raised, mirror front, mirror three-quarter,
+first-person, look up, look down, lowering, rest again -- before and after.
+
+- Before: mirror showed the forearm thrusting forward out of a shoulder
+  stub; first-person look-down showed the world glove behind the rig's hand.
+- After: mirror and external views show the upper arm swinging out/forward
+  from the shoulder, a clearly bent elbow, the forearm across the chest,
+  the watch face up on a strap that wraps the wrist; first-person shows
+  only the rig's readable watch looking level/up/down; release returns to
+  a symmetric neutral rest.
+
+## F. Character rig migration plan
+
+Dependency inventory (this round):
+- Outside `player_body.gd`, only two body node names are used: `LapAnchor`
+  (`sleep_state.gd`) and `CarryAnchor` (carry system).
+- Public API used by gameplay: `set_sitting`, `set_lying`, `is_sitting`,
+  `is_lying`, `set_watch_raise_pose`, `animate_hand_laptop_gesture`,
+  `swing_leg_to_floor`, `lean_forward`, `reset_get_up_pose`.
+- Tests referencing body internals: 16 files; heaviest
+  `test_hand_mesh_and_mirror_fov` (21 refs), `test_sitting_pose` (11),
+  `test_standing_body_composition` (9), `test_mirror_reflection` (7),
+  `test_lying_body_transform` (7).
+
+Gameplay behaviour vs implementation-specific assertions:
+- Keep (behaviour): first-person composition (nothing visible at pitch 0,
+  no body part near frame centre), head hidden from own camera but seen by
+  mirror, watch raise reversible with constant limb lengths, pose changes
+  reversible, sitting hand reaches the laptop, mirror isolation of the
+  first-person rig, lying/sitting transforms.
+- Rewrite at migration (implementation): `StandingPose is CSGCombiner3D`,
+  CSG node names/radii (`Chest`/`Waist`/`Hips` radius taper,
+  `ShoulderL.radius` gap), "old CSG arm primitives hidden", `ArmMeshR`/
+  `FingerIndex` lofted-tube checks.
+
+Plan:
+1. `CharacterVisual` scene: `Skeleton3D` with SkeletonProfileHumanoid bone
+   names + skinned low-poly technician mesh + `BoneAttachment3D`s for the
+   watch (RightLowerArm), carry (RightHand) and lap anchors; head/neck
+   meshes on render layer 4.
+2. `PlayerBody` keeps its public API and becomes an adapter driving bone
+   rotations (watch raise = this round's joint-space solve, already
+   rotation-based; sit/lie/get-up as AnimationPlayer clips or bone poses).
+   Movement controller and collision capsule stay authoritative and are
+   never driven by the visual.
+3. Swap behind a flag; port the behaviour tests to bone queries; delete the
+   CSG-specific assertions only once their behavioural replacements pass.
+4. Walking: AnimationTree locomotion blend driven by movement speed.
+5. Second player: the same `CharacterVisual` instanced without the
+   first-person rig, driven by replicated pose state.
+
+Prototype added (not wired into the game):
+`scenes/dev/rigged_technician_prototype.tscn` /
+`scripts/dev/rigged_technician_prototype.gd` -- a real `Skeleton3D` (22
+humanoid-profile bones), a procedurally generated rigidly-skinned stand-in
+mesh with anatomical proportions (eye 1.64 m, upper arm 0.31 m, forearm
+0.25 m), and the same watch-inspection gesture posed purely through bone
+rotations. Rendered at rest / mid / full: the skinned mesh deforms with the
+bones. Covered by `tests/test_rigged_technician_prototype.gd`.
+
+## G. Tests
+
+New: `test_watch_raise_pose.gd` (real C input; lengths sampled through the
+tween; shoulder rotation; elbow flexion; forearm not pointing at the
+mirror; deltoid follows; watch attached; no 180 twist; face toward eye;
+single watch; body visible and unmoved; layer isolation of the first-person
+rig and of the raised world arm; reversible; mid-raise reversal
+continuous and monotonic; sitting/lying reset and no-op) and
+`test_rigged_technician_prototype.gd`. Updated
+`test_hand_mesh_and_mirror_fov.gd` ("returns to identity" -> "returns to its
+captured rest orientation", the actual intent, since the rest hand is now
+neutral). Runner: 79 tests (80 scripts on disk; the one exclusion,
+`manual_verify_real_input_reconnect.gd`, is manual-only by its own
+documented design -- needs real rendering -- and was run this round under
+`--write-movie`: PASS). Results of the two full runs are recorded in the
+checkpoint commit message and the Round 25 report.
+
+## H. Known limitations
+
+- Rest proportions remain off (Section A); fixing them inside the CSG body
+  would break first-person composition assumptions -- deferred to the rig.
+- The hand is rigid: no finger curl or wrist extension during inspection.
+- The first-person rig is a bare-skin forearm while the world body wears
+  dark gloves; its own watch keeps the doubly-inherited dial rotation
+  (masked by its Label3D face).
+- The rig prototype's mesh is a rigidly skinned stand-in (visible seams);
+  it is a staging step, not an asset.
+
+## I. Git checkpoint
+
+One local commit records Rounds 24-25 (storage depth, duplicate-cartridge
+fixes, mirror, character silhouette, watch-inspection pose, rig prototype,
+tests, this documentation). Excluded: `CLAUDE.md.save` (editor backup),
+render outputs (scratchpad only), `tests/.last_run.log` (gitignored).
+Not pushed.

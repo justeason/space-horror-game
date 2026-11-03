@@ -124,6 +124,11 @@ func _init() -> void:
 	_check("the world-body wristwatch is a CHILD of HandR (moves with the hand), not a sibling fixed in pose-root space", wrist_watch != null)
 	if wrist_watch != null:
 		var watch_before: Vector3 = wrist_watch.global_position
+		# Round 25: the standing hand's REST orientation is now neutral
+		# (palm toward the thigh, see player_body.gd's
+		# _setup_watch_raise_rig()), so "back to rest" means back to this
+		# captured quaternion, not literally identity.
+		var hand_rest_quat: Quaternion = hand_r_node.quaternion
 		player_body.set_watch_raise_pose(true, 0.01)
 		for i in 10: await process_frame
 		var watch_after: Vector3 = wrist_watch.global_position
@@ -142,11 +147,11 @@ func _init() -> void:
 		# to the raised one). Confirms the rotation actually changed,
 		# not just the position.
 		# ============================================================
-		_check("HandR's rotation actually changes when the arm raises, not just its position (the fix for the awkward-looking raised pose)", not hand_r_node.quaternion.is_equal_approx(Quaternion.IDENTITY))
+		_check("HandR's rotation actually changes when the arm raises, not just its position (the fix for the awkward-looking raised pose)", not hand_r_node.quaternion.is_equal_approx(hand_rest_quat))
 
 		player_body.set_watch_raise_pose(false, 0.01)
 		for i in 10: await process_frame
-		_check("HandR's rotation returns to identity once the arm lowers back to rest", hand_r_node.quaternion.is_equal_approx(Quaternion.IDENTITY))
+		_check("HandR's rotation returns to its rest orientation once the arm lowers back to rest", hand_r_node.quaternion.is_equal_approx(hand_rest_quat))
 
 	print("")
 	if _ok: print("ALL TESTS PASSED")

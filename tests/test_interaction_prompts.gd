@@ -117,7 +117,12 @@ func _init() -> void:
 	# interactability, open-state reveal).
 	# ============================================================
 
-	var wire_eye: Vector3 = wire.global_position + Vector3(0.3, 1.6 - wire.global_position.y, 0.3)
+	# Round 24: the wire now rests ~0.3m inside a genuinely recessed
+	# wall cavity, so the old (0.3, _, 0.3) probe eye would sit INSIDE
+	# the cabinet's own footprint (its line of sight clipped the
+	# cabinet's top plate). Probe from a real standing spot in the room
+	# instead, looking in through the open door.
+	var wire_eye: Vector3 = wire.global_position + Vector3(0.6, 1.6 - wire.global_position.y, 0.15)
 	_place(wire_eye)
 	await _aim_at(look_pivot, pitch_pivot, wire_eye, wire.global_position)
 	_check("looking at wire: pick-up prompt shown", prompt_label.text == "Click: Pick Up Wire Component")

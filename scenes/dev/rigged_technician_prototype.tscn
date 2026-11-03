@@ -1,0 +1,20 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/dev/rigged_technician_prototype.gd" id="1_rig"]
+
+[node name="RiggedTechnicianPrototype" type="Node3D"]
+script = ExtResource("1_rig")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.0, 1.35, -1.75)
+fov = 45.0
+
+[node name="KeyLight" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.8, 2.0, -1.2)
+light_energy = 2.0
+omni_range = 5.0
+
+[node name="FillLight" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.0, 1.2, -1.0)
+light_energy = 0.8
+omni_range = 5.0

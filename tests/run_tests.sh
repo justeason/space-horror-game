@@ -103,6 +103,9 @@ TESTS=(
   test_signal_calibration
   test_workstation_room_discoverability
   test_mirror_reflection
+  test_storage_cabinet_depth
+  test_watch_raise_pose
+  test_rigged_technician_prototype
 )
 
 if [ "$#" -gt 0 ]; then

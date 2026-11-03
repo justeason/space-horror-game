@@ -223,12 +223,28 @@ func attempt_insert() -> Dictionary:
 		if _carry_system != null:
 			var item: Node3D = _carry_system.take_carried_item_if_matches(_REQUIRED_ITEM_ID)
 			if item != null and item.has_method("mark_installed"):
-				item.mark_installed(self, Transform3D(Basis(), Vector3(0, -0.6, 0)))
+				item.mark_installed(self, installed_cartridge_local_transform())
 		_stage = Stage.CLOSE_LATCHES
 		_sync_world_diorama()
 		return {"ok": true, "seated": true, "stage": _stage}
 	_failed_insert_flash = true
 	return {"ok": true, "seated": false, "angle_off_deg": diff}
+
+
+## Round 24 Priority 2: where a seated cartridge physically lives, in
+## THIS station's own local space -- the centre of the world twin's own
+## housing tube (WorldDiorama/Housing), with the cartridge's own long
+## (Y) axis turned to lie along that tube's axis. Replaces the old
+## hard-coded Vector3(0, -0.6, 0), which put the "installed" cartridge
+## in open air 0.6m below the station. Scale is stripped so the part
+## keeps its real size (the twin itself is a scaled model).
+func installed_cartridge_local_transform() -> Transform3D:
+	var housing: Node3D = _world_diorama.get_node_or_null("Housing") if _world_diorama != null else null
+	if housing == null:
+		return Transform3D()
+	var local: Transform3D = global_transform.affine_inverse() * housing.global_transform
+	var axis_basis := Basis(Vector3(0, 0, 1), PI / 2.0)
+	return Transform3D(local.basis.orthonormalized() * axis_basis, local.origin)
 
 
 func consume_failed_insert_flash() -> bool:

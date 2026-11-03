@@ -131,7 +131,6 @@ enum Pose { STANDING, SITTING, LYING }
 ## right arm away from and back to.
 const _STANDING_ARM_NODES: Array = ["UpperArmR", "ElbowR", "LowerArmR", "HandR"]
 var _standing_arm_rest_pos: Dictionary = {}
-var _watch_raise_tweens: Array = []
 
 var _pose: Pose = Pose.STANDING
 var _hand_rest_pos: Vector3
@@ -165,6 +164,8 @@ func _ready() -> void:
 	_build_hands_and_watch()
 	for node_name in _STANDING_ARM_NODES:
 		_standing_arm_rest_pos[node_name] = _standing_pose.get_node(node_name).position
+	_setup_watch_raise_rig()
+	_apply_watch_raise(0.0)
 	_apply_pose()
 	_update_arm_meshes()
 
@@ -196,6 +197,7 @@ func set_sitting(value: bool) -> void:
 		# before this was delegated to the separate rig.
 		if _watch_rig != null:
 			_watch_rig.set_raised(false, 0.0)
+		_stop_watch_raise(true)
 	if not value:
 		_kill_hand_gesture()
 		reset_get_up_pose()
@@ -209,6 +211,8 @@ func set_sitting(value: bool) -> void:
 ## lying flat, not currently reachable from any interaction, kept for a
 ## future sleep mechanic. Idempotent.
 func set_lying(value: bool) -> void:
+	if value:
+		_stop_watch_raise(true)
 	_pose = Pose.LYING if value else Pose.STANDING
 	_apply_pose()
 	if value:
@@ -700,8 +704,11 @@ func _build_hands_and_watch() -> void:
 	# every gesture), at the equivalent local offset -- it now inherits
 	# HandR's own live, possibly mid-tween position for free, the same
 	# way the hand/fingers already did.
-	_build_wrist_watch(_standing_pose.get_node("HandR"), Vector3(0, 0.08, 0.03), Vector3(0, 0, 0), true)
-	_build_wrist_watch(_sitting_pose.get_node("HandR"), Vector3(0, -0.079, -0.003), Vector3(0, 0, 0), true)
+	# Round 25: the watch now sits ON the forearm 5cm up from the wrist,
+	# strap sized to the actual arm tube there -- see _build_wrist_watch().
+	for entry in [[_standing_pose, _ARM_RADII_STANDING], [_sitting_pose, _ARM_RADII_SITTING]]:
+		var placement: Dictionary = _wrist_watch_placement(entry[0], entry[1], 0.05)
+		_build_wrist_watch(entry[0].get_node("HandR"), placement["dir"], 0.05, placement["radius"])
 
 
 ## Builds a palm + 4 fingers (each knuckle + two tapered segments + a
@@ -742,173 +749,344 @@ func _build_hand(root: Node3D, is_right: bool) -> void:
 	_HandMeshBuilder.build_fingers_and_thumb(root, is_right, _mat_glove_main)
 
 
-## Builds a compact case/bezel/face/strap/crown/lugs wristwatch as
-## children of `root` at `local_pos`/`local_rot_degrees` -- the same
-## physical object the first-person rig shows up close, at matching
-## real-world dimensions (same WatchCase/Bezel/FacePlate sizes as
-## first_person_watch_rig.tscn), just seen from the outside on the
-## actual wrist instead of raised to the camera.
-func _build_wrist_watch(root: Node3D, local_pos: Vector3, local_rot_degrees: Vector3, is_right: bool) -> void:
+## Round 25: rebuilt world-body wristwatch (the camera-relative first-person
+## rig keeps its own, separately-framed watch -- see
+## first_person_watch_rig.gd).
+##
+## ROOT CAUSE of the old "intersecting / floating watch geometry", found by
+## measuring the built transforms, not assumed:
+## 1. Bezel / FacePlate / rim screws were CHILDREN of a WatchCase that was
+##    already rotated 90 deg about X, and each ALSO carried its own 90 deg X
+##    rotation -- the rotation was inherited twice, so the dial discs lay
+##    ALONG the forearm (face axis measured as (0,-1,0) at rest), slicing
+##    crosswise through the case and the arm instead of facing outward.
+## 2. The strap was a 0.062m-radius cuff on a ~0.03m-radius forearm tube,
+##    and the case sat INSIDE that cuff.
+## Now each watch gets ONE frame whose local +Y is the face normal (the
+## dorsal side of the forearm, +Z in this project's canonical hand frame)
+## and local +Z runs up the forearm toward the elbow. The strap hugs the
+## arm tube; every dial part is an UNROTATED child of that frame (CSG
+## cylinder axes are local Y = the face normal), so nothing is rotated
+## twice. `forearm_dir_local` is the wrist->elbow direction in the hand's
+## own local frame; `arm_radius` is the lofted arm tube's radius there.
+func _build_wrist_watch(hand_root: Node3D, forearm_dir_local: Vector3, distance_from_wrist: float, arm_radius: float) -> void:
+	var dir: Vector3 = forearm_dir_local.normalized()
+	var dorsal: Vector3 = (Vector3(0, 0, 1) - dir * dir.z).normalized()
+	var side: Vector3 = dorsal.cross(dir).normalized()
 	var group := Node3D.new()
 	group.name = "WristWatch"
-	group.position = local_pos
-	group.rotation_degrees = local_rot_degrees
-	root.add_child(group)
+	group.transform = Transform3D(Basis(side, dorsal, dir), dir * distance_from_wrist)
+	hand_root.add_child(group)
 
+	var strap_r: float = arm_radius + 0.003
 	var strap := CSGCylinder3D.new()
 	strap.name = "Strap"
-	strap.radius = 0.062
-	strap.height = 0.05
-	strap.sides = 14
+	strap.radius = strap_r
+	strap.height = 0.02
+	strap.sides = 20
+	strap.rotation_degrees = Vector3(90, 0, 0) # cylinder axis (local Y) -> along the forearm (local Z)
 	strap.material = _mat_watch_strap
 	group.add_child(strap)
 
-	# Round 22 Priority 1: ROOT CAUSE of "the watch is still too boxy/
-	# oversized" (confirmed by render, not assumed) -- WatchCase was a
-	# CSGBox3D with a half-diagonal (~0.067) well past the round
-	# Bezel's own radius (0.042), so the box's square corners visibly
-	# stuck out past the dial sitting on its face -- a round dial on a
-	# visible square slab, not a wearable device. Rebuilt as a genuinely
-	# round case (a CSGCylinder3D, matching the first-person rig's own
-	# Round 22 fix -- see first_person_watch_rig.tscn's WatchCase class
-	# doc comment for the full before/after), with four small rim
-	# screws instead of the old box's exposed corners.
+	var case_h: float = 0.011
+	var case_y: float = strap_r + case_h * 0.5 - 0.002
 	var watch_case := CSGCylinder3D.new()
 	watch_case.name = "WatchCase"
-	watch_case.radius = 0.045
-	watch_case.height = 0.026
+	watch_case.radius = 0.021
+	watch_case.height = case_h
 	watch_case.sides = 24
 	watch_case.smooth_faces = true
-	watch_case.rotation_degrees = Vector3(90, 0, 0)
-	watch_case.position = Vector3(0, 0, -0.02)
+	watch_case.position = Vector3(0, case_y, 0)
 	watch_case.material = _mat_watch_case
 	group.add_child(watch_case)
 
-	var lug_top := CSGBox3D.new()
-	lug_top.name = "LugTop"
-	lug_top.size = Vector3(0.024, 0.018, 0.016)
-	lug_top.position = Vector3(0, 0.043, -0.006)
-	lug_top.material = _mat_watch_metal
-	watch_case.add_child(lug_top)
-
-	var lug_bottom := CSGBox3D.new()
-	lug_bottom.name = "LugBottom"
-	lug_bottom.size = Vector3(0.024, 0.018, 0.016)
-	lug_bottom.position = Vector3(0, -0.043, -0.006)
-	lug_bottom.material = _mat_watch_metal
-	watch_case.add_child(lug_bottom)
-
-	var bezel := CSGCylinder3D.new()
+	var top_y: float = case_h * 0.5
+	var bezel := CSGTorus3D.new()
 	bezel.name = "Bezel"
-	bezel.radius = 0.045
-	bezel.height = 0.011
+	bezel.inner_radius = 0.0165
+	bezel.outer_radius = 0.0215
 	bezel.sides = 24
-	bezel.rotation_degrees = Vector3(90, 0, 0)
-	bezel.position = Vector3(0, 0, -0.018)
+	bezel.ring_sides = 8
+	bezel.position = Vector3(0, top_y, 0)
 	bezel.material = _mat_watch_metal
 	watch_case.add_child(bezel)
 
 	var face := CSGCylinder3D.new()
 	face.name = "FacePlate"
-	face.radius = 0.036
-	face.height = 0.006
+	face.radius = 0.0168
+	face.height = 0.002
 	face.sides = 24
-	face.rotation_degrees = Vector3(90, 0, 0)
-	face.position = Vector3(0, 0, -0.013)
+	face.position = Vector3(0, top_y + 0.0005, 0)
 	face.material = _mat_watch_face
 	watch_case.add_child(face)
 
 	for angle_deg in [45.0, 135.0, 225.0, 315.0]:
 		var screw := CSGSphere3D.new()
 		screw.name = "RimScrew"
-		screw.radius = 0.0055
+		screw.radius = 0.0024
 		var rad: float = deg_to_rad(angle_deg)
-		screw.position = Vector3(0.039 * cos(rad), 0.039 * sin(rad), -0.01)
+		screw.position = Vector3(0.019 * cos(rad), top_y + 0.0015, 0.019 * sin(rad))
 		screw.material = _mat_watch_metal
 		watch_case.add_child(screw)
 
+	for lug_z in [0.022, -0.022]:
+		var lug := CSGBox3D.new()
+		lug.name = "LugTop" if lug_z > 0.0 else "LugBottom"
+		lug.size = Vector3(0.016, 0.006, 0.01)
+		lug.position = Vector3(0, -0.002, lug_z)
+		lug.material = _mat_watch_metal
+		watch_case.add_child(lug)
+
 	var crown := CSGCylinder3D.new()
 	crown.name = "Crown"
-	crown.radius = 0.008
-	crown.height = 0.013
+	crown.radius = 0.0035
+	crown.height = 0.006
 	crown.sides = 8
 	crown.rotation_degrees = Vector3(0, 0, 90)
-	crown.position = Vector3(0.047, 0, -0.008)
+	crown.position = Vector3(0.0235, 0, 0)
 	crown.material = _mat_watch_metal
 	watch_case.add_child(crown)
 
 
-## Round 19 Priority 1/2: the standing world body's own "looking at my
-## wrist" pose, distinct from the camera-relative first-person rig --
-## called by wristwatch_view.gd ALONGSIDE (not instead of) its existing
-## first-person _watch_rig.set_raised() call, so the mirror shows a
-## believable world-body inspection pose for exactly as long as the
-## first-person presentation is also shown, using the same
-## falloff-from-rest-position tween approach animate_hand_laptop_gesture
-## already established for SittingPose's arm. Only acts while STANDING
-## (the only pose from which raising a wrist to look at it makes sense);
-## a no-op otherwise, so no SittingPose/LyingPose arm is ever disturbed
-## by holding C in those states.
+## Round 25: forearm direction (wrist -> lower-arm anchor) in the hand's own
+## local frame, plus the lofted arm tube's radius `dist` up from the wrist,
+## so _build_wrist_watch() can wrap the strap around the actual arm.
+func _wrist_watch_placement(pose_root: Node3D, radii: Dictionary, dist: float) -> Dictionary:
+	var hand: Node3D = pose_root.get_node("HandR")
+	var lower: Node3D = pose_root.get_node("LowerArmR")
+	var seg: Vector3 = lower.position - hand.position
+	var t: float = clampf(dist / seg.length(), 0.0, 1.0)
+	return {
+		"dir": hand.basis.inverse() * seg.normalized(),
+		"radius": lerpf(radii["Hand"], radii["LowerArm"], t),
+	}
+## Round 25 Priority 1/2: the standing world body's watch-inspection pose,
+## rebuilt as REAL JOINT ROTATION. Called by wristwatch_view.gd alongside
+## (not instead of) the camera-relative first-person rig's own
+## set_raised(); only acts while STANDING.
+##
+## ROOT CAUSE of "the reflected arm looks unnaturally long", measured
+## (scratchpad arm_measure.gd; see MILESTONE1_DESIGN.md Round 25), not
+## assumed: the old implementation never rotated anything. It TRANSLATED
+## each joint anchor toward one hand target by a different fraction
+## (UpperArm 0.2, Elbow 0.5, LowerArm 0.75, Hand 1.0) with the shoulder
+## fixed. Segment lengths were therefore not preserved: shoulder->elbow
+## collapsed from 0.377m to 0.143m and elbow->wrist from 0.300m to 0.193m
+## (and varied mid-tween), the elbow barely bent (interior angle 159.5 ->
+## 132.7 deg) and the forearm ended up pointing almost straight FORWARD
+## (-Z 0.93). The upper arm effectively vanished into the shoulder, so the
+## mirror showed one long limb thrusting out of the shoulder toward the
+## glass. The rigid hand/watch assembly was then rotated by a shortest-arc
+## quaternion with no control over forearm roll, so the watch face never
+## turned toward the eyes (131 deg off).
+##
+## NOW: the arm is driven in joint space with constant segment lengths.
+## - SHOULDER: the upper arm (ShoulderR->UpperArmR->ElbowR) rotates as one
+##   rigid segment about the fixed shoulder point (ShoulderR never moves,
+##   so it stays attached to the torso -- no shrug).
+## - ELBOW: the forearm hinges about the elbow axis (the upper-arm x
+##   forearm normal), so the elbow genuinely flexes.
+## - WRIST: the forearm then rolls about its own axis (pronation) by the
+##   amount that turns the watch face toward the eye; HandR (palm, fingers,
+##   WristWatch) takes exactly the forearm's rotation, so hand and watch
+##   stay rigidly attached to the wrist.
+## The raised configuration is solved ONCE (analytic two-bone IK to a
+## readable wrist position in front of the chest, elbow pole down/out/
+## forward); the animation interpolates joint angles in sequence -- the
+## shoulder leads, the elbow follows, the wrist turns last -- and simply
+## runs backwards on release. Positions are recomputed from those angles
+## each step (forward kinematics), so no segment can stretch mid-motion.
+## Raised wrist position (body space: eye at origin, -Z forward, +X right)
+## and the elbow pole direction for the two-bone solve. Exported so the
+## pose can be tuned in the editor; _setup_watch_raise_rig() re-solves.
+@export var watch_wrist_target: Vector3 = Vector3(0.0, -0.42, -0.40)
+@export var watch_elbow_pole: Vector3 = Vector3(1.0, -0.4, -0.3)
+## The world body moves a little slower than the snappy first-person rig
+## (0.28s default) so the shoulder -> elbow -> wrist sequence reads as a
+## natural gesture rather than a snap.
+const _WORLD_RAISE_DURATION_SCALE: float = 1.5
+var _watch_raise_progress: float = 0.0
+var _watch_raise_tween: Tween
+var _arm_rig: Dictionary = {}
+
+
+static func _limb_frame(axis: Vector3, hinge: Vector3) -> Basis:
+	return Basis(axis, hinge, axis.cross(hinge))
+
+
+func _setup_watch_raise_rig() -> void:
+	var s: Vector3 = _standing_pose.get_node("ShoulderR").position
+	var u_rest: Vector3 = _standing_arm_rest_pos["UpperArmR"]
+	var e_rest: Vector3 = _standing_arm_rest_pos["ElbowR"]
+	var l_rest: Vector3 = _standing_arm_rest_pos["LowerArmR"]
+	var w_rest: Vector3 = _standing_arm_rest_pos["HandR"]
+	var l1: float = s.distance_to(e_rest)
+	var l2: float = e_rest.distance_to(w_rest)
+	var u_r: Vector3 = (e_rest - s) / l1
+	var f_r: Vector3 = (w_rest - e_rest) / l2
+	var h_r: Vector3 = u_r.cross(f_r).normalized()
+
+	# Analytic two-bone IK for the raised wrist position.
+	var d: Vector3 = watch_wrist_target - s
+	var dist: float = clampf(d.length(), absf(l1 - l2) + 0.001, l1 + l2 - 0.001)
+	var dn: Vector3 = d.normalized()
+	var along: float = (l1 * l1 - l2 * l2 + dist * dist) / (2.0 * dist)
+	var out: float = sqrt(maxf(l1 * l1 - along * along, 0.0))
+	var pole: Vector3 = (watch_elbow_pole - dn * watch_elbow_pole.dot(dn)).normalized()
+	var e_d: Vector3 = s + dn * along + pole * out
+	var w_d: Vector3 = s + dn * dist
+	var u_d: Vector3 = (e_d - s) / l1
+	var f_d: Vector3 = (w_d - e_d) / l2
+	var h_d: Vector3 = u_d.cross(f_d).normalized()
+
+	var ff_r: Basis = _limb_frame(f_r, h_r)
+	# Round 25: a relaxed standing hand hangs in NEUTRAL (palm facing the
+	# thigh), not the fully supinated palm-forward "anatomical position"
+	# the hand builder's canonical frame produces. With a supinated rest,
+	# turning the dorsal watch face toward the eyes needed a -173.5 deg
+	# forearm roll -- the unnatural near-180 twist. Neutral rest = the hand
+	# pre-rotated 90 deg about its own forearm axis (palm -Z -> medial),
+	# which leaves only a ~85 deg visible pronation during the gesture.
+	var hand_rest_q := Quaternion(f_r, -PI / 2.0)
+	var hand_l: Node3D = _standing_pose.get_node("HandL")
+	var lower_l: Node3D = _standing_pose.get_node("LowerArmL")
+	var f_l: Vector3 = (hand_l.position - lower_l.position).normalized()
+	hand_l.quaternion = Quaternion(f_l, PI / 2.0)
+	var q_upper: Quaternion = (_limb_frame(u_d, h_d) * _limb_frame(u_r, h_r).transposed()).get_rotation_quaternion()
+
+	# Forearm roll that turns the watch face toward the eye (body origin).
+	var roll: float = 0.0
+	var hand: Node3D = _standing_pose.get_node("HandR")
+	var watch: Node3D = hand.get_node_or_null("WristWatch")
+	if watch != null:
+		var r0: Basis = _limb_frame(f_d, h_d) * ff_r.transposed()
+		var watch_rest: Transform3D = Transform3D(Basis(hand_rest_q), Vector3.ZERO) * watch.transform
+		var face_n: Vector3 = r0 * watch_rest.basis.y
+		var face_p: Vector3 = e_d + r0 * (w_rest - e_rest + watch_rest.origin)
+		var to_eye: Vector3 = -face_p
+		var n_p: Vector3 = (face_n - f_d * face_n.dot(f_d)).normalized()
+		var e_p: Vector3 = (to_eye - f_d * to_eye.dot(f_d)).normalized()
+		roll = atan2(f_d.dot(n_p.cross(e_p)), n_p.dot(e_p))
+
+	_arm_rig = {
+		"s": s, "u_rest": u_rest, "e_rest": e_rest, "l_rest": l_rest, "w_rest": w_rest,
+		"u_r": u_r, "h_r": h_r, "ff_r": ff_r,
+		"flex_r": u_r.angle_to(f_r), "flex_d": u_d.angle_to(f_d),
+		"q_upper": q_upper, "roll": roll, "hand_rest_q": hand_rest_q,
+		"upper_len": l1, "fore_len": l2,
+		"cap_rest": _standing_pose.get_node("ShoulderCapR").position,
+	}
+
+
+## Forward kinematics for watch-raise progress `p` (0 = rest, 1 = fully
+## inspecting). Shoulder leads, elbow follows, wrist roll comes last.
+func _apply_watch_raise(p: float) -> void:
+	_watch_raise_progress = p
+	if _arm_rig.is_empty():
+		return
+	var rig: Dictionary = _arm_rig
+	var upper_node: Node3D = _standing_pose.get_node("UpperArmR")
+	var elbow_node: Node3D = _standing_pose.get_node("ElbowR")
+	var lower_node: Node3D = _standing_pose.get_node("LowerArmR")
+	var hand_node: Node3D = _standing_pose.get_node("HandR")
+	var cap_node: Node3D = _standing_pose.get_node("ShoulderCapR")
+	_set_right_arm_mirror_only(p > 0.0)
+	if p <= 0.0:
+		cap_node.position = rig["cap_rest"]
+		upper_node.position = rig["u_rest"]
+		elbow_node.position = rig["e_rest"]
+		lower_node.position = rig["l_rest"]
+		hand_node.position = rig["w_rest"]
+		hand_node.quaternion = rig["hand_rest_q"]
+		return
+	# Overlapping phases: the shoulder leads slightly, the elbow flexes
+	# almost with it (a shoulder-only lead swings the arm out into a
+	# forward reach first -- measured: wrist 0.54m in front of the body
+	# mid-raise), and the wrist roll finishes last.
+	var t_shoulder: float = smoothstep(0.0, 0.8, p)
+	var t_elbow: float = smoothstep(0.05, 0.85, p)
+	var t_wrist: float = smoothstep(0.4, 1.0, p)
+	var b_upper := Basis(Quaternion.IDENTITY.slerp(rig["q_upper"], t_shoulder))
+	var u: Vector3 = b_upper * rig["u_r"]
+	var h: Vector3 = b_upper * rig["h_r"]
+	var f: Vector3 = u.rotated(h, lerpf(rig["flex_r"], rig["flex_d"], t_elbow))
+	var b_fore: Basis = Basis(f, rig["roll"] * t_wrist) * _limb_frame(f, h) * (rig["ff_r"] as Basis).transposed()
+	var s: Vector3 = rig["s"]
+	var e: Vector3 = s + b_upper * (rig["e_rest"] - s)
+	upper_node.position = s + b_upper * (rig["u_rest"] - s)
+	# The deltoid cap belongs to the upper-arm segment: it must swing with
+	# it, or it is left floating where the arm used to hang.
+	cap_node.position = s + b_upper * (rig["cap_rest"] - s)
+	elbow_node.position = e
+	lower_node.position = e + b_fore * (rig["l_rest"] - rig["e_rest"])
+	hand_node.position = e + b_fore * (rig["w_rest"] - rig["e_rest"])
+	hand_node.quaternion = b_fore.get_rotation_quaternion() * (rig["hand_rest_q"] as Quaternion)
+
+
+## Round 25 Priority 3: the player's OWN camera must not see the world
+## body's raised right arm -- that view belongs to the camera-relative
+## first-person rig (layer 2). Measured by render: looking down with C
+## held showed BOTH the first-person rig's hand/watch AND the world body's
+## raised glove beside it (already faintly visible before this round, more
+## so once the arm genuinely flexed up in front of the chest). While the
+## arm is raised, its forearm tube and every hand/watch visual move to the
+## head's mirror-only layer (value 4: excluded from the player camera's
+## cull mask, rendered by the mirror and every other camera); at rest they
+## return to the default layer so a downward glance still shows a hanging
+## arm. Standing HandR is a plain Node3D (not a CSG child of the torso
+## combiner) precisely so its palm/watch can carry their own layer.
+const _MIRROR_ONLY_LAYER: int = 4
+var _right_arm_mirror_only: bool = false
+
+
+func _set_right_arm_mirror_only(value: bool) -> void:
+	if value == _right_arm_mirror_only:
+		return
+	_right_arm_mirror_only = value
+	var layer: int = _MIRROR_ONLY_LAYER if value else 1
+	var arm_mesh: VisualInstance3D = _arm_mesh_instances.get("standing_R")
+	if arm_mesh != null:
+		arm_mesh.layers = layer
+	var stack: Array = [_standing_pose.get_node("HandR")]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		if n is VisualInstance3D:
+			(n as VisualInstance3D).layers = layer
+		for c in n.get_children():
+			stack.append(c)
+
+
+func is_right_arm_mirror_only() -> bool:
+	return _right_arm_mirror_only
+
+
+func watch_raise_progress() -> float:
+	return _watch_raise_progress
+
+
+func watch_raise_rig() -> Dictionary:
+	return _arm_rig
+
+
+func _stop_watch_raise(instant_rest: bool) -> void:
+	if _watch_raise_tween != null and _watch_raise_tween.is_valid():
+		_watch_raise_tween.kill()
+	if instant_rest:
+		_apply_watch_raise(0.0)
+
+
 func set_watch_raise_pose(raised: bool, duration: float) -> void:
 	if _pose != Pose.STANDING:
 		return
-	for tw in _watch_raise_tweens:
-		if tw != null and tw.is_valid():
-			tw.kill()
-	_watch_raise_tweens.clear()
-
-	# A modest raise toward the chest/lower-face, not full eye level --
-	# this is a static-pose approximation (see the class doc comment's
-	# own "no continuous IK solver" limitation), chosen so the forearm
-	# swings plausibly up and inward without the hand needing to reach
-	# convincingly all the way to eye height.
-	var target: Vector3 = Vector3(0.08, -0.46, -0.32)
-	var rest_hand: Vector3 = _standing_arm_rest_pos.get("HandR", Vector3.ZERO)
-	var hand_delta: Vector3 = target - rest_hand
-	var falloff: Dictionary = {"UpperArmR": 0.2, "ElbowR": 0.5, "LowerArmR": 0.75, "HandR": 1.0}
-	for node_name in _STANDING_ARM_NODES:
-		var node: Node3D = _standing_pose.get_node_or_null(node_name)
-		if node == null:
-			continue
-		var rest: Vector3 = _standing_arm_rest_pos[node_name]
-		var dest: Vector3 = rest + hand_delta * falloff[node_name] if raised else rest
-		var tw: Tween = create_tween()
-		tw.tween_property(node, "position", dest, duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT if raised else Tween.EASE_IN)
-		_watch_raise_tweens.append(tw)
-
-	# Round 23 Priority 3 fix: the loop above only ever tweened each
-	# joint's POSITION -- the actual root cause of "the raised watch
-	# pose looks awkward". _rebuild_arm_mesh() already re-derives the
-	# forearm TUBE's own orientation live from the joint positions each
-	# frame (its tangent just follows wherever Elbow/Hand end up), so
-	# the forearm itself always looks right. But HandR is also the
-	# parent of the actual rigid CSG geometry (Palm/fingers/WristWatch,
-	# built once in _build_hand()/_build_wrist_watch()) -- that whole
-	# assembly's ROTATION never changed, so it kept facing exactly the
-	# way it faces at rest (arm hanging straight down) even once
-	# dragged up near the chest, landing with the palm/watch pointed in
-	# a direction that no longer matches the raised forearm at all.
-	# Fixed by rotating HandR itself to match the forearm's new
-	# direction: the shortest-arc rotation from the REST forearm
-	# direction (Elbow->Hand at rest) to the RAISED one, applied as
-	# HandR's own quaternion. This is the same "derive orientation from
-	# the two live joint endpoints" principle _rebuild_arm_mesh()
-	# already uses for the tube mesh, just applied once to the rigid
-	# hand assembly instead of continuously to a lofted spine.
-	var hand_node: Node3D = _standing_pose.get_node_or_null("HandR")
-	var elbow_node: Node3D = _standing_pose.get_node_or_null("ElbowR")
-	if hand_node != null and elbow_node != null:
-		var rest_elbow: Vector3 = _standing_arm_rest_pos.get("ElbowR", Vector3.ZERO)
-		var dest_elbow: Vector3 = rest_elbow + hand_delta * falloff["ElbowR"] if raised else rest_elbow
-		var dest_hand: Vector3 = rest_hand + hand_delta * falloff["HandR"] if raised else rest_hand
-		var rest_dir: Vector3 = (rest_hand - rest_elbow).normalized()
-		var dest_dir: Vector3 = (dest_hand - dest_elbow).normalized()
-		var target_quat: Quaternion = Quaternion(rest_dir, dest_dir) if raised else Quaternion.IDENTITY
-		var rot_tw: Tween = create_tween()
-		rot_tw.tween_property(hand_node, "quaternion", target_quat, duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT if raised else Tween.EASE_IN)
-		_watch_raise_tweens.append(rot_tw)
-
-
+	_stop_watch_raise(false)
+	var target: float = 1.0 if raised else 0.0
+	var span: float = absf(target - _watch_raise_progress)
+	var dur: float = duration * _WORLD_RAISE_DURATION_SCALE * span
+	if dur <= 0.0:
+		_apply_watch_raise(target)
+		return
+	_watch_raise_tween = create_tween()
+	_watch_raise_tween.tween_method(_apply_watch_raise, _watch_raise_progress, target, dur)
 func _apply_pose() -> void:
 	_standing_pose.visible = _pose == Pose.STANDING
 	_sitting_pose.visible = _pose == Pose.SITTING

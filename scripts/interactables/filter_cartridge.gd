@@ -93,12 +93,26 @@ func get_display_name() -> String:
 ## pose and disables collision, same "stays a real, addressable object,
 ## just no longer a loose pickup" contract as wire_component.gd's own
 ## mark_installed().
+##
+## Round 24 Priority 2 ROOT-CAUSE FIX for the "floating decorative
+## duplicate cartridge": this used to leave the cartridge VISIBLE at
+## whatever local pose the station passed in -- which was a hard-coded
+## Vector3(0, -0.6, 0), i.e. 0.6m straight BELOW the station anchor, out
+## in open air in front of the Life Support wall, nowhere near the
+## housing. Confirmed by render (it hung there under the housing panel)
+## and by enumerating every visible cylinder near the station. Now:
+## the station passes a pose INSIDE its own housing tube, and the
+## cartridge goes invisible on seating -- exactly the contract
+## wire_component.gd's own mark_installed() already uses: a seated part
+## is enclosed by the housing, and the housing (latches, valve, gauge)
+## is the one visible representation of "installed".
 func mark_installed(parent_node: Node, local_transform: Transform3D) -> void:
 	if _installed:
 		return
 	_installed = true
 	reparent(parent_node, false)
 	transform = local_transform
+	visible = false
 	var collision := get_node_or_null("Collision")
 	if collision != null:
 		collision.disabled = true

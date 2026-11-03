@@ -106,11 +106,20 @@ extends SubViewport
 ## symptom measurably worse, not better -- the fix follows the actual
 ## math/render evidence instead.
 const _VIRTUAL_EYE_DEPTH_BEHIND_GLASS: float = 0.8
-## Half-width/half-height of the physical glass rectangle (main.tscn's
-## WashMirrorGlass size is 0.5 x 0.42) -- the actual portal window the
-## off-axis frustum is built to exactly frame.
-const _GLASS_HALF_WIDTH: float = 0.25
-const _GLASS_HALF_HEIGHT: float = 0.21
+## Half-width/half-height of the physical glass rectangle -- the actual
+## portal window the off-axis frustum is built to exactly frame.
+##
+## Round 24 Priority 3: the glass was enlarged (0.5 x 0.42 -> 0.56 x 0.9,
+## extended down toward the basin) so more of the body is visible. These
+## are now READ from the glass CSGBox3D's own `size` in _ready() rather
+## than hard-coded, so the frustum, the feed texture's aspect ratio and
+## the physical glass can never drift apart again. The defaults below
+## are only a fallback for a glass node that isn't a CSGBox3D.
+var _glass_half_width: float = 0.25
+var _glass_half_height: float = 0.21
+## Feed texture resolution per metre of glass (the original 0.5 x 0.42
+## glass used a 500 x 420 viewport, i.e. 1000 px/m).
+const _FEED_PIXELS_PER_METRE: float = 1000.0
 const _FAR_CLIP: float = 30.0
 
 var _player_camera: Camera3D = null
@@ -157,6 +166,11 @@ func _ready() -> void:
 	_mirror_camera.cull_mask = _mirror_camera.cull_mask & ~_EXCLUDE_FIRST_PERSON_RIG_LAYER
 
 	var glass: GeometryInstance3D = get_node_or_null(glass_mesh_path)
+	if glass is CSGBox3D:
+		var glass_size: Vector3 = (glass as CSGBox3D).size
+		_glass_half_width = glass_size.x * 0.5
+		_glass_half_height = glass_size.y * 0.5
+		size = Vector2i(roundi(glass_size.x * _FEED_PIXELS_PER_METRE), roundi(glass_size.y * _FEED_PIXELS_PER_METRE))
 	if glass != null:
 		var mat := StandardMaterial3D.new()
 		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -296,7 +310,7 @@ func _update_reflection() -> void:
 
 ## Computes the asymmetric (off-axis) frustum that exactly frames the
 ## physical glass rectangle (centre `glass_center`, half-extents
-## _GLASS_HALF_WIDTH/_GLASS_HALF_HEIGHT along `glass_right`/`glass_up`)
+## _glass_half_width/_glass_half_height along `glass_right`/`glass_up`)
 ## as seen from virtual eye `eye`, looking along `forward_axis` (the
 ## direction from the eye through the glass into the room). Standard
 ## portal/off-axis-projection derivation: project each of the glass
@@ -316,7 +330,7 @@ func _asymmetric_frustum_for(eye: Vector3, glass_center: Vector3, glass_right: V
 	var near_dist: float = 0.0
 	for sx in [-1.0, 1.0]:
 		for sy in [-1.0, 1.0]:
-			var corner: Vector3 = glass_center + sx * _GLASS_HALF_WIDTH * glass_right + sy * _GLASS_HALF_HEIGHT * glass_up
+			var corner: Vector3 = glass_center + sx * _glass_half_width * glass_right + sy * _glass_half_height * glass_up
 			var rel: Vector3 = corner - eye
 			xs.append(rel.dot(glass_right))
 			ys.append(rel.dot(glass_up))
