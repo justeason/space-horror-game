@@ -44,7 +44,8 @@ func _process(delta: float) -> void:
 	if _message_timer > 0.0:
 		_message_timer -= delta
 		if _message_timer <= 0.0 and _message_label != null:
-			_message_label.visible = false
+			if _message_label.get_meta(&"msg_owner", 0) == get_instance_id():   # shared HUD label: hide only our own message
+				_message_label.visible = false
 
 
 ## Called once by filter_housing_station.gd the moment the old
@@ -85,6 +86,7 @@ func _show_message(text: String) -> void:
 	if _message_label == null:
 		return
 	_message_label.text = text
+	_message_label.set_meta(&"msg_owner", get_instance_id())
 	_message_label.visible = true
 	_message_timer = message_duration
 

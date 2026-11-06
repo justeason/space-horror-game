@@ -103,6 +103,12 @@ func _refresh_text() -> void:
 		return
 	var room: StringName = _day_plan.get_outstanding_task_room()
 	if room == &"":
+		# Round 32 Priority 7: a shipment waiting at the airlock is the one
+		# glanceable thing worth showing when no order is open.
+		var port: Node = _day_plan.cargo_port() if _day_plan.has_method("cargo_port") else null
+		if port != null and port.is_busy() and port.state != port.PortState.RECEIVED:
+			_watch_rig.set_watch_text("CARGO %s\nAIRLOCK" % ("READY" if port.state == port.PortState.ARRIVED else "OPEN"))
+			return
 		_watch_rig.set_watch_text("ALL CLEAR")
 		return
 	# Round 20 Priority 5: if a part is already known to be required
@@ -117,7 +123,8 @@ func _refresh_text() -> void:
 	# after the repair is already done and the real next step is to
 	# head back and verify it at the Control Room.
 	if _day_plan.required_component_id != &"" and not _day_plan.is_task_done(&"e05") and not _has_required_part():
-		_watch_rig.set_watch_text("GET PART\nSTORAGE")
+		var pn: String = preload("res://scripts/station/part_names.gd").short(_day_plan.required_component_id)
+		_watch_rig.set_watch_text("GET PART\nSTORAGE" if pn == "16GA" else "GET PART %s\nSTORAGE" % pn)
 		return
 	var action: String
 	if room == &"control_room":

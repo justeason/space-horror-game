@@ -92,7 +92,17 @@ enum Pose { STANDING, SITTING, LYING }
 ## reaches frame-center even at the maximum pitch (see
 ## test_standing_body_composition.gd, which sweeps the whole pitch
 ## range and checks this as an invariant, not a single-angle sample).
-@export var standing_pitch_follow: float = 0.3
+##
+## Round 26: RETIRED (default 0). Tilting the WHOLE body -- pelvis and legs
+## included -- by 30% of camera pitch about the eye is exactly what made the
+## mirror show a rigid, leaning mannequin whose head never looked anywhere
+## (measured: 23.4 deg whole-body tilt at a 78 deg downward look, legs
+## swinging with it). The body now stays upright and planted; look pitch
+## drives the head/neck through CharacterPoseState instead, and the
+## first-person composition concern this solved is handled per camera (see
+## _set_upper_torso_self_hidden()). Kept as an export only so the old
+## behaviour can be compared side by side.
+@export var standing_pitch_follow: float = 0.0
 
 ## Debug/testing toggle for the whole body, independent of pose.
 @export var body_visible: bool = true
@@ -122,6 +132,12 @@ enum Pose { STANDING, SITTING, LYING }
 ## normally, at the default cull_mask. Without this, those other
 ## viewpoints would show a headless torso.
 @onready var _head_group: Node3D = $HeadGroup
+@onready var _neck_pivot: Node3D = get_node_or_null("HeadGroup/NeckPivot")
+@onready var _head_pivot: Node3D = get_node_or_null("HeadGroup/NeckPivot/HeadPivot")
+## Round 26: the shared visual pose state (Player/PoseState). Optional so
+## the body still works standalone (head simply stays level).
+@export var pose_state_path: NodePath
+@onready var _pose_state: Node = get_node_or_null(pose_state_path)
 @onready var _watch_rig: Node = get_node_or_null(watch_rig_path)
 
 ## Round 19 Priority 2: StandingPose arm nodes whose rest position is
@@ -165,9 +181,12 @@ func _ready() -> void:
 	for node_name in _STANDING_ARM_NODES:
 		_standing_arm_rest_pos[node_name] = _standing_pose.get_node(node_name).position
 	_setup_watch_raise_rig()
+	_split_self_hidden_upper_torso()
 	_apply_watch_raise(0.0)
 	_apply_pose()
 	_update_arm_meshes()
+	if use_rigged_visual:
+		_setup_rigged_visual()
 
 
 func _process(_delta: float) -> void:
@@ -175,7 +194,34 @@ func _process(_delta: float) -> void:
 		rotation.y = _look_pivot.rotation.y
 		_pitch_follow_current = standing_pitch_follow
 		rotation.x = _pitch_pivot.rotation.x * _pitch_follow_current
+	_apply_look_pose()
+	if _watch_raise_progress > 0.0 and _pose == Pose.STANDING:
+		_update_watch_target(_shared_watch_target())
+		_apply_watch_raise(_watch_raise_progress)
 	_update_arm_meshes()
+	_update_rig(_delta)
+	_update_eye_anchor()
+
+
+## Round 26 Priority 3: the world head/neck now answer the player's look
+## pitch through the shared CharacterPoseState (anatomically limited split
+## across upper spine / neck / head -- see character_pose_state.gd). The
+## CSG torso is one boolean union and cannot bend cheaply, so on THIS body
+## the upper-spine share is carried at the neck base; the Skeleton3D
+## prototype applies it to its Spine/Chest bones instead. Pelvis, legs and
+## the collar ring stay put; only HeadGroup/NeckPivot and
+## HeadGroup/NeckPivot/HeadPivot rotate (plain Node3D pivots, so this is a
+## transform change, not a CSG rebuild).
+func _apply_look_pose() -> void:
+	if _neck_pivot == null or _head_pivot == null:
+		return
+	var neck: float = 0.0
+	var head: float = 0.0
+	if _pose_state != null and _pose == Pose.STANDING:
+		neck = _pose_state.spine_pitch + _pose_state.neck_pitch
+		head = _pose_state.head_pitch
+	_neck_pivot.rotation.x = neck
+	_head_pivot.rotation.x = head
 
 
 func is_sitting() -> bool:
@@ -188,7 +234,8 @@ func is_lying() -> bool:
 
 ## Called by sleep_state.gd exactly when the sit-down/stand-up tween has
 ## fully settled. Idempotent.
-func set_sitting(value: bool) -> void:
+func set_sitting(value: bool, crossfade_s: float = POSE_XFADE_S) -> void:
+	_xfade_dur = maxf(crossfade_s, 0.05)
 	if value:
 		# Defensive: force the watch rig down/hidden instantly before
 		# leaving STANDING, regardless of whatever wristwatch_view.gd's
@@ -201,22 +248,35 @@ func set_sitting(value: bool) -> void:
 	if not value:
 		_kill_hand_gesture()
 		reset_get_up_pose()
+	_begin_pose_crossfade(Pose.SITTING if value else Pose.STANDING)
 	_pose = Pose.SITTING if value else Pose.STANDING
+	_sit_preview_t = -1.0
 	_apply_pose()
 	if value:
 		rotation.y = deg_to_rad(sitting_world_yaw_degrees)
+	# _apply_pose()/the line above re-yaw the body right now; recompose the
+	# rig immediately so the crossfade's first frame is exactly what was
+	# shown, never one stale frame.
+	_update_rig(0.0)
 
 
 ## Preserved from before the sitting-pose redesign: a distinct pose for
 ## lying flat, not currently reachable from any interaction, kept for a
 ## future sleep mechanic. Idempotent.
-func set_lying(value: bool) -> void:
+func set_lying(value: bool, crossfade_s: float = POSE_XFADE_S) -> void:
+	_xfade_dur = maxf(crossfade_s, 0.05)
 	if value:
 		_stop_watch_raise(true)
+	_begin_pose_crossfade(Pose.LYING if value else Pose.STANDING)
 	_pose = Pose.LYING if value else Pose.STANDING
+	_sit_preview_t = -1.0
 	_apply_pose()
 	if value:
 		rotation.y = deg_to_rad(lying_world_yaw_degrees)
+	# _apply_pose()/the line above re-yaw the body right now; recompose the
+	# rig immediately so the crossfade's first frame is exactly what was
+	# shown, never one stale frame.
+	_update_rig(0.0)
 
 
 ## Right-arm nodes that move together for the laptop-opening gesture,
@@ -899,7 +959,6 @@ func _wrist_watch_placement(pose_root: Node3D, radii: Dictionary, dist: float) -
 ## Raised wrist position (body space: eye at origin, -Z forward, +X right)
 ## and the elbow pole direction for the two-bone solve. Exported so the
 ## pose can be tuned in the editor; _setup_watch_raise_rig() re-solves.
-@export var watch_wrist_target: Vector3 = Vector3(0.0, -0.42, -0.40)
 @export var watch_elbow_pole: Vector3 = Vector3(1.0, -0.4, -0.3)
 ## The world body moves a little slower than the snappy first-person rig
 ## (0.28s default) so the shoulder -> elbow -> wrist sequence reads as a
@@ -908,6 +967,9 @@ const _WORLD_RAISE_DURATION_SCALE: float = 1.5
 var _watch_raise_progress: float = 0.0
 var _watch_raise_tween: Tween
 var _arm_rig: Dictionary = {}
+var _watch_target_applied: Vector3 = Vector3(INF, INF, INF)
+const _PoseStateScript = preload("res://scripts/player/character_pose_state.gd")
+var _deltoid_r: MeshInstance3D
 
 
 static func _limb_frame(axis: Vector3, hinge: Vector3) -> Basis:
@@ -926,19 +988,6 @@ func _setup_watch_raise_rig() -> void:
 	var f_r: Vector3 = (w_rest - e_rest) / l2
 	var h_r: Vector3 = u_r.cross(f_r).normalized()
 
-	# Analytic two-bone IK for the raised wrist position.
-	var d: Vector3 = watch_wrist_target - s
-	var dist: float = clampf(d.length(), absf(l1 - l2) + 0.001, l1 + l2 - 0.001)
-	var dn: Vector3 = d.normalized()
-	var along: float = (l1 * l1 - l2 * l2 + dist * dist) / (2.0 * dist)
-	var out: float = sqrt(maxf(l1 * l1 - along * along, 0.0))
-	var pole: Vector3 = (watch_elbow_pole - dn * watch_elbow_pole.dot(dn)).normalized()
-	var e_d: Vector3 = s + dn * along + pole * out
-	var w_d: Vector3 = s + dn * dist
-	var u_d: Vector3 = (e_d - s) / l1
-	var f_d: Vector3 = (w_d - e_d) / l2
-	var h_d: Vector3 = u_d.cross(f_d).normalized()
-
 	var ff_r: Basis = _limb_frame(f_r, h_r)
 	# Round 25: a relaxed standing hand hangs in NEUTRAL (palm facing the
 	# thigh), not the fully supinated palm-forward "anatomical position"
@@ -952,30 +1001,124 @@ func _setup_watch_raise_rig() -> void:
 	var lower_l: Node3D = _standing_pose.get_node("LowerArmL")
 	var f_l: Vector3 = (hand_l.position - lower_l.position).normalized()
 	hand_l.quaternion = Quaternion(f_l, PI / 2.0)
-	var q_upper: Quaternion = (_limb_frame(u_d, h_d) * _limb_frame(u_r, h_r).transposed()).get_rotation_quaternion()
-
-	# Forearm roll that turns the watch face toward the eye (body origin).
-	var roll: float = 0.0
-	var hand: Node3D = _standing_pose.get_node("HandR")
-	var watch: Node3D = hand.get_node_or_null("WristWatch")
-	if watch != null:
-		var r0: Basis = _limb_frame(f_d, h_d) * ff_r.transposed()
-		var watch_rest: Transform3D = Transform3D(Basis(hand_rest_q), Vector3.ZERO) * watch.transform
-		var face_n: Vector3 = r0 * watch_rest.basis.y
-		var face_p: Vector3 = e_d + r0 * (w_rest - e_rest + watch_rest.origin)
-		var to_eye: Vector3 = -face_p
-		var n_p: Vector3 = (face_n - f_d * face_n.dot(f_d)).normalized()
-		var e_p: Vector3 = (to_eye - f_d * to_eye.dot(f_d)).normalized()
-		roll = atan2(f_d.dot(n_p.cross(e_p)), n_p.dot(e_p))
 
 	_arm_rig = {
 		"s": s, "u_rest": u_rest, "e_rest": e_rest, "l_rest": l_rest, "w_rest": w_rest,
-		"u_r": u_r, "h_r": h_r, "ff_r": ff_r,
-		"flex_r": u_r.angle_to(f_r), "flex_d": u_d.angle_to(f_d),
-		"q_upper": q_upper, "roll": roll, "hand_rest_q": hand_rest_q,
+		"u_r": u_r, "h_r": h_r, "ff_r": ff_r, "f_r": f_r,
+		"flex_r": u_r.angle_to(f_r), "hand_rest_q": hand_rest_q,
 		"upper_len": l1, "fore_len": l2,
 		"cap_rest": _standing_pose.get_node("ShoulderCapR").position,
+		"watch_rest_local": (_standing_pose.get_node("HandR/WristWatch") as Node3D).transform,
 	}
+	_watch_target_applied = Vector3(INF, INF, INF)
+	_update_watch_target(_shared_watch_target())
+
+	# Round 26: the right deltoid cap was a CSG sphere inside the torso's
+	# union (default layer) -- so while the arm was raised it stayed visible
+	# to the player's own camera, a large grey ball in the lower-right of a
+	# downward glance that the first-person sleeve passed through. The CSG
+	# node stays as the (hidden) anchor the pose code already moves; the
+	# visible deltoid is now its own mesh that follows it and switches to the
+	# mirror-only layer with the rest of the raised arm.
+	var cap_csg: CSGSphere3D = _standing_pose.get_node("ShoulderCapR")
+	var deltoid := MeshInstance3D.new()
+	deltoid.name = "DeltoidR"
+	var sphere := SphereMesh.new()
+	sphere.radius = cap_csg.radius
+	sphere.height = cap_csg.radius * 2.0
+	sphere.radial_segments = 24
+	sphere.rings = 12
+	deltoid.mesh = sphere
+	deltoid.material_override = cap_csg.material
+	deltoid.transform = cap_csg.transform
+	_standing_pose.add_child(deltoid)
+	cap_csg.visible = false
+	_deltoid_r = deltoid
+
+
+## Round 27: the raised configuration follows the SHARED watch target
+## (CharacterPoseState.watch_target: held at a fixed direction relative to
+## the view, following look pitch 1:1 within body limits). The two-bone IK
+## re-solves whenever that target moves (> 1mm), so limb lengths, the
+## shoulder pivot and the elbow hinge are preserved by construction, and the
+## forearm roll is re-derived each time so the face keeps turning toward the
+## eye. The first-person rig is derived from THIS pose (see
+## first_person_watch_rig.gd), so the player's own view and the mirror can
+## no longer disagree.
+const _CLAVICLE_LIFT: Vector3 = Vector3(0.0, 0.025, -0.01)
+const _WATCH_ELBOW_POLE_HIGH: Vector3 = Vector3(1.0, 0.25, -0.15)
+## Wrist flexion: the hand bends this fraction of the way from the
+## forearm's slope back toward horizontal (fingers across, not pointing up
+## past the face), capped -- see _apply_watch_raise().
+const _WRIST_LEVEL_FRACTION: float = 0.6
+const _WRIST_FLEX_MAX_DEG: float = 35.0
+
+
+func _update_watch_target(target: Vector3) -> void:
+	if target.distance_to(_watch_target_applied) < 0.001:
+		return
+	_watch_target_applied = target
+	var cfg: Dictionary = _solve_raised(target)
+	for key in ["q_upper", "flex_d", "roll", "target", "s_raised"]:
+		_arm_rig[key] = cfg[key]
+
+
+func _shared_watch_target() -> Vector3:
+	if _pose_state != null:
+		return _pose_state.watch_target
+	return _PoseStateScript.watch_target_for_pitch(0.0)
+
+
+## Analytic two-bone IK to `target` (body space) plus the forearm roll that
+## turns the watch face toward the eye (body origin). Pure with respect to
+## the rest data captured in _arm_rig.
+func _solve_raised(target: Vector3) -> Dictionary:
+	var rig: Dictionary = _arm_rig
+	# Clavicle: the shoulder point rises/protracts a little when the watch is
+	# held high (watch above lower-chest height), as a real shoulder girdle
+	# does; segment lengths are measured from this moved pivot, so they stay
+	# constant.
+	# Round 27 follow-up: StandingPose is offset back from the eye (see the
+	# "standing body offset" note above SELF_HIDDEN_TORSO_PARTS); targets
+	# and the eye arrive in BODY space.
+	target = target - _standing_pose.position
+	var eye_local: Vector3 = -_standing_pose.position
+	var lift: float = smoothstep(-0.30, -0.05, target.y)
+	var s: Vector3 = (rig["s"] as Vector3) + _CLAVICLE_LIFT * lift
+	var l1: float = rig["upper_len"]
+	var l2: float = rig["fore_len"]
+	var d: Vector3 = target - s
+	var dist: float = clampf(d.length(), absf(l1 - l2) + 0.001, l1 + l2 - 0.001)
+	var dn: Vector3 = d.normalized()
+	var along: float = (l1 * l1 - l2 * l2 + dist * dist) / (2.0 * dist)
+	var out: float = sqrt(maxf(l1 * l1 - along * along, 0.0))
+	# Round 27: for a high target (looking up) the elbow swings out toward
+	# shoulder height so the forearm lies ACROSS in front of the face; with a
+	# fixed downward pole the forearm stood vertical and the pose read as a
+	# wave rather than a watch check.
+	var high: float = smoothstep(-0.25, 0.15, target.y)
+	var pole_dir: Vector3 = watch_elbow_pole.lerp(_WATCH_ELBOW_POLE_HIGH, high)
+	var pole: Vector3 = (pole_dir - dn * pole_dir.dot(dn)).normalized()
+	var e_d: Vector3 = s + dn * along + pole * out
+	var w_d: Vector3 = s + dn * dist
+	var u_d: Vector3 = (e_d - s) / l1
+	var f_d: Vector3 = (w_d - e_d) / l2
+	var h_d: Vector3 = u_d.cross(f_d).normalized()
+	var u_r: Vector3 = rig["u_r"]
+	var h_r: Vector3 = rig["h_r"]
+	var q_upper: Quaternion = (_limb_frame(u_d, h_d) * _limb_frame(u_r, h_r).transposed()).get_rotation_quaternion()
+	var roll: float = 0.0
+	var watch: Node3D = _standing_pose.get_node("HandR").get_node_or_null("WristWatch")
+	if watch != null:
+		var r0: Basis = _limb_frame(f_d, h_d) * (rig["ff_r"] as Basis).transposed()
+		var watch_rest: Transform3D = Transform3D(Basis(rig["hand_rest_q"]), Vector3.ZERO) * watch.transform
+		var face_n: Vector3 = r0 * watch_rest.basis.y
+		var face_p: Vector3 = e_d + r0 * (rig["w_rest"] - rig["e_rest"] + watch_rest.origin)
+		var to_eye: Vector3 = eye_local - face_p
+		var n_p: Vector3 = (face_n - f_d * face_n.dot(f_d)).normalized()
+		var e_p: Vector3 = (to_eye - f_d * to_eye.dot(f_d)).normalized()
+		roll = atan2(f_d.dot(n_p.cross(e_p)), n_p.dot(e_p))
+	return {"q_upper": q_upper, "flex_d": u_d.angle_to(f_d), "roll": roll, "target": w_d, "s_raised": s}
 
 
 ## Forward kinematics for watch-raise progress `p` (0 = rest, 1 = fully
@@ -990,14 +1133,19 @@ func _apply_watch_raise(p: float) -> void:
 	var lower_node: Node3D = _standing_pose.get_node("LowerArmR")
 	var hand_node: Node3D = _standing_pose.get_node("HandR")
 	var cap_node: Node3D = _standing_pose.get_node("ShoulderCapR")
-	_set_right_arm_mirror_only(p > 0.0)
 	if p <= 0.0:
+		_standing_pose.get_node("ShoulderR").position = rig["s"]
 		cap_node.position = rig["cap_rest"]
+		if _deltoid_r != null:
+			_deltoid_r.position = cap_node.position
 		upper_node.position = rig["u_rest"]
 		elbow_node.position = rig["e_rest"]
 		lower_node.position = rig["l_rest"]
 		hand_node.position = rig["w_rest"]
 		hand_node.quaternion = rig["hand_rest_q"]
+		var rest_watch: Node3D = hand_node.get_node_or_null("WristWatch")
+		if rest_watch != null:
+			rest_watch.transform = rig["watch_rest_local"]
 		return
 	# Overlapping phases: the shoulder leads slightly, the elbow flexes
 	# almost with it (a shoulder-only lead swings the arm out into a
@@ -1012,15 +1160,39 @@ func _apply_watch_raise(p: float) -> void:
 	var f: Vector3 = u.rotated(h, lerpf(rig["flex_r"], rig["flex_d"], t_elbow))
 	var b_fore: Basis = Basis(f, rig["roll"] * t_wrist) * _limb_frame(f, h) * (rig["ff_r"] as Basis).transposed()
 	var s: Vector3 = rig["s"]
-	var e: Vector3 = s + b_upper * (rig["e_rest"] - s)
-	upper_node.position = s + b_upper * (rig["u_rest"] - s)
+	# Clavicle lift blends in with the shoulder phase; the whole upper-arm
+	# segment rotates rigidly about the (possibly lifted) shoulder pivot.
+	var s_now: Vector3 = s.lerp(rig.get("s_raised", s), t_shoulder)
+	_standing_pose.get_node("ShoulderR").position = s_now
+	var e: Vector3 = s_now + b_upper * (rig["e_rest"] - s)
+	upper_node.position = s_now + b_upper * (rig["u_rest"] - s)
 	# The deltoid cap belongs to the upper-arm segment: it must swing with
 	# it, or it is left floating where the arm used to hang.
-	cap_node.position = s + b_upper * (rig["cap_rest"] - s)
+	cap_node.position = s_now + b_upper * (rig["cap_rest"] - s)
+	if _deltoid_r != null:
+		_deltoid_r.position = cap_node.position
 	elbow_node.position = e
 	lower_node.position = e + b_fore * (rig["l_rest"] - rig["e_rest"])
 	hand_node.position = e + b_fore * (rig["w_rest"] - rig["e_rest"])
-	hand_node.quaternion = b_fore.get_rotation_quaternion() * (rig["hand_rest_q"] as Quaternion)
+	# Wrist flexion (Round 27): bend the hand at the wrist toward horizontal
+	# so the fingers point across rather than continuing a steep forearm
+	# line. The watch sits on the FOREARM, not the hand, so it is
+	# counter-rotated to stay put relative to the forearm.
+	var forearm_q: Quaternion = b_fore.get_rotation_quaternion() * (rig["hand_rest_q"] as Quaternion)
+	var flex_axis: Vector3 = f.cross(Vector3.UP)
+	var flex_q := Quaternion.IDENTITY
+	if flex_axis.length() > 0.01:
+		var slope: float = asin(clampf(f.y, -1.0, 1.0))
+		var cap: float = deg_to_rad(_WRIST_FLEX_MAX_DEG)
+		# Rotating about (forearm x up) by a POSITIVE angle turns the hand
+		# toward up, so levelling a rising forearm needs the negative slope.
+		var flex: float = -clampf(slope * _WRIST_LEVEL_FRACTION, -cap, cap) * t_wrist
+		flex_q = Quaternion(flex_axis.normalized(), flex)
+	hand_node.quaternion = flex_q * forearm_q
+	var watch: Node3D = hand_node.get_node_or_null("WristWatch")
+	if watch != null:
+		var undo: Quaternion = (flex_q * forearm_q).inverse() * forearm_q
+		watch.transform = Transform3D(Basis(undo), Vector3.ZERO) * (rig["watch_rest_local"] as Transform3D)
 
 
 ## Round 25 Priority 3: the player's OWN camera must not see the world
@@ -1060,6 +1232,88 @@ func is_right_arm_mirror_only() -> bool:
 	return _right_arm_mirror_only
 
 
+## Round 26 Priority 5: per-camera visibility for the near-eye upper torso.
+##
+## With the whole-body tilt retired (see standing_pitch_follow), the body is
+## upright and the eye sits directly above the shoulder yoke -- this body's
+## torso is centred ~7cm IN FRONT of the eye -- so a downward glance from the
+## player's own camera filled the lower half of the frame with the tops of
+## the shoulders/yoke/chest at ~0.3m (rendered and confirmed: a large grey
+## dome; and the camera-locked watch sank into it). In a real body that
+## region is behind your own chin and jaw, and the player's camera already
+## cannot see its own head/collar (layer 4) for the same reason. These
+## upper-torso pieces now render on that same mirror-only layer: the mirror,
+## surveillance and any other camera see the complete body, while the
+## player's own downward glance shows belt, hips, legs and arms. The original
+## CSG nodes stay in StandingPose as hidden anchors (pose code and existing
+## tests address them by name); their visual duplicates live in a separate
+## combiner under a plain Node3D so they are not part of the torso union.
+## Standing body offset (Round 27 follow-up): StandingPose and HeadGroup sit
+## 0.10m BEHIND the eye/camera (player_body.tscn). Measured from the
+## player's own camera at an 80 deg downward look with C held: the torso
+## (belt/belly/hips) covered 20% of the frame in the lower centre and the
+## hanging left arm 13% lower-left, because this body had been built with
+## its torso centred 7-10cm IN FRONT of the eye -- the reverse of a real
+## person, whose eyes are ~10cm in front of the neck/torso axis. Looking
+## straight down therefore looked onto the top of the belly and shoulders.
+## Only the visuals moved: the camera, collision capsule and the
+## CarryAnchor/LapAnchor (PlayerBody children) are unchanged.
+##
+## Round 27 follow-up (measured by rendered pixel diff, C held): with only the
+## chest hidden, looking 60-80 deg down still showed the remaining torso top
+## (belly bridge/waist/belt/pelvis cylinder) as a flat-topped grey disc
+## covering 31-37% of the lower-centre region, plus the top caps of the
+## hanging arm tubes as floating "stumps" near the eye (their shoulders are
+## hidden). The player's own camera now uses "legs-only" body awareness: the
+## whole torso and both arms/hands render only for the mirror and every
+## other camera; the player's own view shows thighs and feet (and the
+## first-person watch arm while C is held).
+const SELF_HIDDEN_TORSO_PARTS: Array = ["TrapeziusBase", "ChestYoke", "ShoulderL", "ShoulderR", "ShoulderCapL", "Chest", "ChestPocket", "AccentStripe", "TorsoBridgeUpper", "Waist", "TorsoBridgeLower", "Belt", "Hips"]
+
+
+func _split_self_hidden_upper_torso() -> void:
+	var holder := Node3D.new()
+	holder.name = "SelfHiddenTorso"
+	_standing_pose.add_child(holder)
+	var combiner := CSGCombiner3D.new()
+	combiner.name = "UpperTorso"
+	combiner.layers = _MIRROR_ONLY_LAYER
+	holder.add_child(combiner)
+	for part_name in SELF_HIDDEN_TORSO_PARTS:
+		var src: CSGShape3D = _standing_pose.get_node_or_null(part_name)
+		if src == null:
+			continue
+		var dup: CSGShape3D = src.duplicate()
+		dup.visible = true
+		combiner.add_child(dup)
+		dup.transform = src.transform
+		src.visible = false
+	if _deltoid_r != null:
+		_deltoid_r.layers = _MIRROR_ONLY_LAYER
+	# Both arms and hands: mirror-only for the standing pose (see the doc
+	# above). The raised right arm's first-person view is the watch rig.
+	var left_mesh: VisualInstance3D = _arm_mesh_instances.get("standing_L")
+	if left_mesh != null:
+		left_mesh.layers = _MIRROR_ONLY_LAYER
+	for hand_name in ["HandL"]:
+		for v in _standing_pose.get_node(hand_name).find_children("*", "VisualInstance3D", true, false):
+			(v as VisualInstance3D).layers = _MIRROR_ONLY_LAYER
+	_set_right_arm_mirror_only(true)
+
+
+## Round 26: the world watch's live pose (global space) for the
+## first-person rig's downward-look presentation: the watch position and the
+## unit direction from the wrist toward the elbow (forearm axis).
+func world_watch_pose() -> Dictionary:
+	var hand: Node3D = _standing_pose.get_node("HandR")
+	var elbow: Node3D = _standing_pose.get_node("ElbowR")
+	var watch: Node3D = hand.get_node("WristWatch")
+	return {
+		"watch": watch.global_position,
+		"to_elbow": (elbow.global_position - hand.global_position).normalized(),
+	}
+
+
 func watch_raise_progress() -> float:
 	return _watch_raise_progress
 
@@ -1092,6 +1346,843 @@ func _apply_pose() -> void:
 	_sitting_pose.visible = _pose == Pose.SITTING
 	_lying_pose.visible = _pose == Pose.LYING
 	_head_group.visible = _pose == Pose.STANDING
+	# Round 28: the rig's head mesh is mirror-only in EVERY pose (the eye is
+	# inside it), so the lying/sitting character keeps its head.
+	if _rig != null:
+		_rig.head_mesh.visible = true
 	rotation.x = 0.0
 	if _pose == Pose.STANDING:
 		rotation.y = _look_pivot.rotation.y
+
+
+# ======================================================================
+# Round 28: the rigged technician as the visible character
+# ======================================================================
+## Round 28 Priority 1/2/3. The visible character is now the skinned
+## Skeleton3D technician (scripts/character/technician_rig.gd). Everything
+## above this point -- the CSG poses, their anchors and tweens, the
+## watch-raise progress, the sitting/get-up/laptop gestures -- keeps running
+## exactly as before and stays the tested source of pose data; its geometry
+## is simply no longer rendered (layers = 0) while the rig is active.
+## `use_rigged_visual = false` restores the old visuals as a fallback.
+##
+## ROOT CAUSE of the straight-down self view (measured, Round 28): the old
+## body's legs were raked ~20 deg forward (hip caps 0.03m in front of the eye,
+## feet 0.32m in front) and its torso was hidden from the player's camera,
+## so a straight-down look landed on two thigh-top spheres directly under
+## the eye. The rig is built on a vertical ear-shoulder-hip-ankle plumb line
+## with the eye 9cm in front of it (EYE_POINT), and its torso, arms and legs
+## are ONE continuous skinned body visible to the player's own camera; only
+## the head/neck mesh (the eye is inside it) is mirror-only.
+##
+## ROOT CAUSE of "fingers in the mirror but not in first person" (Round 28):
+## they were two different models -- the world body's hand and the separate
+## camera-attached first-person rig, whose oversized watch strap/case sits
+## between the camera and its own short finger meshes at upward looks. Now
+## both views render the SAME rig arm, hand and watch; the old first-person
+## rig is suppressed.
+const _TechnicianRigScene = preload("res://scenes/character/technician_rig.tscn")
+@export var use_rigged_visual: bool = true
+var _rig: Node3D = null
+var _walk_phase: float = 0.0
+var _walk_amount: float = 0.0
+var _last_global_pos: Vector3 = Vector3(INF, INF, INF)
+var _carry_blend: float = 0.0
+var _rig_roll_target: Vector3 = Vector3(INF, INF, INF)
+var _rig_roll: float = 0.0
+
+
+func rigged_visual() -> Node3D:
+	return _rig
+
+
+func _setup_rigged_visual() -> void:
+	_rig = _TechnicianRigScene.instantiate()
+	_rig.name = "RiggedVisual"
+	add_child(_rig)
+	if _rig.skeleton == null:
+		_rig.build()
+	_hide_legacy_visuals()
+	if _watch_rig != null and "suppress_presentation" in _watch_rig:
+		_watch_rig.suppress_presentation = true
+	_update_rig(0.0)
+
+
+## The legacy CSG/mesh visuals stay in the tree (their nodes are the tested
+## pose anchors and keep their transforms/tweens) but every visual BELOW the
+## four pose roots is hidden, so each root renders an empty union. Only
+## _apply_pose() toggles visibility afterwards, and it touches the roots
+## only. (Setting `layers = 0` at runtime instead was tried first and
+## crashed the Godot 4.7 renderer -- "indexing did not unpair geometries
+## from light" followed by SIGSEGV -- so visibility is used.)
+func _hide_legacy_visuals() -> void:
+	for root in [_standing_pose, _sitting_pose, _lying_pose, _head_group]:
+		for n in (root as Node).find_children("*", "VisualInstance3D", true, false):
+			(n as VisualInstance3D).visible = false
+
+
+func _carry_system() -> Node:
+	return get_parent().get_node_or_null("CarrySystem") if get_parent() != null else null
+
+
+func _update_rig(delta: float) -> void:
+	if _rig == null:
+		return
+	if _rig_shown_pose != _pose:
+		_begin_pose_crossfade(_pose)
+	_rig.reset_pose()
+	match _pose:
+		Pose.STANDING:
+			_compose_standing(delta)
+			_eye_offset_cached = _rig_eye() - _rig.EYE_POINT
+			if _sit_preview_t >= 0.0:
+				_compose_sit_preview(delta)
+		Pose.SITTING:
+			_seated_follow_w = move_toward(_seated_follow_w, _seated_follow_target, delta * 2.5) if delta > 0.0 else _seated_follow_target
+			_compose_seated()
+		Pose.LYING:
+			var hips: Vector3 = to_local(_lying_pose.get_node("Hips").global_position)
+			var shoulders: Vector3 = to_local(_lying_pose.get_node("Shoulders").global_position)
+			# Lie FLAT on the back: the body axis is the hips->shoulders
+			# direction projected onto the horizontal (the legacy anchors tilt
+			# ~14 deg head-down, which put the rig's head through the
+			# mattress), front (-Z) facing up so the back (+Z) points down.
+			var y_axis: Vector3 = Vector3(shoulders.x - hips.x, 0.0, shoulders.z - hips.z).normalized()
+			var z_axis: Vector3 = Vector3.DOWN
+			var basis := Basis(y_axis.cross(z_axis), y_axis, z_axis)
+			# Raise so the back rests at the legacy hip height, and anchor
+			# along the body axis at the SHOULDERS (Round 29: anchored at the
+			# hips, the rig's longer legs put the boots past the bunk's foot).
+			var neck_rest: Vector3 = _rig.rest_pos("Neck")
+			var anchor := Vector3(shoulders.x, hips.y, shoulders.z)
+			_rig.transform = Transform3D(basis, anchor + Vector3(0, 0.1, 0) - basis * neck_rest)
+			_pose_lying_head()
+			# Arms rest along the sides, slightly bent (hands on the mattress).
+			for side in ["Right", "Left"]:
+				_rig.set_local(side + "UpperArm", Quaternion(Vector3.FORWARD, deg_to_rad(8.0 if side == "Right" else -8.0)))
+				_rig.set_local(side + "LowerArm", Quaternion(Vector3.RIGHT, deg_to_rad(15.0)))
+	if _rig_xfade_t < 1.0:
+		# Out-of-frame refreshes (delta 0, e.g. from set_sitting()) never
+		# advance the blend -- they used to complete it instantly.
+		_rig_xfade_t = minf(_rig_xfade_t + delta / _xfade_dur, 1.0)
+		var snap: Dictionary = {"rot": _rig_snap["rot"], "xf": global_transform.affine_inverse() * _rig_snap_gxf}
+		_rig.crossfade_from(snap, smoothstep(0.0, 1.0, _rig_xfade_t))
+	if _pose != Pose.SITTING:
+		_place_lap_anchor()   # restores the authored spot
+	_rig.apply_to_skeleton()
+	_rig_applied = _rig.snapshot()
+	_rig_applied_gxf = _rig.global_transform
+	_update_carry_anchor()
+	if _watch_rig != null:
+		var label: Node = _watch_rig.get_node_or_null("ArmGroup/WatchAssembly/WatchFaceText")
+		if label != null:
+			_rig.set_watch_text(_compact_watch_text(label.text))
+	var cam: Node3D = _pitch_pivot.get_node_or_null("Camera3D")
+	if cam != null and _watch_raise_progress > 0.0:
+		_rig.level_watch_text(cam)
+
+
+## Round 29 Priority 2: lying head. The lying face points UP (rig -Z), so
+## the player's look is measured against the torso, not the horizon:
+## looking toward the feet lifts the head (chin toward chest, neck 60% /
+## head 40%, up to 55 deg) the way a person in bed does, so the eye -- and
+## the camera on it -- rises off the mattress and sees down the body
+## instead of grazing along the chest; looking back past the headboard
+## tips it back a little.
+const LYING_HEAD_LIFT_MAX_DEG: float = 55.0
+const LYING_HEAD_EXTEND_MAX_DEG: float = 15.0
+
+
+func _pose_lying_head() -> void:
+	var cam: Node3D = _pitch_pivot.get_node_or_null("Camera3D")
+	if cam == null:
+		return
+	var fwd: Vector3 = (_rig.global_basis.orthonormalized().inverse() * (-cam.global_basis.z)).normalized()
+	var toward_feet: float = atan2(-fwd.y, -fwd.z)   # 0 = straight up out of the face
+	var flex: float = clampf(toward_feet * 0.7, -deg_to_rad(LYING_HEAD_EXTEND_MAX_DEG), deg_to_rad(LYING_HEAD_LIFT_MAX_DEG))
+	_rig.pose_look(0.0, -flex * 0.6, -flex * 0.4)
+
+
+func _compose_standing(delta: float) -> void:
+	_rig.transform = Transform3D(Basis(), -_rig.EYE_POINT)
+	_update_rig_walk(delta)
+	if _pose_state != null:
+		_rig.pose_look(_pose_state.spine_pitch, _pose_state.neck_pitch, _pose_state.head_pitch)
+	# Round 32: bend at the waist to place a part on a LOW surface (bed);
+	# eases back after the release.
+	var lean_goal: float = _place_lean if _place_t >= 0.0 else 0.0
+	_lean_w = move_toward(_lean_w, lean_goal, delta / 0.3) if delta > 0.0 else lean_goal
+	if _lean_w > 0.0:
+		_rig.set_local("Spine", _rig.get_local("Spine") * Quaternion(Vector3.RIGHT, -deg_to_rad(PLACE_LEAN_MAX_DEG) * 0.6 * _lean_w))
+		_rig.set_local("Hips", Quaternion(Vector3.RIGHT, -deg_to_rad(PLACE_LEAN_MAX_DEG) * 0.4 * _lean_w))
+	var carry: Node = _carry_system()
+	# A pending reach (Round 31: ownership only at the grasp) animates the
+	# arm exactly like carrying.
+	var carrying: bool = carry != null and (carry.is_carrying() or (carry.has_method("is_reaching") and carry.is_reaching()))
+	_carry_blend = move_toward(_carry_blend, 1.0 if carrying else 0.0, delta * 4.0) if delta > 0.0 else (1.0 if carrying else 0.0)
+	if _watch_raise_progress > 0.0:
+		_pose_watch_arm()
+	elif _carry_blend > 0.0:
+		_pose_carry_arm(delta)
+
+
+## Watch inspection arm (Round 28 shared target; Round 29 Priority 4 high
+## range). The target comes from CharacterPoseState (shared with every
+## view). Round 29: above eye level the old pose clamped the watch to eye
+## height ~0.33m straight ahead -- ~0.53m from the shoulder for a 0.565m
+## arm, i.e. a locked-straight "reaching forward" arm at 35 deg up. Now the
+## target keeps rising with the look but comes CLOSER, and the clavicle
+## elevates/protracts (a real shoulder shrug) so the elbow stays bent; the
+## elbow pole swings out to the side for high holds so the forearm rises
+## in front of the face instead of pointing at it.
+const WATCH_CLAVICLE_ELEVATION_DEG: float = 24.0
+const WATCH_CLAVICLE_PROTRACTION_DEG: float = 14.0
+
+
+func _pose_watch_arm() -> void:
+	var tgt_body: Vector3 = _shared_watch_target()
+	var look_pitch: float = _pose_state.look_pitch if _pose_state != null else 0.0
+	# 0 at/below a level look: EXACTLY the Round 28 pose (the approved
+	# level/downward watch check). Eases to the high-hold pose above it.
+	var up: float = smoothstep(0.0, deg_to_rad(25.0), look_pitch)
+	var e: float = atan2(tgt_body.y, -tgt_body.z)
+	# Round 28 high-hold shaping (keyed to target height): wrist slightly out
+	# and forward, elbow pole rising toward shoulder height.
+	var old_high: float = smoothstep(-0.25, 0.0, tgt_body.y)
+	var old_pole: Vector3 = Vector3(0.55, -1.0, 0.05).lerp(Vector3(1.0, 0.05, -0.3), old_high)
+	# Round 29 high hold: clavicle shrug + protraction, elbow out to the side
+	# and a little below the wrist, target measured from the ACTUAL posed eye
+	# (looking up tips the head back, carrying the eye back/down).
+	var lift: float = up * (0.5 + 0.5 * smoothstep(0.0, deg_to_rad(40.0), e)) * smoothstep(0.0, 1.0, _watch_raise_progress)
+	_rig.set_local("RightShoulder", Quaternion(Vector3.UP, deg_to_rad(WATCH_CLAVICLE_PROTRACTION_DEG) * lift) * Quaternion(Vector3.BACK, deg_to_rad(WATCH_CLAVICLE_ELEVATION_DEG) * lift))
+	var eye_ref: Vector3 = _rig.EYE_POINT.lerp(_rig_eye(), up)
+	var tgt: Vector3 = tgt_body + eye_ref + Vector3(0.12, 0.0, -0.06) * old_high * (1.0 - up)
+	var pole: Vector3 = old_pole.lerp(Vector3(0.85, -0.75, -0.25), up).lerp(Vector3(0.45, -1.0, -0.55), smoothstep(deg_to_rad(30.0), deg_to_rad(60.0), look_pitch))
+	# Gaze: while reading the watch the head bows toward it (on top of the
+	# shared look angles) -- the mirror shows someone LOOKING at their
+	# watch, not staring past it.
+	var to_watch: Vector3 = tgt_body.normalized()
+	var gaze: float = asin(clampf(to_watch.y, -1.0, 1.0)) - look_pitch
+	var gaze_head: float = clampf(gaze * 0.6, deg_to_rad(-30.0), 0.0) * smoothstep(0.3, 1.0, _watch_raise_progress)
+	_rig.set_local("Head", _rig.get_local("Head") * Quaternion(Vector3.RIGHT, gaze_head))
+	if tgt.distance_to(_rig_roll_target) > 0.001:
+		_rig_roll_target = tgt
+		_rig_roll = _rig.watch_roll_toward(eye_ref, tgt, pole)
+	_rig.pose_arm_ik("Right", tgt, pole, _watch_raise_progress, _rig_roll, _WRIST_LEVEL_FRACTION)
+	# High holds: the hand relaxes forward at the wrist (flexion AWAY from
+	# the eye) instead of standing upright like a wave; the dial is on the
+	# back of the wrist, so it stays clear and facing the eye.
+	var relax: float = deg_to_rad(WATCH_HIGH_WRIST_RELAX_DEG) * up * smoothstep(0.3, 1.0, _watch_raise_progress)
+	if relax > 0.0:
+		var hp: Vector3 = _rig.bone_pos("RightHand")
+		var f: Vector3 = (hp - _rig.bone_pos("RightLowerArm")).normalized()
+		var axis: Vector3 = f.cross((eye_ref - hp).normalized())
+		if axis.length() > 0.05:
+			_rig.set_global("RightHand", Basis(axis.normalized(), -relax) * _rig.bone_basis("RightHand"))
+
+
+const WATCH_HIGH_WRIST_RELAX_DEG: float = 55.0
+
+
+## Priority 5 (Round 28): the right hand genuinely holds the carried part.
+## Carry pose: forearm forward, hand in front of the right hip/belly,
+## within reach. Reach sequence: hand OUT to the part (which stays put),
+## grasp, then both travel back to the carry pose.
+func _pose_carry_arm(delta: float) -> void:
+	var hold_body: Vector3 = CARRY_HAND_TARGET
+	var blend: float = _carry_blend
+	var carry: Node = _carry_system()
+	if carry == null or not (carry.is_carrying() or (carry.has_method("is_reaching") and carry.is_reaching())):
+		# Released (dropped/stowed/installed), possibly mid-reach: the arm
+		# eases home from where the hand ACTUALLY was, never from the
+		# nominal carry pose (that jumped the hand ~0.9 m in one frame).
+		for n in _CARRY_ARM_BONES.size():
+			_rig.set_local(_CARRY_ARM_BONES[n], Quaternion.IDENTITY.slerp(_last_arm_rot[n], blend))
+		return
+	if _reach_t >= 0.0:
+		_reach_t += delta
+		var grasp: Vector3 = _reach_from_body + Vector3(0.0, 0.07, 0.0)
+		if _reach_t >= REACH_OUT_S and not _grasp_sent:
+			# The hand has arrived: ownership transfers NOW.
+			_grasp_sent = true
+			if carry != null and carry.has_method("complete_grasp") and carry.is_reaching():
+				if not carry.complete_grasp():
+					return
+		if _reach_t < REACH_OUT_S:
+			hold_body = grasp
+			# Linear here: pose_arm_ik() already eases each joint (shoulder
+			# leads, elbow, then wrist); a second ease doubled the peak hand
+			# speed (~9 m/s measured) into a snap.
+			blend = clampf(_reach_t / REACH_OUT_S, 0.0, 1.0)
+		else:
+			var k: float = smoothstep(REACH_OUT_S, REACH_TOTAL_S, _reach_t)
+			hold_body = grasp.lerp(CARRY_HAND_TARGET, k)
+			if _reach_t >= REACH_TOTAL_S:
+				_reach_t = -1.0
+			else:
+				# Return to the carry pose in JOINT space (slerp between the
+				# solved grasp and carry arms): sliding the IK target in a
+				# straight line swung the elbow through its pole region at
+				# ~7 m/s mid-return.
+				var pole := Vector3(0.9, -1.0, 0.2)
+				var roll: float = deg_to_rad(-70.0)
+				var bones := ["RightUpperArm", "RightLowerArm", "RightHand"]
+				_rig.pose_arm_ik("Right", grasp + _rig.EYE_POINT, pole, 1.0, roll, 0.0)
+				var qa: Array = bones.map(func(b): return _rig.get_local(b))
+				_rig.pose_arm_ik("Right", CARRY_HAND_TARGET + _rig.EYE_POINT, pole, 1.0, roll, 0.0)
+				for n in bones.size():
+					_rig.set_local(bones[n], (qa[n] as Quaternion).slerp(_rig.get_local(bones[n]), k))
+				_last_hold_body = hold_body
+				_remember_arm()
+				return
+			blend = 1.0
+	if _place_t >= 0.0:
+		# Round 32 place gesture: the hand carries the part out to the place
+		# point (still held), then carry_system releases it there.
+		_place_t += delta
+		hold_body = hold_body.lerp(_place_target_body, smoothstep(0.0, _place_dur, _place_t))
+		var carry_c: Node = _carry_system()
+		if carry_c == null or not carry_c.is_carrying():
+			_place_t = -1.0
+	_last_hold_body = hold_body
+	var hold: Vector3 = hold_body + _rig.EYE_POINT
+	_rig.pose_arm_ik("Right", hold, Vector3(0.9, -1.0, 0.2), blend, deg_to_rad(-70.0) * blend, 0.0)
+	_remember_arm()
+
+
+## The carry arm as last SHOWN (local rotations) -- a release eases from
+## exactly this to rest, whatever phase the reach/carry was in.
+const _CARRY_ARM_BONES := ["RightUpperArm", "RightLowerArm", "RightHand"]
+var _last_arm_rot: Array = [Quaternion.IDENTITY, Quaternion.IDENTITY, Quaternion.IDENTITY]
+
+
+func _remember_arm() -> void:
+	for n in _CARRY_ARM_BONES.size():
+		_last_arm_rot[n] = _rig.get_local(_CARRY_ARM_BONES[n])
+
+
+## Seated pose in BODY space, independent of where the body currently is
+## (SittingPose's own transform is identity, so its anchors' local
+## positions are body-space): reclined spine, look, eye pinned to the
+## body origin (= the seated camera), legs/hands IK'd to the tested
+## legacy sitting anchors (get-up leg swing, laptop reach).
+func _compose_seated() -> void:
+	_rig.pose_sit()
+	# Recline + placement are solved at a NEUTRAL look so the pelvis stays
+	# planted on the mattress whatever the player looks at; the look then
+	# bends neck/head/upper spine and the camera follows that posed eye
+	# (see _update_eye_anchor(), same anatomical anchor as standing).
+	_pose_rig_seated_recline()
+	var neutral_eye: Vector3 = _rig_eye()
+	if _pose_state != null:
+		_rig.pose_look(_pose_state.spine_pitch, _pose_state.neck_pitch, _pose_state.head_pitch)
+	# _seated_follow_w = 1: pelvis planted, camera follows the posed head.
+	# 0 (laptop open): the posed eye itself is pinned to the camera, so the
+	# laptop/editor framing (which positions the CAMERA) is never shifted
+	# by the head; the pelvis absorbs it instead. Blended, so no jump.
+	var posed_eye: Vector3 = _rig_eye()
+	_seated_pin_shift = (posed_eye - neutral_eye) * (1.0 - _seated_follow_w)
+	_rig.transform = Transform3D(Basis(), -(neutral_eye + _seated_pin_shift))
+	# The legacy anchors were authored around the legacy hip; the reclined
+	# rig's pelvis sits a little fore/aft of it, so the feet and hands move
+	# with the pelvis (horizontal shift only -- floor contact stays on the
+	# floor) and the legs keep their authored hip->ankle geometry instead
+	# of folding the knees up toward the chest.
+	var hip_shift: Vector3 = _rig.transform * _rig.bone_pos("Hips") - _sitting_pose.get_node("Hips").position
+	hip_shift.y = 0.0
+	for side in ["Left", "Right"]:
+		var suffix: String = side.substr(0, 1)
+		var ankle_node: Node3D = _sitting_pose.get_node("Ankle" + suffix)
+		var ankle_b: Vector3 = ankle_node.position + hip_shift
+		if seated_on_bed:
+			# Round 30 Priority 2: on the bunk the legs lie OUT along the
+			# mattress (thighs flat, knees soft) -- the folded legacy anchors
+			# raised the knees in front of the laptop screen. The get-up leg
+			# swing (which moves the legacy ankle anchors) blends back to them.
+			var hip_j: Vector3 = _rig.transform * _rig.bone_pos(side + "UpperLeg")
+			var out := hip_j + Vector3(0.0, BED_LEG_DROP, -BED_LEG_REACH)
+			var swing: float = 0.0
+			var key: String = "Ankle" + suffix
+			if _leg_rest_transform.has(key):
+				swing = clampf(ankle_node.position.distance_to((_leg_rest_transform[key] as Transform3D).origin) / 0.35, 0.0, 1.0)
+			ankle_b = out.lerp(ankle_b, smoothstep(0.0, 1.0, swing))
+		_rig.pose_leg_ik(side, _rig.transform.affine_inverse() * ankle_b)
+	_place_lap_anchor()
+	for side in ["Left", "Right"]:
+		var suffix: String = side.substr(0, 1)
+		var hand_b: Vector3 = _sitting_pose.get_node("Hand" + suffix).position + hip_shift
+		var sx: float = 1.0 if side == "Right" else -1.0
+		var kb: Variant = _laptop_hand_target(side)
+		if kb != null:
+			hand_b = kb
+		_rig.pose_arm_ik(side, _rig.transform.affine_inverse() * hand_b, Vector3(sx, -1.0, 0.3), 1.0, 0.0, 0.0)
+
+
+## Round 30 Priority 2: seat style + lap placement. sleep_state.gd sets
+## seated_on_bed (legs out along the mattress, laptop on the thighs); the
+## workstation chair keeps the legacy anchors.
+var seated_on_bed: bool = false
+const BED_LEG_REACH: float = 0.74   # hip joint -> ankle, along the mattress
+const BED_LEG_DROP: float = -0.06
+## Laptop base rests this far above the thighs' centre line (thigh radius
+## ~0.085 m + a little clearance).
+const LAP_ABOVE_THIGH: float = 0.1
+## laptop_view.gd's held_local_rotation_degrees.x (front edge down).
+const LAPTOP_HOLD_PITCH_DEG: float = 20.0
+var _lap_anchor_rest = null
+
+
+func set_seat_style(on_bed: bool) -> void:
+	seated_on_bed = on_bed
+
+
+## LapAnchor rides on top of the rig's actual thighs (midway hip->knee,
+## both legs) while seated on the bunk; elsewhere it keeps its authored
+## spot. The laptop is parented to it while open/held.
+func _place_lap_anchor() -> void:
+	var lap: Node3D = get_node_or_null("LapAnchor")
+	if lap == null:
+		return
+	if _lap_anchor_rest == null:
+		_lap_anchor_rest = lap.position
+	if not seated_on_bed or _pose != Pose.SITTING:
+		lap.position = _lap_anchor_rest
+		lap.basis = Basis()
+		return
+	var mid := Vector3.ZERO
+	var slope := 0.0
+	for side in ["Left", "Right"]:
+		var a: Vector3 = _rig.transform * _rig.bone_pos(side + "UpperLeg")
+		var b: Vector3 = _rig.transform * _rig.bone_pos(side + "LowerLeg")
+		mid += a.lerp(b, 0.62)
+		slope += atan2(b.y - a.y, Vector2(b.x - a.x, b.z - a.z).length())
+	mid *= 0.5
+	slope *= 0.5
+	# From the NEUTRAL seated placement: while the laptop is open the rig
+	# slides a little to keep the eye on the camera as the head moves; the
+	# laptop must not drift with the player's look.
+	lap.position = mid + _seated_pin_shift + Vector3(0.0, LAP_ABOVE_THIGH, 0.0)
+	# The base lies ALONG the thighs: they rise toward the knees, and
+	# laptop_view.gd holds the laptop pitched -20 deg (front edge down), so
+	# the anchor pitches up by the thigh slope plus that hold angle.
+	lap.basis = Basis(Vector3.RIGHT, slope + deg_to_rad(LAPTOP_HOLD_PITCH_DEG))
+
+
+## While the laptop is open on the lap, the hands rest on its keyboard
+## (palm heels at the front edge), in body space. null otherwise.
+func _laptop_hand_target(side: String) -> Variant:
+	var lap: Node3D = get_node_or_null("LapAnchor")
+	if lap == null or not seated_on_bed:
+		return null
+	for c in lap.get_children():
+		if c is Node3D and "is_open" in c and c.is_open:
+			var sx: float = 0.075 if side == "Right" else -0.075
+			return to_local((c as Node3D).to_global(Vector3(sx, 0.03, 0.06)))
+	return null
+
+
+## Round 29 Priority 2/7: sit-down preview. The logical pose (and every
+## caller's timing) is unchanged -- set_sitting(true) still arrives only
+## once the sit-down tween settles -- but while the camera travels to the
+## seat, the VISIBLE body eases from the live standing pose into the
+## final seated pose already placed at the seat (world space), instead of
+## the standing body being dragged down through the bunk with the camera
+## and then snapping. Started by begin_sit_down().
+var _sit_preview_t: float = -1.0
+var _sit_preview_dur: float = 1.0
+var _sit_preview_eye: Vector3 = Vector3.ZERO
+var _sit_preview_w: float = 0.0
+
+
+func begin_sit_down(seat_eye_global: Vector3, duration: float) -> void:
+	if _rig == null or _pose != Pose.STANDING:
+		return
+	_sit_preview_t = 0.0
+	_sit_preview_dur = maxf(duration, 0.05)
+	_sit_preview_eye = seat_eye_global
+	_sit_preview_w = 0.0
+
+
+func sit_down_preview_weight() -> float:
+	return _sit_preview_w if _sit_preview_t >= 0.0 else 0.0
+
+
+func _compose_sit_preview(delta: float) -> void:
+	_sit_preview_t += delta
+	if _sit_preview_t > _sit_preview_dur + 1.5:
+		# The sit was abandoned without ever settling: ease back to
+		# standing through the ordinary pose-switch crossfade.
+		_sit_preview_t = -1.0
+		_rig_snap = _rig_applied
+		_rig_snap_gxf = _rig_applied_gxf
+		_rig_xfade_t = 0.0
+		return
+	_sit_preview_w = smoothstep(0.0, _sit_preview_dur, _sit_preview_t)
+	var stand: Dictionary = _rig.snapshot()
+	_rig.reset_pose()
+	_compose_seated()
+	# Where the body WILL be once seated: the seat eye, seated yaw.
+	var parent_g: Transform3D = get_parent().global_transform if get_parent() is Node3D else Transform3D()
+	var seat_body := Transform3D(parent_g.basis.orthonormalized() * Basis(Vector3.UP, deg_to_rad(sitting_world_yaw_degrees)), _sit_preview_eye)
+	_rig.transform = global_transform.affine_inverse() * seat_body * _rig.transform
+	_rig.crossfade_from(stand, _sit_preview_w)
+	_eye_offset_cached *= (1.0 - _sit_preview_w)
+
+
+## Pose SWITCH (stand/sit/lie): crossfade from what was last SHOWN (in
+## world space -- the body's own yaw changes at the switch). Called by
+## set_sitting()/set_lying() at the moment of the switch, so the snapshot
+## never depends on whether a tween callback ran before or after this
+## node's _process() that frame.
+func _begin_pose_crossfade(new_pose: int) -> void:
+	if _rig == null or new_pose == _rig_shown_pose:
+		return
+	if _rig_shown_pose != -1 and not _rig_applied.is_empty():
+		_rig_snap = _rig_applied
+		_rig_snap_gxf = _rig_applied_gxf
+		_rig_xfade_t = 0.0
+		var cam0: Node3D = _pitch_pivot.get_node_or_null("Camera3D")
+		_cam_from = cam0.position if cam0 != null else Vector3.ZERO
+	_rig_shown_pose = new_pose
+
+
+const POSE_XFADE_S: float = 0.4
+## Duration of the current pose-switch crossfade (lying down / sitting up
+## use their whole transition time).
+var _xfade_dur: float = POSE_XFADE_S
+var _rig_shown_pose: int = -1
+var _rig_snap: Dictionary = {}
+var _rig_snap_gxf: Transform3D = Transform3D()
+var _rig_xfade_t: float = 1.0
+var _rig_applied: Dictionary = {}
+var _rig_applied_gxf: Transform3D = Transform3D()
+var _cam_from: Vector3 = Vector3.ZERO
+var _eye_offset_cached: Vector3 = Vector3.ZERO
+
+
+## Round 29 Priority 2 ROOT CAUSE ("sitting on the bed, the body covers the
+## screen"): the legacy SittingPose anchors describe a RECLINED sitter --
+## hips 0.20m in FRONT of and 0.56m below the eye, shoulders behind it --
+## but the rig sat bolt upright on those hips, so its head landed 0.38m in
+## front of the camera. The camera was therefore BEHIND the character's
+## head: neck, shoulders and upper back sat 0.22-0.29m ahead of the lens
+## and filled the frame (measured; only the head itself is camera-hidden).
+## Fix: lean the rig back from its pelvis toward the legacy hips->eye
+## direction (a person leaning back against the bunk wall), then pin its
+## posed eye exactly on the camera (body origin). The camera, LookPivot,
+## laptop framing and capsule are untouched.
+func _pose_rig_seated_recline() -> void:
+	# Two constraints: the eye exactly on the camera (body origin) AND the
+	# pelvis resting at seat height (the legacy hip anchor's height, so the
+	# seat never sinks into or floats above the mattress). With the torso's
+	# hips->eye length fixed by the current pose (look included), the
+	# recline angle is what satisfies both; the pelvis slides a few cm
+	# fore/aft as the head moves, which is what a reclined sitter does.
+	var seat_y: float = _sitting_pose.get_node("Hips").position.y + SEATED_HIP_RAISE
+	var recline: float = 0.0
+	for _i in 3:
+		_rig.set_local("Hips", Quaternion(Vector3.RIGHT, recline * 0.4))
+		_rig.set_local("Spine", Quaternion(Vector3.RIGHT, deg_to_rad(-4.0) + recline * 0.6))
+		var have: Vector3 = _rig_eye() - _rig.bone_pos("Hips")
+		var h: float = -seat_y                     # wanted hips->eye height
+		var len_yz: float = Vector2(have.y, have.z).length()
+		var want_z: float = sqrt(maxf(len_yz * len_yz - h * h, 0.0))  # eye BEHIND hips (+Z)
+		var ang_have: float = atan2(have.z, have.y)
+		var ang_want: float = atan2(want_z, h)
+		recline = clampf(recline + (ang_want - ang_have), deg_to_rad(-10.0), deg_to_rad(45.0))
+	_rig.set_local("Hips", Quaternion(Vector3.RIGHT, recline * 0.4))
+	_rig.set_local("Spine", Quaternion(Vector3.RIGHT, deg_to_rad(-4.0) + recline * 0.6))
+	_seated_recline = recline
+
+
+## The rig's Hips bone sits ~2cm above the legacy pelvis-centre anchor for
+## the same seat contact (the rig's buttocks are ~0.13m below that bone).
+const SEATED_HIP_RAISE: float = 0.02
+var _seated_follow_w: float = 1.0
+var _seated_pin_shift: Vector3 = Vector3.ZERO
+var _seated_follow_target: float = 1.0
+
+
+## sleep_state.gd turns seated head-follow OFF while the laptop is open
+## (its zoom/aim tweens place the camera precisely) and back ON after.
+func set_seated_head_follow(enabled: bool) -> void:
+	_seated_follow_target = 1.0 if enabled else 0.0
+
+
+func seated_head_follow_weight() -> float:
+	return _seated_follow_w
+var _seated_recline: float = 0.0
+
+
+## The rig's eye point under its CURRENT pose, in rig space.
+func _rig_eye() -> Vector3:
+	return _rig.bone_pos("Head") + _rig.bone_basis("Head") * (_rig.EYE_POINT - _rig.rest_pos("Head"))
+
+
+## Round 28 Priority 5: the carried item sits IN the rig's right palm.
+## carry_system.gd parents the item to CarryAnchor at a fixed local offset
+## (held_local_position); here CarryAnchor itself follows the palm so the
+## item and the hand stay together through pickup, carry and drop. Before
+## and after carrying, CarryAnchor returns to its authored position.
+const CARRY_HAND_TARGET: Vector3 = Vector3(0.17, -0.62, -0.30)
+var _carry_anchor_rest = null
+
+
+## Reach sequence: [0, REACH_OUT_S) hand travels to the item (item stays
+## put), then the hand grasps and both travel to the carry pose by
+## REACH_TOTAL_S. -1 = no reach in progress.
+const REACH_OUT_S: float = 0.6
+var _last_hold_body: Vector3 = CARRY_HAND_TARGET
+const REACH_TOTAL_S: float = 1.2
+var _reach_t: float = -1.0
+var _reach_from_body: Vector3 = Vector3.ZERO
+var _carry_connected: bool = false
+
+
+## Round 32: place gesture toward `target_global` (the part's centre).
+var _place_t: float = -1.0
+var _place_dur: float = 0.35
+var _place_target_body: Vector3 = Vector3.ZERO
+
+
+const PLACE_LEAN_MAX_DEG: float = 35.0
+var _place_lean: float = 0.0
+var _lean_w: float = 0.0
+
+
+func begin_place(target_global: Vector3, duration: float) -> void:
+	_place_t = 0.0
+	_place_dur = maxf(duration, 0.05)
+	# Lean in proportion to how far below hand height the spot is.
+	var below: float = global_position.y - target_global.y
+	_place_lean = clampf((below - 0.6) / 0.45, 0.0, 1.0)
+	# The palm sits ~7 cm above the held part's centre.
+	_place_target_body = to_local(target_global) + Vector3(0.0, 0.07, 0.0)
+
+
+func is_placing() -> bool:
+	return _place_t >= 0.0
+
+
+## Round 31 Priority 7: a physical reach is possible (rig present, standing,
+## not mid sit-down); otherwise carry_system.gd claims the part at once.
+func can_reach() -> bool:
+	return _rig != null and _pose == Pose.STANDING and _sit_preview_t < 0.0
+
+
+## The reach was cancelled before the grasp: the arm eases home from where
+## it was (the release branch of _pose_carry_arm()).
+func cancel_reach() -> void:
+	_reach_t = -1.0
+	_grasp_sent = true
+
+
+var _grasp_sent: bool = true
+
+
+func _on_item_picked_up(_item: Node3D, from_global: Transform3D) -> void:
+	_grasp_sent = false
+	_reach_from_body = to_local(from_global.origin)
+	_reach_t = 0.0 if _pose == Pose.STANDING and _rig != null else -1.0
+
+
+func is_reaching() -> bool:
+	return _reach_t >= 0.0
+
+
+func _palm_body() -> Vector3:
+	var palm_rig: Vector3 = _rig.bone_pos("RightHand") + _rig.bone_basis("RightHand") * Vector3(0.0, -0.07, -0.01)
+	return to_local(_rig.to_global(palm_rig))
+
+
+func _update_carry_anchor() -> void:
+	var anchor: Node3D = get_node_or_null("CarryAnchor")
+	if anchor == null:
+		return
+	if _carry_anchor_rest == null:
+		_carry_anchor_rest = anchor.position
+	var carry: Node = _carry_system()
+	if carry != null and not _carry_connected and carry.has_signal("item_picked_up"):
+		carry.item_picked_up.connect(_on_item_picked_up)
+		_carry_connected = true
+	if carry != null and carry.has_method("is_reaching") and carry.is_reaching():
+		anchor.position = _carry_anchor_rest   # the part is not in the hand yet
+		return
+	if carry == null or not carry.is_carrying() or _pose != Pose.STANDING or _rig == null:
+		anchor.position = _carry_anchor_rest
+		_reach_t = -1.0
+		return
+	var held: Vector3 = carry.held_local_position
+	if _reach_t >= 0.0 and _reach_t < REACH_OUT_S:
+		# Hand still on its way: the part stays exactly where it was.
+		anchor.position = _reach_from_body - held
+		return
+	# Grasped: the part rides in the palm.
+	anchor.position = _palm_body() - held
+
+
+## Round 29 Priority 5: gait. ROOT CAUSES of "the steps look too large"
+## (measured with real W input): the old cycle advanced one step per
+## 0.75m while footstep sounds play every 0.85m (so contacts drifted
+## against the sounds), its legs swung +/-24 deg with 38 deg knees like
+## pendulums, and the "planted" foot slid at 1.38 m/s in the world (77% of
+## walking speed). Now: contacts are locked to the footstep accumulator
+## itself (free_move_controller.gd gait_position(): a heel strike at every
+## footstep sound), feet are PLACED by leg IK on a shorter 0.55m sweep
+## (0.25 ahead / 0.30 behind; thighs within ~22 deg instead of 24 deg plus
+## 38 deg pendulum knees) with a swing arc, each foot is on the ground for
+## 68% of a step period (so its sweep matches the ground it covers), and
+## the pelvis drops a few cm so the knees stay softly flexed. At 1.8 m/s
+## and an 0.85m cadence the footprint spacing itself is fixed by physics
+## (speed / cadence); see test_gait_footsteps.gd for measured slide.
+var gait_source: Node = null
+const GAIT_STEP_DISTANCE: float = 0.85
+const GAIT_REACH_AHEAD: float = 0.25
+const GAIT_REACH_BEHIND: float = 0.30
+const GAIT_PELVIS_DROP: float = 0.02
+const GAIT_TELEPORT_SPEED: float = 6.0
+var _gait_own: float = 0.0
+var _gait_offset: float = 0.0
+var _gait_last: float = 0.0
+var _gait_used_src: bool = false
+var _gait_raw_prev: float = 0.0
+var _speed_est: float = 0.0
+var _gait_dir: Vector2 = Vector2(0.0, -1.0)
+
+
+func gait_position() -> float:
+	var use_src: bool = gait_source != null and gait_source.has_method("gait_position") and "active" in gait_source and gait_source.active
+	var raw: float = gait_source.gait_position() if use_src else _gait_own
+	if use_src != _gait_used_src or raw < _gait_raw_prev - 0.0005:
+		# Source switch (free movement re-activated after a scripted move)
+		# or an accumulator reset (stopping restarts the stride at a whole
+		# step): keep the legs' phase continuous; the offset is dropped once
+		# the legs are at rest, so contacts re-lock to the footstep sounds
+		# for the next walk.
+		_gait_offset = _gait_last - raw
+		_gait_used_src = use_src
+	_gait_raw_prev = raw
+	if _walk_amount < 0.02:
+		_gait_offset = 0.0
+	_gait_last = raw + _gait_offset
+	return _gait_last
+
+
+func walk_amount() -> float:
+	return _walk_amount
+
+
+func _update_rig_walk(delta: float) -> void:
+	var gp: Vector3 = global_position
+	var moved := Vector3.ZERO
+	if delta > 0.0 and is_finite(_last_global_pos.x):
+		moved = Vector3(gp.x - _last_global_pos.x, 0.0, gp.z - _last_global_pos.z)
+		# A teleport (scene setup, the post-sit sync) is not walking: an
+		# implausible per-frame speed would kick the walk blend on.
+		if moved.length() / delta > GAIT_TELEPORT_SPEED:
+			moved = Vector3.ZERO
+	_last_global_pos = gp
+	var step_d: float = gait_source.step_distance if gait_source != null and "step_distance" in gait_source else GAIT_STEP_DISTANCE
+	if moved.length() > 0.0005:
+		_gait_own += moved.length() / step_d
+	elif delta > 0.0:
+		_gait_own = floorf(_gait_own)  # same "stopped -> restart the stride" rule
+	# Speed: low-passed (render frames can outnumber physics ticks, so many
+	# frames see zero displacement -- the old per-frame estimate collapsed
+	# the walk blend to ~0 at high frame rates).
+	if delta > 0.0:
+		var inst: float = moved.length() / delta
+		_speed_est = lerpf(_speed_est, inst, 1.0 - exp(-delta * 12.0))
+		var v: Vector3 = moved / delta
+		if gait_source != null and gait_source.has_method("horizontal_velocity") and gait_source.active:
+			v = gait_source.horizontal_velocity()
+		var vb: Vector3 = global_basis.orthonormalized().inverse() * v
+		if Vector2(vb.x, vb.z).length() > 0.2:
+			_gait_dir = _gait_dir.lerp(Vector2(vb.x, vb.z).normalized(), 1.0 - exp(-delta * 10.0)).normalized()
+	var target: float = clampf(_speed_est / 1.6, 0.0, 1.0) if _speed_est > 0.08 else 0.0
+	_walk_amount = move_toward(_walk_amount, target, delta * 4.0) if delta > 0.0 else target
+	# Any continuity offset bleeds away while walking (<= 0.8 step/s), so
+	# heel strikes always re-lock onto the footstep sounds.
+	if delta > 0.0:
+		_gait_offset = move_toward(_gait_offset, 0.0, delta * 0.8)
+	_walk_phase = gait_position()
+	if _walk_amount > 0.01:
+		_rig.transform.origin.y -= GAIT_PELVIS_DROP * _walk_amount
+		_rig.pose_gait(_walk_phase, _gait_dir, _walk_amount, GAIT_REACH_AHEAD, GAIT_REACH_BEHIND, _watch_raise_progress <= 0.0 and _carry_blend <= 0.0)
+
+
+func set_watch_text(text: String) -> void:
+	if _rig != null:
+		_rig.set_watch_text(_compact_watch_text(text))
+
+
+## The rig's real-size 48mm dial shows short glanceable codes: the same
+## message as wristwatch_view.gd composes, with room names abbreviated
+## (e.g. "CHECK IN\nCONTROL ROOM" -> "CHECK IN\nCTRL RM").
+const _WATCH_ABBREV := {"CONTROL ROOM": "CTRL RM", "ENGINEERING": "ENGR", "LIFE SUPPORT": "LIFE SUP", "COMMUNICATIONS": "COMMS", "LIVING QUARTERS": "QUARTERS", "STORAGE": "STORAGE"}
+
+
+static func _compact_watch_text(text: String) -> String:
+	var out: String = text
+	for k in _WATCH_ABBREV:
+		out = out.replace(k, _WATCH_ABBREV[k])
+	return out
+
+
+## Round 28 Priority 1: anatomical eye anchor. ROOT CAUSE of the remaining
+## straight-down view problem, confirmed by render with the rig in place:
+## the camera ROTATED IN PLACE at the eye, so at 80 deg down the lower half
+## of the 72 deg frame looked ~26 deg BEHIND vertical, straight onto the
+## top of the player's own chest/shoulders -- a view no real eye has,
+## because looking down flexes the neck and carries the eyes forward and
+## down around it. While standing, the camera node follows the rig's posed
+## head (the pose the mirror shows), see eye_anchor_offset(). Only the Camera3D's LOCAL offset changes -- the
+## LookPivot/PitchPivot controller, capsule and movement are untouched, and
+## at a level look the offset is exactly zero. The interaction ray and the
+## flashlight live on/under this camera, so they move with the eye.
+var _eye_anchor_active: bool = false
+
+
+## The eye's displacement (body space) from its rest point for the rig's
+## CURRENT posed head: the eye is carried by the same spine/neck/head bone
+## rotations the mirror shows (CharacterPoseState's anatomical split), so the
+## camera sits exactly where the reflected character's eyes are.
+func eye_anchor_offset() -> Vector3:
+	if _rig == null or _pose != Pose.STANDING:
+		return Vector3.ZERO
+	# Computed from the TARGET pose before any pose-switch crossfade, so a
+	# half-blended seated/standing skeleton never drags the camera.
+	return _eye_offset_cached
+
+
+## Round 29 Priority 2: per-pose camera target (Camera3D LOCAL position):
+## - standing: the anatomical eye anchor above;
+## - sitting: the seated rig's posed eye (zero at a neutral look -- the
+##   rig is placed so its neutral eye IS the seat camera);
+## - lying: the lying rig's eye (the camera lies where the head lies,
+##   looking up out of the face, never from inside the torso).
+## Pose switches blend from where the camera was, over the same
+## crossfade as the body, so getting up never jumps the view.
+func _update_eye_anchor() -> void:
+	var cam: Node3D = _pitch_pivot.get_node_or_null("Camera3D")
+	if cam == null:
+		return
+	if _rig == null:
+		if _eye_anchor_active:
+			cam.position = Vector3.ZERO
+			_eye_anchor_active = false
+		return
+	var target: Vector3 = Vector3.ZERO
+	match _pose:
+		Pose.STANDING:
+			target = _pitch_pivot.basis.inverse() * eye_anchor_offset()
+		Pose.SITTING, Pose.LYING:
+			# An OFFSET from the body origin, rotated into PitchPivot space --
+			# never an absolute position, so LookPivot's own offsets (the
+			# laptop editor zoom) still move the camera.
+			var eye_body: Vector3 = _rig.transform * _rig_eye()
+			target = (cam.get_parent() as Node3D).global_basis.orthonormalized().inverse() * (global_basis.orthonormalized() * eye_body)
+	if _rig_xfade_t < 1.0:
+		target = _cam_from.lerp(target, smoothstep(0.0, 1.0, _rig_xfade_t))
+	cam.position = target
+	_eye_anchor_active = target != Vector3.ZERO

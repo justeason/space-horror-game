@@ -39,9 +39,12 @@ func _init() -> void:
 			print("FAIL: node Geometry/%s exists" % n)
 			_ok = false
 			continue
-		if node.use_collision:
+		# Round 30: furniture may collide on the dedicated contact layer (4)
+		# so dropped parts rest on it; it must still never collide on the
+		# player / interaction layer 1 (the invariant this check protects).
+		if node.use_collision and (node.collision_layer & 1) != 0:
 			any_collision = true
-			print("FAIL: Geometry/%s unexpectedly has use_collision=true" % n)
+			print("FAIL: Geometry/%s unexpectedly collides on layer 1" % n)
 			_ok = false
 	_check("new console dressing: none of the %d new pieces added collision" % new_node_names.size(), not any_collision)
 

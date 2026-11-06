@@ -55,6 +55,55 @@ extends StaticBody3D
 @onready var _calibration_view: Node = get_node_or_null(calibration_view_path)
 
 
+## Round 30 Priority 8: the first system that genuinely RECURS. Registered
+## with DayPlan's service re-arm hook: once the calibration is due again
+## (DayPlan.SERVICE_INTERVAL_DAYS) and every system has been serviced at
+## least once, a new Calibration work order starts with a recorded sensor
+## drift whose required-chamber count comes from the day's variant seed
+## (stable within the day, different across days). The minigame itself is
+## unchanged; completion is still DayPlan's l07.
+var _drift_day: int = -1
+var _drift_required: int = 0
+
+
+func _ready() -> void:
+	if _day_plan != null and _day_plan.has_method("register_service_rearm"):
+		_day_plan.register_service_rearm(_day_plan.Workday.CALIBRATION, _rearm_for_service)
+
+
+var _drift_seed: int = 0
+
+
+func _rearm_for_service(seed: int) -> void:
+	_drift_day = _day_plan.day_number
+	_drift_required = 1 + int(absi(seed) % 3)
+	# Round 31: WHICH chambers drift also comes from the day's seed (the
+	# calibration view shuffles its chamber list with it).
+	_drift_seed = seed
+
+
+## Today's drift seed (0 = no recorded drift today).
+func service_seed() -> int:
+	return _drift_seed if _drift_day == _day_plan.day_number else 0
+
+
+## Equipment condition (Round 31 Priority 8), from real state only.
+func condition() -> StringName:
+	if is_complete():
+		return &"restored" if _drift_day == _day_plan.day_number else &"nominal"
+	if has_recorded_drift() or (_day_plan.workday == _day_plan.Workday.CALIBRATION):
+		return &"service_due"
+	return &"nominal"
+
+
+func has_recorded_drift() -> bool:
+	return _drift_day == _day_plan.day_number and not is_complete()
+
+
+func service_required_count() -> int:
+	return _drift_required if _drift_day == _day_plan.day_number else 0
+
+
 func active_fault_count() -> int:
 	return clampi(fault_count, 1, 3)
 
@@ -68,6 +117,8 @@ func interact() -> void:
 func get_interact_prompt() -> String:
 	if _day_plan.is_task_done(&"l07"):
 		return "Click: Check Sensor Calibration (Nominal)"
+	if has_recorded_drift():
+		return "Click: Calibrate Environmental Sensor (drift detected)"
 	return "Click: Calibrate Environmental Sensor"
 
 

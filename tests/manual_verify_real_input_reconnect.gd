@@ -56,6 +56,7 @@ func _init() -> void:
 	terminal.interact()
 	terminal.interact()
 	carry.pick_up(wire)
+	await create_timer(0.7).timeout  # Round 31: the hand owns the part only at the grasp
 	terminal.interact()
 	for i in 5: await process_frame
 

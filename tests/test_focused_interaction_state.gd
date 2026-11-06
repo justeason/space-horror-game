@@ -46,6 +46,7 @@ func _init() -> void:
 	var terminal := panel.get_node("Terminal")
 	terminal.interact(); terminal.interact() # E01, E02
 	carry.pick_up(wire)
+	await create_timer(0.7).timeout  # Round 31: the hand owns the part only at the grasp
 	terminal.interact() # opens the focused repair procedure for real
 	await process_frame
 

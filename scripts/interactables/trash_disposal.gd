@@ -14,6 +14,8 @@ extends StaticBody3D
 @export var sfx_path: NodePath
 @export var message_label_path: NodePath
 @export var message_duration: float = 2.0
+## Round 28: optional DayPlan, told when the used filter is disposed.
+@export var day_plan_path: NodePath
 
 ## Which item_ids this bin accepts -- kept narrow (not "anything
 ## currently carried") so it reads as a specific parts-disposal point
@@ -24,6 +26,7 @@ const _ACCEPTED_ITEM_IDS: Array[StringName] = [&"used_filter_cartridge"]
 @onready var _carry_system: Node = get_node_or_null(carry_system_path)
 @onready var _sfx: Node = get_node_or_null(sfx_path)
 @onready var _message_label: Label = get_node_or_null(message_label_path)
+@onready var _day_plan: Node = get_node_or_null(day_plan_path)
 ## Round 22 Priority 2/6: a brief hinged-flap open/close on a successful
 ## disposal -- the "small but clear physical interaction feel" Priority
 ## 6 asked for, reusing the exact same hinge-rotation-tween pattern
@@ -40,11 +43,16 @@ var _disposed_count: int = 0
 var _flap_tween: Tween
 
 
+func _ready() -> void:
+	add_to_group(&"no_place")   # Round 32: not a place-gesture surface
+
+
 func _process(delta: float) -> void:
 	if _message_timer > 0.0:
 		_message_timer -= delta
 		if _message_timer <= 0.0 and _message_label != null:
-			_message_label.visible = false
+			if _message_label.get_meta(&"msg_owner", 0) == get_instance_id():   # shared HUD label: hide only our own message
+				_message_label.visible = false
 
 
 func interact() -> void:
@@ -56,11 +64,16 @@ func interact() -> void:
 		_show_message("That doesn't belong in this disposal unit.")
 		return
 	var item: Node3D = _carry_system.take_carried_item_if_matches(carried_id)
+	var dpl: Node = get_node_or_null(day_plan_path)
+	if item != null and dpl != null and dpl.has_method("log_event"):
+		dpl.log_event("Disposed: %s" % (item.get_display_name() if item.has_method("get_display_name") else "part"))
 	if item == null:
 		return
 	if item.has_method("dispose"):
 		item.dispose()
 	_disposed_count += 1
+	if _day_plan != null and carried_id == &"used_filter_cartridge":
+		_day_plan.record_fact(&"disposed:used_filter")
 	if _sfx != null:
 		_sfx.play_kind(&"success")
 	_show_message("Disposed of used filter cartridge.")
@@ -109,5 +122,6 @@ func _show_message(text: String) -> void:
 	if _message_label == null:
 		return
 	_message_label.text = text
+	_message_label.set_meta(&"msg_owner", get_instance_id())
 	_message_label.visible = true
 	_message_timer = message_duration

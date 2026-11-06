@@ -30,6 +30,11 @@ var mirror_enabled: bool = true
 func _ready() -> void:
 	_free_body.look_pivot = _player.get_node("LookPivot")
 	_free_body.footsteps = _player.get_node("Footsteps")
+	# Round 29 Priority 5: the visible gait is locked to the same footstep
+	# accumulator that plays the sounds.
+	var body: Node = _player.get_node_or_null("PlayerBody")
+	if body != null and "gait_source" in body:
+		body.gait_source = _free_body
 
 	_player.force_stop_movement()
 	_player.set_node_movement_enabled(false)

@@ -119,6 +119,23 @@ enum State { AWAKE, SITTING, LAPTOP, EDITING, SLEEPING }
 @export var get_up_stance_settle_duration: float = 0.25
 @export var get_up_rise_duration: float = 0.4
 @export var get_up_finish_duration: float = 0.35
+## Round 29: which way the seated body turns (degrees, added to its seated
+## yaw) and how far the seat eye slides while the legs swing down during
+## get-up -- authored for this bunk like sit_position: the bunk's open
+## long edge is on its west (-X) side.
+@export var get_up_turn_degrees: float = -90.0
+## Round 31 Priority 6: lying down to sleep.
+@export var lie_down_duration: float = 1.1
+@export var sit_up_duration: float = 1.0
+@export var lie_look_pitch_degrees: float = 55.0
+@export var mattress_top_y: float = 0.535
+@export var lie_position_xz: Vector2 = Vector2(5.0, -1.1)
+var _lying: bool = false
+@export var get_up_edge_offset: Vector3 = Vector3(-0.28, 0.0, 0.0)
+## ...and how much further the eye travels out over the planted feet as
+## it rises (stage 6), so the standing body never appears inside the bunk.
+@export var get_up_rise_offset: Vector3 = Vector3(-0.35, 0.0, 0.0)
+var _turn_tween: Tween
 
 ## Editor zoom: how far (0..1) from the ordinary sitting eye position
 ## toward the laptop screen's actual current position the view eases
@@ -254,6 +271,12 @@ func begin_sitting() -> void:
 	var yaw_delta: float = wrapf(deg_to_rad(sit_look_yaw_degrees) - current_yaw, -PI, PI)
 	_tween.tween_property(_look_pivot, "rotation:y", current_yaw + yaw_delta, transition_duration)
 	_tween.chain().tween_callback(_on_sit_settled)
+	# Round 29 Priority 7: visual only -- the body eases into the seated
+	# pose while the camera travels (set_sitting() timing unchanged).
+	if _player_body.has_method("set_seat_style"):
+		_player_body.set_seat_style(true)
+	if _player_body.has_method("begin_sit_down"):
+		_player_body.begin_sit_down(sit_position, transition_duration)
 	_update_prompt()
 
 	# TODO(day system): once a day/time system exists, this is where an
@@ -271,14 +294,51 @@ func begin_sitting() -> void:
 ## typed is silently discarded), then returned to its resting spot on
 ## the bed so it is never left floating at the lap position.
 func end_sitting() -> void:
-	if _state == State.AWAKE:
+	if _state == State.AWAKE or _state == State.SLEEPING:
 		return
+	if _lying:
+		_sit_up_then_get_up()
+		return
+	_begin_get_up()
+
+
+## Round 31: from lying, sit back up (crossfade over the whole move), then
+## run the ordinary staged get-up.
+func _sit_up_then_get_up() -> void:
+	_lying = false
+	_interaction_controller.interactions_enabled = false
+	_player_body.set_sitting(true, sit_up_duration)
+	_kill_tween()
+	_tween = create_tween()
+	_tween.set_parallel(true)
+	_tween.tween_property(_player, "global_position", sit_position, sit_up_duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_tween.tween_property(_pitch_pivot, "rotation:x", deg_to_rad(sit_look_pitch_degrees), sit_up_duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_look_pivot._target_pitch = deg_to_rad(sit_look_pitch_degrees)
+	_tween.chain().tween_callback(func():
+		_interaction_controller.interactions_enabled = true
+		_begin_get_up())
+
+
+func is_lying_in_bed() -> bool:
+	return _lying
+
+
+## Player (eye) position that rests the lying body's pelvis on the mattress.
+func _lying_eye_position() -> Vector3:
+	var hips: Node3D = _player_body.get_node_or_null("LyingPose/Hips")
+	var hy: float = hips.position.y if hips != null else -0.65
+	return Vector3(lie_position_xz.x, mattress_top_y + 0.02 - hy, lie_position_xz.y)
+
+
+func _begin_get_up() -> void:
 
 	_kill_zoom_tween()
 	_kill_laptop_aim_tween()
 	if _laptop_view.is_open():
 		_laptop_view.close()
 	_laptop_view.return_to_rest()
+	if _player_body.has_method("set_seated_head_follow"):
+		_player_body.set_seated_head_follow(true)
 	_look_controller.focus_assist_enabled = false
 	_look_controller.escape_enabled = true
 	# In case the player got up directly from EDITING (bypassing
@@ -344,9 +404,12 @@ func end_sitting() -> void:
 	# swaps to StandingPose, THEN finishes rising -- see the block
 	# comment above for why the swap can't happen at the very start of
 	# this stage.
-	_tween.tween_property(_player, "global_position:y", mid_rise_y, get_up_rise_duration * 0.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	# Round 29: rise FORWARD over the planted feet (beside the bunk), not
+	# straight up out of the mattress -- same stage durations.
+	var over_feet: Vector3 = base_pos + get_up_edge_offset + get_up_rise_offset
+	_tween.tween_property(_player, "global_position", Vector3(lerp(base_pos.x + get_up_edge_offset.x, over_feet.x, 0.6), mid_rise_y, lerp(base_pos.z + get_up_edge_offset.z, over_feet.z, 0.6)), get_up_rise_duration * 0.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	_tween.tween_callback(func(): _player_body.set_sitting(false))
-	_tween.tween_property(_player, "global_position:y", standing_y, get_up_rise_duration * 0.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_tween.tween_property(_player, "global_position", Vector3(over_feet.x, standing_y, over_feet.z), get_up_rise_duration * 0.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	# Stage 7 (finish standing): walk, at the now-correct standing eye
 	# height, from beside the bed to wherever the player was before
 	# sitting down, restoring normal movement once settled.
@@ -366,6 +429,16 @@ func end_sitting() -> void:
 	var total_duration: float = get_up_prepare_duration + get_up_leg_swing_duration * 2.0 + get_up_stance_settle_duration + get_up_rise_duration + get_up_finish_duration
 	_zoom_tween = create_tween()
 	_zoom_tween.tween_property(_look_pivot, "position", Vector3.ZERO, total_duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	# Round 29 Priority 2/7: swing round to the bunk's OPEN edge while the
+	# legs come down (parallel to stages 1-4, same total duration), so the
+	# feet plant on the floor beside the bunk instead of through the
+	# mattress. Seated body yaw + a short slide of the seat eye to the edge;
+	# the camera's look direction stays the player's own.
+	var swing_time: float = get_up_prepare_duration + get_up_leg_swing_duration * 2.0
+	_turn_tween = create_tween()
+	_turn_tween.set_parallel(true)
+	_turn_tween.tween_property(_player_body, "rotation:y", deg_to_rad(sitting_world_yaw_for_get_up() + get_up_turn_degrees), swing_time).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_turn_tween.tween_property(_player, "global_position", base_pos + get_up_edge_offset, swing_time).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	_update_prompt()
 
 
@@ -398,6 +471,20 @@ func begin_sleep() -> void:
 
 	_kill_eyes_tween()
 	_eyes_tween = create_tween()
+	# Round 31 Priority 6: lie down on the mattress FIRST (skeleton
+	# crossfade over the whole move, camera easing to the lying eye and
+	# looking up), then the unchanged eyes-closing sequence. Waking leaves
+	# the player lying; E sits up and gets up.
+	if not _lying:
+		_lying = true
+		var lie_eye: Vector3 = _lying_eye_position()
+		_player_body.set_lying(true, lie_down_duration)
+		var lt: Tween = create_tween()
+		lt.set_parallel(true)
+		lt.tween_property(_player, "global_position", lie_eye, lie_down_duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		lt.tween_property(_pitch_pivot, "rotation:x", deg_to_rad(lie_look_pitch_degrees), lie_down_duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		_look_pivot._target_pitch = deg_to_rad(lie_look_pitch_degrees)
+		_eyes_tween.tween_interval(lie_down_duration)
 	if _eyes_overlay != null:
 		_eyes_tween.tween_property(_eyes_overlay, "color:a", 1.0, eyes_close_duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 	else:
@@ -454,9 +541,11 @@ func _kill_eyes_tween() -> void:
 
 ## The dedicated "use laptop" action. Only valid from SITTING.
 func open_laptop() -> void:
-	if _state != State.SITTING:
+	if _state != State.SITTING or _lying:
 		return
 	_state = State.LAPTOP
+	if _player_body.has_method("set_seated_head_follow"):
+		_player_body.set_seated_head_follow(false)
 	_laptop_view.open()
 	# Target the SCREEN, not the lap anchor (the laptop's base/resting
 	# point) -- the anchor sits low enough (near the hip) that aiming
@@ -497,6 +586,8 @@ func close_laptop() -> void:
 	if _state != State.LAPTOP:
 		return
 	_state = State.SITTING
+	if _player_body.has_method("set_seated_head_follow"):
+		_player_body.set_seated_head_follow(true)
 	_kill_laptop_aim_tween()
 	_look_controller.focus_assist_enabled = false
 	# Mirrors open_laptop()'s gesture (same grip point, same hinge
@@ -727,6 +818,13 @@ func _kill_tween() -> void:
 	if _tween != null and _tween.is_valid():
 		_tween.kill()
 	_tween = null
+	if _turn_tween != null and _turn_tween.is_valid():
+		_turn_tween.kill()
+	_turn_tween = null
+
+
+func sitting_world_yaw_for_get_up() -> float:
+	return _player_body.sitting_world_yaw_degrees if "sitting_world_yaw_degrees" in _player_body else 0.0
 
 
 func _kill_zoom_tween() -> void:
@@ -750,7 +848,7 @@ func _update_prompt() -> void:
 			# just no longer also pokes the label directly here.
 			pass
 		State.SITTING:
-			_prompt_label.text = "E: Get Up    F: Laptop    G: Sleep"
+			_prompt_label.text = "E: Get Up    G: Sleep" if _lying else "E: Get Up    F: Laptop    G: Sleep"
 			_prompt_label.visible = true
 		State.LAPTOP:
 			_prompt_label.text = "T: Edit Log Entry    F: Close Laptop"

@@ -481,7 +481,23 @@ func open_station(station: Node) -> void:
 	# this for deterministic tests, same "test-only forced value" contract
 	# every other randomized system in this project already uses.
 	var fault_count: int = _debug_forced_count if _debug_forced_count != -1 else _random_required_count()
+	# Round 30: a recurring-service drift (DayPlan re-arm) fixes the day's
+	# requirement -- same count every reopen that day, varies by day.
+	if _debug_forced_count == -1 and station.has_method("service_required_count") and station.service_required_count() > 0:
+		fault_count = clampi(station.service_required_count(), 1, CHAMBERS.size())
 	var active: Array = CHAMBERS.slice(0, fault_count)
+	# Round 31: a recurring drift picks WHICH chambers drifted from the
+	# day's seed -- different chambers on different days, fixed all day.
+	if _debug_forced_count == -1 and station.has_method("service_seed") and station.service_seed() != 0:
+		var order: Array = CHAMBERS.duplicate()
+		var rng := RandomNumberGenerator.new()
+		rng.seed = station.service_seed()
+		for i in range(order.size() - 1, 0, -1):
+			var j: int = rng.randi_range(0, i)
+			var t = order[i]
+			order[i] = order[j]
+			order[j] = t
+		active = order.slice(0, fault_count)
 	for ch in CHAMBERS:
 		# Only this attempt's active (faulty) chambers start away from
 		# their target; the rest start already solved. Difficulty still

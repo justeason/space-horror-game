@@ -78,6 +78,7 @@ func _init() -> void:
 	_check("not carrying yet", not carry.is_carrying())
 	_send_key(KEY_SPACE)
 	await process_frame
+	await create_timer(0.7).timeout  # Round 31: owned at the grasp
 	_check("Space picks up the hovered item", carry.is_carrying())
 	_check("picked up the correct item", carry.carried_item_id() == &"wire_control_16ga")
 
@@ -103,14 +104,18 @@ func _init() -> void:
 	await process_frame
 	_check("pressing Space again while carrying drops it (not a stuck pickup)", not carry.is_carrying())
 	wire.interact() # pick back up directly for the remaining checks
+	await create_timer(0.7).timeout  # Round 31: the hand owns the part only at the grasp
 	_check("picked back up for the remaining checks", carry.is_carrying())
 	_send_key(KEY_SPACE)
 	await process_frame
 	_check("Space key drops the carried item", not carry.is_carrying())
+	# Round 30: the dropped part falls from the hand and settles (~0.6s)
+	# before it is a collidable, targetable world object again.
+	await create_timer(0.9).timeout
 
 	var wire_count := 0
 	for child in main.get_node("Interactables").get_children():
-		if child == wire or (child.has_method("get_display_name") and child.get_display_name() == "Wire Component"):
+		if child == wire or child.name == wire.name:  # Round 31: 4 spares exist by design; THIS one must be unique
 			wire_count += 1
 	_check("exactly one wire exists after drop (no duplication)", wire_count == 1)
 	_check("dropped wire did not snap back to its original Storage transform", not wire.transform.is_equal_approx(original_resting_transform))
@@ -125,6 +130,7 @@ func _init() -> void:
 	await _aim_at(look_pivot, pitch_pivot, dropped_eye, wire.global_position)
 	_send_key(KEY_SPACE)
 	await process_frame
+	await create_timer(0.7).timeout  # Round 31: owned at the grasp
 	_check("dropped wire can be picked back up via Space", carry.is_carrying())
 	_check("picking it back up gives the same item id", carry.carried_item_id() == &"wire_control_16ga")
 
@@ -183,7 +189,8 @@ func _init() -> void:
 	var total_wires := 0
 	for n in [main.get_node("Interactables"), player.get_node("PlayerBody/CarryAnchor")]:
 		for child in n.get_children():
-			if child.has_method("get_display_name") and child.get_display_name() == "Wire Component":
+			# Round 31: four 16GA spares exist by design -- THIS wire must be unique.
+			if child == wire or child.name == wire.name:
 				total_wires += 1
 	_check("no safe floor found: no duplicate wire exists (count=%d)" % total_wires, total_wires == 1)
 

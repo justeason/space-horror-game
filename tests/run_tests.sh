@@ -106,6 +106,26 @@ TESTS=(
   test_storage_cabinet_depth
   test_watch_raise_pose
   test_rigged_technician_prototype
+  test_look_pose_sync
+  test_rigged_character
+  test_workdays
+  test_carry_reach
+  test_station_ambience
+  test_carry_no_drift
+  test_bed_camera
+  test_watch_high_range
+  test_gait_footsteps
+  test_workday_recurrence
+  test_animation_transitions
+  test_furniture_contact
+  test_bed_laptop
+  test_multiday_maintenance
+  test_furniture_blocks_player
+  test_grasp_ownership
+  test_drop_release
+  test_electrical_spare_types
+  test_cargo_delivery
+  test_sustainability_20days
 )
 
 if [ "$#" -gt 0 ]; then

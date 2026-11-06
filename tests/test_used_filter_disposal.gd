@@ -41,6 +41,7 @@ func _init() -> void:
 	await _click(diorama, &"latch:2") # both latches open -> REMOVE_OLD
 
 	new_cartridge.interact() # retrieve the new cartridge from Storage
+	await create_timer(0.7).timeout  # Round 31: the hand owns the part only at the grasp
 	_check("carrying the new cartridge before removing the old one", carry.is_carrying() and carry.carried_item_id() == &"filter_cartridge")
 
 	# ============================================================
@@ -75,6 +76,7 @@ func _init() -> void:
 	# ============================================================
 	_check("used cartridge offers a real pick-up prompt now that it exists", used.get_interact_prompt() == "Click: Pick Up Used Filter Cartridge")
 	used.interact()
+	await create_timer(0.7).timeout  # Round 31: the hand owns the part only at the grasp
 	_check("used cartridge picked up", carry.is_carrying() and carry.carried_item_id() == &"used_filter_cartridge")
 
 	# ============================================================
@@ -88,6 +90,7 @@ func _init() -> void:
 	_check("disposing with empty hands does nothing (no crash, no false success)", trash.disposed_count() == 0)
 
 	used.interact() # pick it back up
+	await create_timer(0.7).timeout  # Round 31: the hand owns the part only at the grasp
 	_check("used cartridge picked back up for the real disposal", carry.is_carrying() and carry.carried_item_id() == &"used_filter_cartridge")
 	_check("disposal bin prompt now offers to throw it away", trash.get_interact_prompt().findn("Throw Away") != -1)
 

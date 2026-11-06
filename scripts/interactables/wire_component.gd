@@ -30,7 +30,18 @@ var _installed: bool = false
 var _color_name: String = "Yellow"
 
 
+## Round 32 Priority 4: spare TYPE. "power" = the 16GA power harness
+## (colored insulation matching the faulted circuit); "signal" = the 22GA
+## shielded signal cable for the telemetry/relay circuits: a thinner coil
+## in a grey braided-shield jacket with its own ID tag (distinct by shape,
+## not only color).
+@export_enum("power", "signal") var cable_type: String = "power"
+
+
 func _ready() -> void:
+	add_to_group(&"wire_spare")
+	if cable_type == "signal":
+		_make_signal_variant()
 	_resting_parent = get_parent()
 	_resting_transform = transform
 
@@ -39,7 +50,8 @@ func _process(delta: float) -> void:
 	if _message_timer > 0.0:
 		_message_timer -= delta
 		if _message_timer <= 0.0 and _message_label != null:
-			_message_label.visible = false
+			if _message_label.get_meta(&"msg_owner", 0) == get_instance_id():   # shared HUD label: hide only our own message
+				_message_label.visible = false
 
 
 func interact() -> void:
@@ -48,7 +60,7 @@ func interact() -> void:
 	if _carry_system.is_carrying():
 		return
 	if _carry_system.pick_up(self):
-		_show_message("Picked up: Control Wire (16-gauge, %s)." % _color_name.to_lower())
+		_show_message("Picked up: %s." % ("Signal Cable (22-gauge shielded)" if cable_type == "signal" else "Control Wire (16-gauge, %s)" % _color_name.to_lower()))
 
 
 ## Called once by electrical_panel.gd's _select_repair_config() the
@@ -58,7 +70,38 @@ func interact() -> void:
 ## whole spare consistently) to match, so the carried part's color is
 ## never a stale "always yellow" mismatch against whichever wire this
 ## attempt's diagnostic/diorama actually says is faulted.
+func _make_signal_variant() -> void:
+	_color_name = "shielded"
+	var shield := StandardMaterial3D.new()
+	shield.albedo_color = Color(0.55, 0.57, 0.6)
+	shield.metallic = 0.55
+	shield.roughness = 0.45
+	for c in get_children():
+		if c is CSGTorus3D:
+			(c as CSGTorus3D).inner_radius = 0.047
+			(c as CSGTorus3D).outer_radius = 0.057
+			(c as CSGTorus3D).material = shield
+		elif c is CSGShape3D and "material" in c:
+			var m := StandardMaterial3D.new()
+			m.albedo_color = Color(0.15, 0.35, 0.75)   # blue signal connector
+			c.material = m
+	var tag := Label3D.new()
+	tag.text = "22GA SIG"
+	tag.font_size = 22
+	tag.pixel_size = 0.0009
+	tag.modulate = Color(0.85, 0.9, 1.0)
+	tag.position = Vector3(0, 0.03, 0)
+	tag.rotation_degrees = Vector3(-90, 0, 0)
+	add_child(tag)
+
+
+func get_display_name() -> String:
+	return "Signal Cable" if cable_type == "signal" else "Wire Component"
+
+
 func set_fault_color(color_name: String, color: Color) -> void:
+	if cable_type == "signal":
+		return   # shielded jacket; not recolored per circuit
 	_color_name = color_name
 	var mat: StandardMaterial3D = get_node("CoilLoopA").material
 	mat.albedo_color = color
@@ -80,12 +123,22 @@ func _show_message(text: String) -> void:
 	if _message_label == null:
 		return
 	_message_label.text = text
+	_message_label.set_meta(&"msg_owner", get_instance_id())
 	_message_label.visible = true
 	_message_timer = message_duration
 
 
 ## Called by carry_system.gd's drop() -- puts this wire back exactly
 ## where it started, parented back under its original Storage rack.
+## Round 31: a storage cabinet (or the reserve crate) assigning this part
+## a new home slot -- where return_to_rest() puts it from now on.
+func set_rest_global(global_xf: Transform3D, parent: Node = null) -> void:
+	if parent != null:
+		_resting_parent = parent
+	var p3: Node3D = _resting_parent as Node3D
+	_resting_transform = p3.global_transform.affine_inverse() * global_xf if p3 != null else global_xf
+
+
 func return_to_rest() -> void:
 	reparent(_resting_parent, false)
 	transform = _resting_transform
@@ -102,8 +155,6 @@ func place_in_world(world_transform: Transform3D) -> void:
 	global_transform = world_transform
 
 
-func get_display_name() -> String:
-	return "Wire Component"
 
 
 ## Called once by electrical_panel.gd's _attempt_install(), after
@@ -151,4 +202,5 @@ func mark_installed(parent_node: Node, local_transform: Transform3D) -> void:
 		collision.disabled = true
 	if _message_label != null:
 		_message_timer = 0.0
-		_message_label.visible = false
+		if _message_label.get_meta(&"msg_owner", 0) == get_instance_id():   # shared HUD label: hide only our own message
+			_message_label.visible = false

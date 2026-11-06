@@ -13,7 +13,7 @@ extends SceneTree
 ##
 ## Also covers the Priority 5 additions on the same cabinets: the
 ## interior lamp (on while open, off once closed) and the live stock
-## placard (QTY 1 -> QTY 0 - RESTOCK once the part is taken).
+## placard (Round 31: real counts, 4 AVAILABLE -> 3 AVAILABLE).
 var _ok := true
 
 func _init() -> void:
@@ -59,15 +59,19 @@ func _init() -> void:
 		var lamp: Light3D = cab.get_node("InteriorLight")
 		var label: Label3D = cab.get_node("DoorHinge/StockLabel")
 		_check("%s: interior lamp off while closed" % tag, lamp.light_energy == 0.0)
-		_check("%s: stock placard reads QTY 1 initially" % tag, label.text.ends_with("QTY 1") and cab.stock_count() == 1)
+		# Round 31: four real parts per cabinet.
+		_check("%s: stock placard reads 4 AVAILABLE initially" % tag, label.text.find("4 AVAILABLE") != -1 and cab.stock_count(item.item_id) == 4)
 		cab.interact()
 		await create_timer(0.7).timeout
 		_check("%s: interior lamp on once opened" % tag, lamp.light_energy > 0.0)
 		_check("%s: stored item revealed once opened" % tag, item.visible)
 		item.interact()
-		await process_frame
-		await process_frame
-		_check("%s: stock placard reads RESTOCK once the part is taken" % tag, cab.stock_count() == 0 and label.text.find("QTY 0") != -1)
+		await create_timer(0.7).timeout  # Round 31: the hand owns the part only at the grasp
+		# Round 28: the rigged hand reaches to the part first (it stays on
+		# its shelf until grasped -- 0.6s since Round 30's slower reach),
+		# then carries it away.
+		await create_timer(0.8).timeout
+		_check("%s: taking one part leaves the others (3 AVAILABLE)" % tag, cab.stock_count(item.item_id) == 3 and label.text.find("3 AVAILABLE") != -1)
 		cab.interact()
 		await create_timer(0.7).timeout
 		_check("%s: interior lamp off again once closed" % tag, lamp.light_energy == 0.0)
@@ -77,7 +81,7 @@ func _init() -> void:
 		main.get_node("Player/CarrySystem").drop()
 		await process_frame
 		await process_frame
-		_check("%s: part returned to the shelf counts as stocked again" % tag, cab.stock_count() == 1)
+		_check("%s: part returned to the shelf counts as stocked again" % tag, cab.stock_count(item.item_id) == 4)
 		_check("%s: part returned behind a shut door is hidden" % tag, not item.visible)
 		_check("%s: part returned behind a shut door is not collidable" % tag, item.get_node("Collision").disabled)
 

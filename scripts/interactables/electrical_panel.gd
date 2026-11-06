@@ -258,13 +258,89 @@ var _relevant_roles: Array = [&"supply", &"return", &"service"]
 
 func _ready() -> void:
 	_refresh_interior_visuals()
+	if _day_plan != null and _day_plan.has_method("register_service_rearm"):
+		_day_plan.register_service_rearm(_day_plan.Workday.ELECTRICAL_SERVICE, _rearm_for_service, _spare_available)
+
+
+## Round 31 Priority 3: recurring electrical service on the SAME fixed
+## 10-wire infrastructure. A later fault develops on a different installed
+## circuit: the day's variant seed picks one of the authored repair
+## configurations (never the one just repaired), fixed for the whole work
+## order (_select_repair_config() keeps an already-chosen config), and the
+## repair state machine returns to UNDIAGNOSED so the existing diagnose ->
+## isolate -> disconnect -> replace -> reconnect procedure runs again. The
+## previously installed spare stays installed (consumed stock).
+var _last_repaired_config: int = -1
+
+
+func _rearm_for_service(seed: int) -> void:
+	_last_repaired_config = _config_index
+	var choices: Array = []
+	for i in _REPAIR_CONFIGS.size():
+		if i != _last_repaired_config and _part_in_stock(part_for_config(i)):
+			choices.append(i)
+	if choices.is_empty():
+		return
+	var idx: int = choices[absi(seed) % choices.size()]
+	_repair_stage = RepairStage.UNDIAGNOSED
+	_procedure = ProcedureStage.NOT_STARTED
+	_isolated = false
+	_disconnected = []
+	_reconnected = []
+	_recorded_disconnect_order = []
+	_wire_replaced = false
+	_screw_progress = [0, 0, 0, 0]
+	_screws_done_for_open = false
+	_screws_reinstalled = false
+	_config_index = -1
+	_apply_config(idx)
+	_refresh_interior_visuals()
+
+
+## Feasibility for DayPlan: SOME other fault configuration has its
+## compatible spare in stock (shelf or reserve) -- never an impossible order.
+func _spare_available() -> bool:
+	for i in _REPAIR_CONFIGS.size():
+		if i != _config_index and _part_in_stock(part_for_config(i)):
+			return true
+	return false
+
+
+func _part_in_stock(id: StringName) -> bool:
+	for c in get_tree().get_nodes_in_group(&"storage_cabinet"):
+		if c.stock_count(id) > 0:
+			return true
+	for r in get_tree().get_nodes_in_group(&"supply_reserve"):
+		if r.reserve_count(id) > 0:
+			return true
+	return false
+
+
+func required_part_name() -> String:
+	return DayPlanPartNames.display(required_component_id, fault_color_name())
+
+
+func fault_config_label() -> String:
+	return _REPAIR_CONFIGS[_config_index].get("label", "") if _config_index >= 0 else ""
+
+
+## Equipment condition (Round 31 Priority 8), from real state only.
+func condition() -> StringName:
+	if _repair_stage == RepairStage.REPAIRED:
+		return &"restored" if _day_plan != null and _day_plan.is_task_done(&"e05") else &"nominal"
+	if _procedure != ProcedureStage.NOT_STARTED or _repair_stage != RepairStage.UNDIAGNOSED:
+		return &"in_progress"
+	if _day_plan != null and (_day_plan.fault_target != &"" or _day_plan.workday == _day_plan.Workday.ELECTRICAL_SERVICE):
+		return &"fault"
+	return &"nominal"
 
 
 func _process(delta: float) -> void:
 	if _message_timer > 0.0:
 		_message_timer -= delta
 		if _message_timer <= 0.0 and _message_label != null:
-			_message_label.visible = false
+			if _message_label.get_meta(&"msg_owner", 0) == get_instance_id():   # shared HUD label: hide only our own message
+				_message_label.visible = false
 
 
 ## The cabinet's own big collider. Deliberately does ONLY one thing:
@@ -389,9 +465,9 @@ func _inspect() -> void:
 func _trace() -> void:
 	_repair_stage = RepairStage.TRACED
 	_day_plan.mark_done(&"e02")
+	_select_repair_config()   # sets required_component_id for the circuit
 	_day_plan.set_required_component(required_component_id)
-	_select_repair_config()
-	_show_message("Circuit traced to Terminal T-2. Required part: Control Wire (16-gauge, %s)." % fault_color_name().to_lower())
+	_show_message("Circuit traced to Terminal T-2. Required part: %s." % required_part_name())
 
 
 ## Round 16 Priority 3: picks (once, idempotently) which _REPAIR_CONFIGS
@@ -404,10 +480,34 @@ func _trace() -> void:
 ## electrical_repair_view.gd's/_sync_world_diorama()'s own
 ## sync_full_state() calls -- never read directly by this panel's own
 ## wire-order logic, which only ever needs _disconnect_order()).
+## Round 32 Priority 4: compatible spare TYPES, from the panel's own fixed
+## circuits. Power circuits (supply/return/service/backup/ground) take the
+## 16GA power harness; the signal/control circuits (telemetry/relay/
+## sensor feed/coolant/auxiliary) take the 22GA shielded signal cable.
+const DayPlanPartNames = preload("res://scripts/station/part_names.gd")
+const PART_POWER := &"wire_control_16ga"
+const PART_SIGNAL := &"wire_signal_22ga"
+const PART_FOR_ROLE := {
+	&"supply": PART_POWER, &"return": PART_POWER, &"service": PART_POWER, &"backup": PART_POWER, &"ground": PART_POWER,
+	&"telemetry": PART_SIGNAL, &"relay": PART_SIGNAL, &"sensor_feed": PART_SIGNAL, &"coolant": PART_SIGNAL, &"auxiliary": PART_SIGNAL,
+}
+
+
+static func part_for_config(index: int) -> StringName:
+	return PART_FOR_ROLE.get(_REPAIR_CONFIGS[index].get("fault", &"service"), PART_POWER)
+
+
 func _select_repair_config() -> void:
 	if _config_index != -1:
 		return
-	_apply_config(randi() % _REPAIR_CONFIGS.size())
+	# First-time repairs (the Day 1 tutorial chain, the first Electrical
+	# workday) stay on POWER faults -- the procedure is learned first with
+	# the familiar harness; recurring service (re-arm) may pick any circuit.
+	var power: Array = []
+	for i in _REPAIR_CONFIGS.size():
+		if part_for_config(i) == PART_POWER:
+			power.append(i)
+	_apply_config(power[randi() % power.size()])
 
 
 func _apply_config(index: int) -> void:
@@ -415,8 +515,15 @@ func _apply_config(index: int) -> void:
 	var config: Dictionary = _REPAIR_CONFIGS[index]
 	_relevant_roles = config.get("relevant", [&"supply", &"return", &"service"]).duplicate()
 	_fault_role = config.get("fault", &"service")
-	if _wire_component != null and _wire_component.has_method("set_fault_color"):
-		_wire_component.set_fault_color(fault_color_name(), WIRE_COLORS.get(_fault_role, WIRE_COLORS[&"service"]))
+	required_component_id = part_for_config(index)
+	# Round 31: every 16GA spare in stock (shelf and reserve) is the same
+	# compatible harness -- all of them take this attempt's color.
+	var spares: Array = get_tree().get_nodes_in_group(&"wire_spare") if is_inside_tree() else []
+	if _wire_component != null and not spares.has(_wire_component):
+		spares.append(_wire_component)
+	for w in spares:
+		if w.has_method("set_fault_color"):
+			w.set_fault_color(fault_color_name(), WIRE_COLORS.get(_fault_role, WIRE_COLORS[&"service"]))
 
 
 ## Test-only: forces a specific fault role instead of a random pick, for
@@ -503,9 +610,9 @@ func _open_procedure() -> void:
 	if _procedure <= ProcedureStage.REPLACE and _wire_replaced == false:
 		if not _carry_system.is_carrying() or _carry_system.carried_item_id() != required_component_id:
 			if _carry_system.is_carrying():
-				_show_message("That isn't the right part for this repair. (Needs: Control Wire, 16-gauge, %s.)" % fault_color_name().to_lower())
+				_show_message("That isn't the right part for this repair. (Needs: %s.)" % required_part_name())
 			else:
-				_show_message("Nothing to install. You need the Control Wire (16-gauge, %s) from Storage." % fault_color_name().to_lower())
+				_show_message("Nothing to install. You need the %s from Storage." % required_part_name())
 			return
 	if _repair_view == null:
 		return
@@ -719,9 +826,11 @@ func install_replacement_wire() -> Dictionary:
 	var item: Node3D = _carry_system.take_carried_item_if_matches(required_component_id)
 	if item == null:
 		if _carry_system.is_carrying():
-			return {"ok": false, "message": "That isn't the right part for this repair. (Needs: Control Wire, 16-gauge, %s.)" % fault_color_name().to_lower()}
-		return {"ok": false, "message": "You no longer have the Control Wire. Fetch another from Storage."}
+			return {"ok": false, "message": "Wrong part — this %s circuit needs: %s. Return the other part to Storage." % [fault_color_name().to_lower(), required_part_name()]}
+		return {"ok": false, "message": "You no longer have the %s. Fetch one from Storage." % required_part_name()}
 	item.mark_installed(_terminal, installed_wire_local_transform)
+	if _day_plan != null and _day_plan.has_method("log_event"):
+		_day_plan.log_event("Replaced %s (%s circuit)" % [required_part_name(), fault_color_name()])
 	_wire_replaced = true
 	_procedure = ProcedureStage.RECONNECT
 	_sync_world_diorama()
@@ -821,5 +930,6 @@ func _show_message(text: String) -> void:
 	if _message_label == null:
 		return
 	_message_label.text = text
+	_message_label.set_meta(&"msg_owner", get_instance_id())
 	_message_label.visible = true
 	_message_timer = message_duration

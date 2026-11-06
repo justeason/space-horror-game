@@ -28,6 +28,9 @@ var _was_near: bool = false
 
 
 func _ready() -> void:
+	# Round 30: this collider is a hover/click volume, not a physical
+	# surface -- carry_system.gd's placement solver ignores the group.
+	add_to_group(&"placement_proxy")
 	_sleep_state = get_node(sleep_state_path)
 	_player = get_node(player_path)
 

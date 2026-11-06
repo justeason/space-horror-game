@@ -194,7 +194,7 @@ static func _frame(axis: Vector3, hinge: Vector3) -> Basis:
 ## Same joint-space solve as PlayerBody._setup_watch_raise_rig(), expressed
 ## as BONE ROTATIONS: upper-arm global rotation, elbow hinge flex, forearm
 ## pronation roll.
-func _setup_watch_inspection() -> void:
+func _setup_watch_inspection(target_offset: Vector3 = Vector3.ZERO) -> void:
 	var s: Vector3 = _bone_rest_global["RightUpperArm"]
 	var e: Vector3 = _bone_rest_global["RightLowerArm"]
 	var w: Vector3 = _bone_rest_global["RightHand"]
@@ -203,7 +203,7 @@ func _setup_watch_inspection() -> void:
 	var u_r: Vector3 = (e - s) / l1
 	var f_r: Vector3 = (w - e) / l2
 	var h_r: Vector3 = (Vector3.RIGHT - u_r * u_r.dot(Vector3.RIGHT)).normalized()
-	var target: Vector3 = Vector3(0, EYE_HEIGHT, 0) + watch_wrist_offset_from_eye
+	var target: Vector3 = Vector3(0, EYE_HEIGHT, 0) + watch_wrist_offset_from_eye + target_offset
 	var d: Vector3 = target - s
 	var dist: float = clampf(d.length(), absf(l1 - l2) + 0.001, l1 + l2 - 0.001)
 	var dn: Vector3 = d.normalized()
@@ -254,3 +254,43 @@ func set_watch_inspection(p: float) -> void:
 
 func bone_global_position(bone_name: String) -> Vector3:
 	return skeleton.get_bone_global_pose(skeleton.find_bone(bone_name)).origin
+
+
+## Round 26 Priority 6: drive this skeleton from the SAME shared pose data
+## the live player uses -- the compact dictionary produced by
+## CharacterPoseState.to_dict() ({yaw, pitch, watch, posture}), i.e. exactly
+## what a future multiplayer peer would receive. Joint angles come from the
+## same anatomical distribution (CharacterPoseState.distribute_look_pitch)
+## and map onto BONES, not CSG node names: spine share split over Chest and
+## UpperChest, then Neck, then Head. Arm bones are posed locally under the
+## shoulder chain, so a bending spine carries the raised arm with it.
+const _PoseState = preload("res://scripts/player/character_pose_state.gd")
+var _applied_bias: float = INF
+
+
+func apply_pose_state(data: Dictionary) -> void:
+	var pitch: float = data.get("pitch", 0.0)
+	var posture: int = data.get("posture", _PoseState.Posture.STANDING)
+	var d: Dictionary = _PoseState.distribute_look_pitch(pitch, posture)
+	_set_pitch("Chest", d["spine"] * 0.5)
+	_set_pitch("UpperChest", d["spine"] * 0.5)
+	_set_pitch("Neck", d["neck"])
+	_set_pitch("Head", d["head"])
+	# Round 27: the same shared 1:1 watch target the live body uses
+	# (relative to the eye), re-solved when the look pitch changes.
+	var watch_pitch: float = pitch if posture == _PoseState.Posture.STANDING else 0.0
+	if absf(watch_pitch - _applied_bias) > 0.002:
+		_applied_bias = watch_pitch
+		var target: Vector3 = _PoseState.watch_target_for_pitch(watch_pitch)
+		_setup_watch_inspection(target - watch_wrist_offset_from_eye)
+	set_watch_inspection(clampf(data.get("watch", 0.0), 0.0, 1.0))
+
+
+func _set_pitch(bone_name: String, angle: float) -> void:
+	skeleton.set_bone_pose_rotation(skeleton.find_bone(bone_name), Quaternion(Vector3.RIGHT, angle))
+
+
+## Global (skeleton-space) forward direction of the head bone -- what a
+## viewer would read as "where this character is looking".
+func head_forward() -> Vector3:
+	return skeleton.get_bone_global_pose(skeleton.find_bone("Head")).basis * Vector3.FORWARD

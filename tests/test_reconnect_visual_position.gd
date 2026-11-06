@@ -79,6 +79,7 @@ func _run_scenario(hard: bool, label: String) -> void:
 	terminal.interact() # E01
 	terminal.interact() # E02
 	carry.pick_up(wire)
+	await create_timer(0.7).timeout  # Round 31: the hand owns the part only at the grasp
 	terminal.interact() # opens the focused procedure for real
 	await process_frame
 	# Round 18 Priority 9: see _wait_for_raycast_ready()'s own comment --

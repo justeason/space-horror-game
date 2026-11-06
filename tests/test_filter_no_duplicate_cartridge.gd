@@ -48,6 +48,7 @@ func _init() -> void:
 	_check("new cartridge is physically inside cabinet2's cavity (between door plane and back wall)", _inside_cabinet(cartridge, cabinet2))
 
 	cartridge.interact()
+	await create_timer(0.7).timeout  # Round 31: the hand owns the part only at the grasp
 	_check("new cartridge picked up", carry.is_carrying() and carry.carried_item_id() == &"filter_cartridge")
 	_check("carried cartridge is parented to the carry anchor (in hand)", cartridge.get_parent() == carry_anchor)
 	_expect_visible("carrying: only the new cartridge, in hand", ["new"])
@@ -58,7 +59,7 @@ func _init() -> void:
 	await create_timer(0.7).timeout
 	_check("closing storage while carrying leaves the held cartridge visible", cartridge.visible)
 	_check("closing storage while carrying leaves the held cartridge collidable", not cartridge.get_node("Collision").disabled)
-	_check("storage stock reads 0 once the part has been taken", cabinet2.stock_count() == 0)
+	_check("storage stock drops by one once the part has been taken (4 -> 3)", cabinet2.stock_count() == 3)
 
 	station.toggle_isolate()
 	station.toggle_latch(1)
@@ -99,6 +100,7 @@ func _init() -> void:
 	_check("installed cartridge still non-collidable after storage toggles", cartridge.get_node("Collision").disabled)
 
 	used.interact()
+	await create_timer(0.7).timeout  # Round 31: the hand owns the part only at the grasp
 	_check("used cartridge picked up", carry.is_carrying() and carry.carried_item_id() == &"used_filter_cartridge")
 	_expect_visible("carrying old: only the old cartridge, in hand", ["used"])
 

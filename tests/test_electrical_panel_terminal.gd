@@ -100,6 +100,7 @@ func _init() -> void:
 	# ============================================================
 	panel.terminal_interact(&"damaged") # advance to TRACED
 	wire.interact()
+	await create_timer(0.7).timeout  # Round 31: the hand owns the part only at the grasp
 	_check("wire picked up before attempting the wrong terminal", carry.is_carrying())
 	intact_terminal.interact() # wrong terminal, via its own real interact()
 	_check("wrong terminal does not consume the wire", carry.is_carrying() and carry.carried_item_id() == &"wire_control_16ga")
@@ -121,6 +122,7 @@ func _init() -> void:
 	_check("wire dropped on the floor", not carry.is_carrying())
 	_check("dropped wire is not installed", not wire.is_installed())
 	wire.interact()
+	await create_timer(0.7).timeout  # Round 31: the hand owns the part only at the grasp
 	_check("dropped wire can be picked back up", carry.is_carrying() and carry.carried_item_id() == &"wire_control_16ga")
 
 	terminal.interact() # correct terminal, via its own real interact() -- opens the focused repair procedure (Phase 3 milestone)
@@ -150,6 +152,7 @@ func _init() -> void:
 	# 5. Installed wire cannot be picked up as loose inventory again.
 	# ============================================================
 	wire.interact() # a stray click on the now-installed wire
+	await create_timer(0.7).timeout  # Round 31: the hand owns the part only at the grasp
 	_check("clicking the installed wire does not start carrying it", not carry.is_carrying())
 	_check("installed wire prompt is empty (not offered as a pickup)", wire.get_interact_prompt() == "")
 

@@ -37,7 +37,8 @@ func _process(delta: float) -> void:
 	if _message_timer > 0.0:
 		_message_timer -= delta
 		if _message_timer <= 0.0 and _message_label != null:
-			_message_label.visible = false
+			if _message_label.get_meta(&"msg_owner", 0) == get_instance_id():   # shared HUD label: hide only our own message
+				_message_label.visible = false
 
 
 func interact() -> void:
@@ -65,12 +66,22 @@ func _show_message(text: String) -> void:
 	if _message_label == null:
 		return
 	_message_label.text = text
+	_message_label.set_meta(&"msg_owner", get_instance_id())
 	_message_label.visible = true
 	_message_timer = message_duration
 
 
 ## Called by carry_system.gd's drop() -- puts this cartridge back
 ## exactly where it started, parented back under its Storage shelf.
+## Round 31: a storage cabinet (or the reserve crate) assigning this part
+## a new home slot -- where return_to_rest() puts it from now on.
+func set_rest_global(global_xf: Transform3D, parent: Node = null) -> void:
+	if parent != null:
+		_resting_parent = parent
+	var p3: Node3D = _resting_parent as Node3D
+	_resting_transform = p3.global_transform.affine_inverse() * global_xf if p3 != null else global_xf
+
+
 func return_to_rest() -> void:
 	reparent(_resting_parent, false)
 	transform = _resting_transform
@@ -118,4 +129,5 @@ func mark_installed(parent_node: Node, local_transform: Transform3D) -> void:
 		collision.disabled = true
 	if _message_label != null:
 		_message_timer = 0.0
-		_message_label.visible = false
+		if _message_label.get_meta(&"msg_owner", 0) == get_instance_id():   # shared HUD label: hide only our own message
+			_message_label.visible = false

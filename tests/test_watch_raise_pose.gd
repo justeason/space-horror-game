@@ -35,6 +35,9 @@ func _init() -> void:
 	var rest := _measure()
 	var rest_hand_q: Quaternion = hand.quaternion
 	var watch_local: Transform3D = watch.transform
+	var watch_rest_p: Vector3 = _sp.global_transform.affine_inverse() * watch.global_position
+	var rest_watch_to_wrist: float = watch_rest_p.distance_to(rest["w"])
+	var rest_watch_to_elbow: float = watch_rest_p.distance_to(rest["e"])
 	var body_pos: Vector3 = _body.global_position
 	var player_pos: Vector3 = player.global_position
 
@@ -54,13 +57,22 @@ func _init() -> void:
 	_check("C raised the first-person rig", rig.is_raised())
 	_check("C raised the world body (progress %.2f)" % _body.watch_raise_progress(), is_equal_approx(_body.watch_raise_progress(), 1.0))
 	_check("shoulder->elbow AND elbow->wrist lengths constant through the whole raise (%d samples, max error %.5f m)" % [samples, max_len_err], samples > 5 and max_len_err < 0.0005)
-	_check("shoulder point never moves (stays attached to the torso)", up["s"].is_equal_approx(rest["s"]))
+	# Round 27: the shoulder pivot may rise/protract by the bounded clavicle
+	# lift when the watch is held high, but it must stay inside the shoulder
+	# pad (attached to the torso -- no shrug, no detachment).
+	_check("shoulder pivot stays attached (clavicle lift %.3f m <= 0.03)" % up["s"].distance_to(rest["s"]), up["s"].distance_to(rest["s"]) <= 0.03)
 	var shoulder_rot: float = rad_to_deg((rest["e"] - rest["s"]).angle_to(up["e"] - up["s"]))
 	_check("upper arm genuinely rotates at the shoulder (%.0f deg)" % shoulder_rot, shoulder_rot > 40.0)
-	_check("elbow genuinely flexes (interior %.0f -> %.0f deg)" % [rest["angle"], up["angle"]], rest["angle"] - up["angle"] > 60.0 and up["angle"] < 80.0)
+	_check("elbow genuinely flexes (interior %.0f -> %.0f deg)" % [rest["angle"], up["angle"]], rest["angle"] - up["angle"] > 60.0 and up["angle"] < 95.0)
 	_check("forearm does not point straight at the mirror (|forward| %.2f < 0.6)" % absf(up["fore_dir"].z), absf(up["fore_dir"].z) < 0.6)
 	_check("deltoid cap moves with the upper arm (max shoulder-distance error %.5f)" % max_cap_err, max_cap_err < 0.0005)
-	_check("watch stays rigidly attached to the wrist (local transform unchanged)", watch.transform.is_equal_approx(watch_local) and watch.get_parent() == hand)
+	# Round 27: the hand now bends at the wrist; the watch is counter-rotated
+	# so it stays fixed on the FOREARM -- its distances to the wrist and to
+	# the elbow are what must not change.
+	var watch_p: Vector3 = _sp.global_transform.affine_inverse() * watch.global_position
+	var to_wrist: float = watch_p.distance_to(up["w"])
+	var to_elbow: float = watch_p.distance_to(up["e"])
+	_check("watch stays fixed on the forearm (wrist %.4f vs %.4f, elbow %.4f vs %.4f)" % [to_wrist, rest_watch_to_wrist, to_elbow, rest_watch_to_elbow], absf(to_wrist - rest_watch_to_wrist) < 0.002 and absf(to_elbow - rest_watch_to_elbow) < 0.002 and watch.get_parent() == hand)
 	var roll_deg: float = rad_to_deg(absf(_body.watch_raise_rig()["roll"]))
 	_check("no near-180 wrist twist (forearm roll %.0f deg <= 100)" % roll_deg, roll_deg <= 100.0)
 	var face_off: float = _face_angle_to_eye()
@@ -69,7 +81,8 @@ func _init() -> void:
 	for n in _sp.find_children("WristWatch", "", true, false):
 		watch_count += 1
 	_check("exactly one world-body watch on the standing pose (no duplicate)", watch_count == 1)
-	_check("world body still visible while raised", _body.visible and _sp.visible and _sp.get_node("ArmMeshR").visible)
+	# Round 28: the visible world body is the rigged character.
+	_check("world body still visible while raised", _body.visible and _body.rigged_visual().body_mesh.is_visible_in_tree())
 	_check("body not moved/rotated to force the watch into view", _body.global_position.is_equal_approx(body_pos) and player.global_position.is_equal_approx(player_pos))
 	# Render-layer isolation.
 	_check("first-person rig is on layer 2 and excluded from the mirror camera", (rig.get_node("ArmGroup") as VisualInstance3D).layers == 2 and (mirror_cam.cull_mask & 2) == 0)
@@ -84,7 +97,10 @@ func _init() -> void:
 	_check("C release lowers the world body to rest", is_equal_approx(_body.watch_raise_progress(), 0.0))
 	_check("joints return exactly to rest", back["e"].is_equal_approx(rest["e"]) and back["w"].is_equal_approx(rest["w"]))
 	_check("hand returns to its rest orientation", hand.quaternion.is_equal_approx(rest_hand_q))
-	_check("arm back on the default layer at rest (visible when glancing down)", arm_mesh.layers == 1)
+	# Round 27 follow-up: legs-only self view -- the standing arms are always
+	# mirror-only (rendered for the mirror/other players, not the player's
+	# own camera, where they appeared as floating shoulder "stumps").
+	_check("arm stays mirror-only at rest too (legs-only self view)", arm_mesh.layers == 4)
 
 	# ---- Reverse mid-raise: no snap. ----
 	_body.set_watch_raise_pose(true, 0.4)

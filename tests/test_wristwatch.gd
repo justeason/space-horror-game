@@ -38,7 +38,11 @@ func _init() -> void:
 	await _press(KEY_C)
 	await create_timer(0.4).timeout
 	_check("raised while C is held", watch.is_raised())
-	_check("rig visible while held", rig.visible)
+	# Round 28: the player sees the rigged character's own arm/watch (the
+	# separate camera rig is suppressed) -- "visible while held" means THAT
+	# watch is shown and the arm is raised.
+	var tech: Node3D = body.rigged_visual()
+	_check("rig visible while held (the shared rigged arm's watch is raised and shown)", tech.watch_face_node().is_visible_in_tree() and body.watch_raise_progress() > 0.5)
 	_check("shows a concise check-in prompt before C01 (Round 12: one glanceable status, not a paragraph)", watch_face.text.findn("CHECK IN") != -1 and watch_face.text.findn("CONTROL ROOM") != -1)
 	_check("body still visible while watch is raised (the actual Round 11 regression)", body.visible)
 
@@ -69,6 +73,9 @@ func _init() -> void:
 	await _release(KEY_C)
 	await create_timer(0.4).timeout
 	_check("dismissed immediately on release", not watch.is_raised())
+	# Round 27: the first-person rig is now the world arm's pose, so it stays
+	# shown until that arm has finished lowering (0.28s x 1.5 = 0.42s).
+	await create_timer(0.15).timeout
 	_check("rig hidden after release", not rig.visible)
 
 	# ============================================================
@@ -136,9 +143,9 @@ func _init() -> void:
 	await _press(KEY_C)
 	await create_timer(0.4).timeout
 	_check("watch works normally again after both exclusive states end", watch.is_raised())
-	_check("rig visible again", rig.visible)
+	_check("rig visible again (shared rigged watch raised)", body.rigged_visual().watch_face_node().is_visible_in_tree() and body.watch_raise_progress() > 0.5)
 	await _release(KEY_C)
-	await create_timer(0.4).timeout
+	await create_timer(0.55).timeout
 	_check("dismissed cleanly", not watch.is_raised())
 	_check("rig hidden cleanly", not rig.visible)
 

@@ -146,6 +146,12 @@ func begin_use() -> void:
 	_tween.tween_property(_look_controller, "rotation:y", current_yaw + yaw_delta, sit_duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	_tween.tween_property(_pitch_pivot, "rotation:x", desired_pitch, sit_duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	_tween.chain().tween_callback(_on_sit_settled)
+	# Round 29 Priority 7: visual only -- the body eases into the seated
+	# pose while the camera travels (set_sitting() timing unchanged).
+	if _player_body.has_method("set_seat_style"):
+		_player_body.set_seat_style(false)
+	if _player_body.has_method("begin_sit_down"):
+		_player_body.begin_sit_down(sit_position, sit_duration)
 
 
 ## The pose swap happens only once fully settled -- same established

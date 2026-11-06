@@ -34,6 +34,11 @@
 [ext_resource type="PackedScene" path="res://scenes/interactables/filter_cartridge.tscn" id="32_filtercartridge"]
 [ext_resource type="PackedScene" path="res://scenes/interactables/used_filter_cartridge.tscn" id="33_usedfilter"]
 [ext_resource type="PackedScene" path="res://scenes/interactables/trash_disposal.tscn" id="34_trashdisposal"]
+[ext_resource type="Script" path="res://scripts/audio/station_ambience.gd" id="35_ambience"]
+[ext_resource type="Script" path="res://scripts/station/furniture_contact.gd" id="36_furniture"]
+[ext_resource type="Script" path="res://scripts/interactables/supply_crate.gd" id="37_crate"]
+[ext_resource type="Script" path="res://scripts/station/equipment_status_lamps.gd" id="38_lamps"]
+[ext_resource type="Script" path="res://scripts/interactables/cargo_port.gd" id="39_cargo"]
 
 [sub_resource type="Environment" id="Environment_main"]
 background_mode = 1
@@ -1602,13 +1607,15 @@ use_collision = true
 
 [node name="StorageCabinet1" type="Node3D" parent="Geometry"]
 script = ExtResource("31_storagecabinet")
+day_plan_path = NodePath("../../DayPlan")
+retrieval_fact = &"retrieved:wire"
 door_hinge_path = NodePath("DoorHinge")
 door_open_degrees = 110.0
-item_paths = [NodePath("../../Interactables/WireComponent")]
+item_paths = [NodePath("../../Interactables/WireComponent"), NodePath("../../Interactables/WireComponent2"), NodePath("../../Interactables/WireComponent3"), NodePath("../../Interactables/WireComponent4"), NodePath("../../Interactables/WireSignal1"), NodePath("../../Interactables/WireSignal2")]
 sfx_path = NodePath("../../Player/HUD/MechanicalSfx")
 interior_light_path = NodePath("InteriorLight")
 stock_label_path = NodePath("DoorHinge/StockLabel")
-stock_item_name = "WIRE HARNESS 16GA"
+stock_item_name = "ELECTRICAL SPARES"
 
 [node name="Back" type="CSGBox3D" parent="Geometry/StorageCabinet1"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.93, 1.3, 8.0)
@@ -1766,9 +1773,11 @@ use_collision = true
 
 [node name="StorageCabinet2" type="Node3D" parent="Geometry"]
 script = ExtResource("31_storagecabinet")
+day_plan_path = NodePath("../../DayPlan")
+retrieval_fact = &"retrieved:filter"
 door_hinge_path = NodePath("DoorHinge")
 door_open_degrees = -110.0
-item_paths = [NodePath("../../Interactables/FilterCartridge")]
+item_paths = [NodePath("../../Interactables/FilterCartridge"), NodePath("../../Interactables/FilterCartridge2"), NodePath("../../Interactables/FilterCartridge3"), NodePath("../../Interactables/FilterCartridge4")]
 sfx_path = NodePath("../../Player/HUD/MechanicalSfx")
 interior_light_path = NodePath("InteriorLight")
 stock_label_path = NodePath("DoorHinge/StockLabel")
@@ -2271,6 +2280,66 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.4, 1.268, 8.0)
 carry_system_path = NodePath("../../Player/CarrySystem")
 message_label_path = NodePath("../../Player/HUD/TaskMessageLabel")
 
+[node name="WireComponent2" parent="Interactables" instance=ExtResource("20_wire")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.6, 1.186, 7.83)
+carry_system_path = NodePath("../../Player/CarrySystem")
+message_label_path = NodePath("../../Player/HUD/TaskMessageLabel")
+
+[node name="WireComponent3" parent="Interactables" instance=ExtResource("20_wire")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.6, 1.186, 8.17)
+carry_system_path = NodePath("../../Player/CarrySystem")
+message_label_path = NodePath("../../Player/HUD/TaskMessageLabel")
+
+[node name="WireComponent4" parent="Interactables" instance=ExtResource("20_wire")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.8, 1.186, 8.0)
+carry_system_path = NodePath("../../Player/CarrySystem")
+message_label_path = NodePath("../../Player/HUD/TaskMessageLabel")
+
+[node name="WireSignal1" parent="Interactables" instance=ExtResource("20_wire")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.8, 1.181, 7.83)
+carry_system_path = NodePath("../../Player/CarrySystem")
+message_label_path = NodePath("../../Player/HUD/TaskMessageLabel")
+item_id = &"wire_signal_22ga"
+cable_type = "signal"
+
+[node name="WireSignal2" parent="Interactables" instance=ExtResource("20_wire")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.8, 1.181, 8.17)
+carry_system_path = NodePath("../../Player/CarrySystem")
+message_label_path = NodePath("../../Player/HUD/TaskMessageLabel")
+item_id = &"wire_signal_22ga"
+cable_type = "signal"
+
+[node name="FilterCartridge2" parent="Interactables" instance=ExtResource("32_filtercartridge")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.4, 1.268, 7.83)
+carry_system_path = NodePath("../../Player/CarrySystem")
+message_label_path = NodePath("../../Player/HUD/TaskMessageLabel")
+
+[node name="FilterCartridge3" parent="Interactables" instance=ExtResource("32_filtercartridge")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.4, 1.268, 8.17)
+carry_system_path = NodePath("../../Player/CarrySystem")
+message_label_path = NodePath("../../Player/HUD/TaskMessageLabel")
+
+[node name="FilterCartridge4" parent="Interactables" instance=ExtResource("32_filtercartridge")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.2, 1.268, 8.0)
+carry_system_path = NodePath("../../Player/CarrySystem")
+message_label_path = NodePath("../../Player/HUD/TaskMessageLabel")
+
+[node name="CargoPort" type="StaticBody3D" parent="Interactables"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.2, 0.0, -1.3)
+script = ExtResource("39_cargo")
+carry_system_path = NodePath("../../Player/CarrySystem")
+message_label_path = NodePath("../../Player/HUD/TaskMessageLabel")
+sfx_path = NodePath("../../Player/HUD/MechanicalSfx")
+day_plan_path = NodePath("../../DayPlan")
+wall_path = NodePath("../../Geometry/AirlockTunnelWestWall")
+
+[node name="SupplyCrate" type="StaticBody3D" parent="Interactables"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -7.25, 0.0, 8.72)
+script = ExtResource("37_crate")
+carry_system_path = NodePath("../../Player/CarrySystem")
+message_label_path = NodePath("../../Player/HUD/TaskMessageLabel")
+sfx_path = NodePath("../../Player/HUD/MechanicalSfx")
+
 [node name="UsedFilterCartridge" parent="Interactables" instance=ExtResource("33_usedfilter")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.3, 0.05, 10.0)
 carry_system_path = NodePath("../../Player/CarrySystem")
@@ -2278,9 +2347,22 @@ message_label_path = NodePath("../../Player/HUD/TaskMessageLabel")
 
 [node name="TrashDisposal" parent="Interactables" instance=ExtResource("34_trashdisposal")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.0, 1.4, 7.05)
+day_plan_path = NodePath("../../DayPlan")
 carry_system_path = NodePath("../../Player/CarrySystem")
 sfx_path = NodePath("../../Player/HUD/MechanicalSfx")
 message_label_path = NodePath("../../Player/HUD/TaskMessageLabel")
+
+[node name="StationAmbience" type="Node3D" parent="."]
+script = ExtResource("35_ambience")
+day_plan_path = NodePath("../DayPlan")
+electrical_panel_path = NodePath("../Geometry/EngineeringCabinet1")
+filter_station_path = NodePath("../Interactables/FilterHousingStation")
+
+[node name="FurnitureContact" type="Node" parent="."]
+script = ExtResource("36_furniture")
+
+[node name="EquipmentStatusLamps" type="Node" parent="."]
+script = ExtResource("38_lamps")
 
 [node name="Lights" type="Node3D" parent="."]
 

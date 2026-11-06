@@ -14,6 +14,7 @@ func _init() -> void:
 
 	_check("starts not carrying", not carry.is_carrying())
 	wire.interact()
+	await create_timer(0.7).timeout  # Round 31: the hand owns the part only at the grasp
 	_check("picking up wire works", carry.is_carrying() and carry.carried_item_id() == &"wire_control_16ga")
 	_check("wire reparented to carry anchor", wire.get_parent() == player.get_node("PlayerBody/CarryAnchor"))
 
@@ -21,6 +22,7 @@ func _init() -> void:
 	# full -- reuse the same wire node as a stand-in "another item"
 	# since it still has interact(); hands-full should be a no-op.
 	wire.interact()
+	await create_timer(0.7).timeout  # Round 31: the hand owns the part only at the grasp
 	_check("re-clicking while already carrying is a no-op", carry.is_carrying())
 
 	_check("consume with wrong id fails, nonpunishing (still carrying)", not carry.consume_if_matches(&"something_else"))

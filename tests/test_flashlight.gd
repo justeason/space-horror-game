@@ -47,8 +47,10 @@ func _init() -> void:
 	terminal.interact()
 	terminal.interact()
 	carry.pick_up(wire)
+	await create_timer(0.7).timeout  # Round 31: the hand owns the part only at the grasp
 	terminal.interact()
 	await process_frame
+	await process_frame   # the beam's own _process applies the focused state
 	_check("focused session is actually active", focused.is_active())
 	_check("on/off state preserved while focused", flashlight.is_on())
 	_check("beam hidden while focused (hands occupied)", not light.visible)

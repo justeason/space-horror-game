@@ -6852,3 +6852,1232 @@ fixes, mirror, character silhouette, watch-inspection pose, rig prototype,
 tests, this documentation). Excluded: `CLAUDE.md.save` (editor backup),
 render outputs (scratchpad only), `tests/.last_run.log` (gitignored).
 Not pushed.
+
+# ROUND 26: SHARED LOOK/POSE STATE -- HEAD LOOK, PITCH-AWARE WATCH POSE, AND FIRST-PERSON TORSO CLEARANCE
+
+## A. Root cause (verified, not assumed)
+
+The mirror was not broken. The two character representations ran different
+pose rules:
+
+- **First-person watch rig** (`first_person_watch_rig.gd`): a plain child of
+  Camera3D, so it followed 100% of camera pitch.
+- **World body** (`player_body.gd`): rotated as ONE rigid piece by 30% of
+  camera pitch about the eye (`standing_pitch_follow = 0.3`) -- pelvis and legs
+  included (logged: 23.4 deg whole-body tilt at a 78 deg downward look). It had
+  no head/neck look response of its own.
+- **Raised watch arm**: one fixed body-space target, independent of pitch.
+
+So the mirror showed the same frozen gesture whatever the player did, while
+the first-person watch moved with the camera. Separately, the first-person
+torso clipping: the camera-locked forearm enters the frame from BELOW the
+camera, which is where the player's own chest is. Measured by testing every
+rig sample point against the actual StandingPose primitives: 2 points inside
+the body at level, 131 at 45 deg down, 222 at 60 deg down. Counter-rotating the
+rig enough to clear the torso needed 40-70 deg, pushing the watch 17-41 deg
+above view centre (unreadable) -- not a viable fix on its own.
+
+## B. Shared look/pose architecture
+
+`scripts/player/character_pose_state.gd`, node `Player/PoseState`
+(process_priority -100, so it runs before every consumer):
+
+- **Inputs, read each frame from the authoritative sources** (it is not a
+  controller): look yaw/pitch from LookPivot/PitchPivot, posture
+  (standing/sitting/lying) and watch weight (0..1) from PlayerBody.
+- **Outputs, engine-agnostic angles**: `spine_pitch`, `neck_pitch`,
+  `head_pitch`, and `watch_pitch_bias` (look pitch clamped to +/-60 deg). No
+  CSG node or bone names.
+- `distribute_look_pitch(pitch, posture)` is a pure static function.
+  Standing: spine 20% (limits -15..+8 deg), neck 60% of the rest (-45..+40),
+  head the remainder (+/-25). Head overflow is handed back to the neck, so the
+  shares sum to the look pitch over -80..+73 deg. Sitting: no spine share.
+  Lying: head nod only (-10..+20 deg).
+- `to_dict()` / `from_dict()`: the compact replicable form
+  {yaw, pitch, watch, posture}. A remote peer derives the same joint angles
+  with no camera (`remote_driven`).
+
+Consumers: the world body (`process_priority` 0), the first-person rig
+(`process_priority` 10, so it reads the world arm after the body has posed
+it), and the Skeleton3D prototype (`apply_pose_state(dict)`).
+
+## C. World body: head/neck and watch pose
+
+- `standing_pitch_follow` default 0.3 -> 0: the body stays upright; pelvis,
+  legs and capsule are unaffected by look pitch.
+- HeadGroup restructured: `Collar` stays on the torso; `NeckPivot` (neck base)
+  and `NeckPivot/HeadPivot` (skull base) are plain Node3D pivots whose CSG
+  children render on layer 4 with no shadows. Rotating them is a transform
+  change, not a CSG rebuild. The neck pivot carries spine + neck pitch (the
+  CSG torso is one boolean union and cannot bend cheaply); the head pivot
+  carries head pitch.
+- Watch pose: `watch_target_for_bias()` adds a bounded offset to the wrist
+  target. Looking up adds at most +0.12 m up and 0.03 m forward; looking down
+  lowers it at most 0.06 m; nothing beyond +/-60 deg. The same two-bone IK
+  re-solves (only when the bias changes by > 0.002 rad), so limb lengths, the
+  shoulder pivot and the elbow hinge are preserved by construction. The
+  forearm roll is re-derived so the face keeps turning toward the eye.
+  Press/release and mid-animation reversal are unchanged (the progress tween
+  from Round 25).
+
+## D. First-person vs world
+
+- Level and upward looks: the first-person rig keeps its authored camera
+  framing (readable, stable; transform identity).
+- Looking down (blend from -10 to -40 deg, scaled by the world arm's raise
+  progress): the rig converges on the world arm's real pose. The watch goes to
+  the world watch position in front of the chest, the forearm aligns with the
+  world forearm (coming in from the elbow out to the side, not up through the
+  chest), and the face is turned to the camera. The face is also spun 70% of
+  the way toward level text, bounded by the torso-clearance test.
+- Per-camera visibility: with the body upright, the eye sits directly above
+  the shoulder yoke (this body's torso is centred ~7 cm in front of the eye).
+  A downward glance therefore filled the frame with a grey dome at ~0.3 m. The
+  near-eye upper torso (TrapeziusBase, ChestYoke, ShoulderL/R, ShoulderCapL,
+  Chest, ChestPocket, AccentStripe, plus the right deltoid mesh) now renders on
+  the mirror-only layer 4, like the head and collar. The original CSG nodes
+  stay as hidden anchors; their visual duplicates live in
+  `StandingPose/SelfHiddenTorso/UpperTorso`. The player's own downward glance
+  shows belt, hips, legs and arms; the mirror, surveillance and any other
+  camera see the complete body.
+- The right deltoid was a CSG sphere in the torso union, visible to the
+  player's own camera while the arm was raised (the grey ball the first-person
+  sleeve passed through). It is now a mesh (`DeltoidR`) following its hidden
+  anchor.
+- No arm scaling, FOV, camera-distance or movement-tuning change. The body is
+  not moved or rotated.
+
+## E. Rendered verification (Godot `--write-movie`, frames inspected)
+
+Matrix: C released level; C held at level, 30/60 deg up, 30/60/78 deg down,
+yaw left/right; mid-transition up->down; release while looking down (mid and
+settled); sit/stand then inspect again. Each captured as player POV, raw
+mirror feed, and an external body-relative side camera, before and after.
+
+- Before: the world body leaned as a rigid unit; its head did not look
+  anywhere independently; the raised arm was frozen relative to the torso. At
+  60 deg down, the first-person watch sank into a large grey shoulder/yoke dome.
+- After: the body is upright and planted. The head and neck bow when looking
+  down (the side view shows a natural reading posture) and tilt up when
+  looking up; the watch arm lifts modestly when looking up. First person: no
+  dome and no torso intersection; the forearm comes in from the right toward
+  the world elbow; the watch is readable at level/up and visible at 60 and
+  78 deg down. Releasing C mid-look-down blends back without snapping. Yaw
+  turns the whole upright body; inspection works again after sit/stand.
+
+## F. Skeleton3D migration compatibility
+
+`rigged_technician_prototype.gd` gained `apply_pose_state(dict)`, taking the
+exact replicable dictionary. The spine share is split over the Chest and
+UpperChest bones, then Neck and Head bones; the watch weight and bounded bias
+re-solve and pose the arm bones locally under the shoulder chain, so a
+bending spine carries the arm. `head_forward()` exposes the look direction.
+Verified by test: driven purely from a `from_dict()` state with no camera,
+the skeleton's head looks down/up and the arm raises. The live CSG body is
+unchanged as the playable character until the rig is visually validated.
+
+## G. Tests
+
+- New `tests/test_look_pose_sync.gd`:
+  - state transmission and process order;
+  - anatomical limits and that the shares sum to the look pitch;
+  - lying nod;
+  - world head responds down/up/level;
+  - no whole-body tilt; pelvis/feet planted; collar fixed;
+  - raised watch at -60..75 deg: constant lengths, elbow/wrist in front of the
+    chest, elbow bent, bounded up/down adjustment;
+  - first person: identity at level, 0 torso hits at 30/45/60/78 deg down,
+    watch converges on the world watch at 60 deg down within the view;
+  - layer isolation (rig layer 2; raised arm, deltoid, upper torso and head
+    on layer 4);
+  - release while sweeping the look is monotonic; presentation returns to
+    identity;
+  - sitting/lying posture and bias;
+  - replicated dictionary drives the Skeleton3D prototype.
+- `tests/test_standing_body_composition.gd`: the pitch-sweep invariant was
+  rewritten against what the player's camera actually renders, keeping its
+  intent (no near geometry fills the view, nothing visible at level). It no
+  longer asserts on hidden anchor positions, which was only satisfiable by
+  tilting the whole body. New checks: the upper torso still exists for the
+  mirror; the lower body stays self-visible; the body never tilts.
+
+## H. Remaining limitations
+
+- The CSG torso does not bend; its spine share is carried at the neck base
+  (the Skeleton3D prototype bends Chest/UpperChest).
+- In first person the near-eye upper torso is hidden. Looking straight down
+  you see belt/hips/legs/arms, not your chest. This is a deliberate per-camera
+  rule; the underlying cause is this body's torso sitting ~7 cm in front of
+  the eye (Round 25 proportions note), to be corrected by the rigged
+  character.
+- At 70-80 deg down the first-person watch sits high in the frame (still
+  visible); real people rarely read a watch that steeply.
+- The first-person forearm is still a bare-skin rig; the world arm is gloved.
+- No yaw-only head turn: the head follows pitch; body yaw follows the camera
+  as before.
+- No networking implemented; only the replicable state form exists.
+
+## I. Git
+
+Round 25's local commit `b927d7a` is preserved and still unpushed. Round 26
+changes are uncommitted in the working tree (no commit authorized for this
+round).
+
+# ROUND 27: ONE SHARED WATCH POSE -- FIRST PERSON AND MIRROR SHOW THE SAME ACTION
+
+## A. Root causes
+
+1. **Two rules, by design (Round 26).** The world arm reacted only a little to
+   look pitch: a bounded +/-60 deg bias, at most +12 cm up and -6 cm down, so
+   the mirror looked nearly static. The first-person rig followed the camera
+   fully at level/up and converged on that nearly static world arm only when
+   looking down. Looking up, the first-person watch rode with the camera while
+   the mirror arm barely moved; looking down, the first-person watch drifted
+   across the screen toward a static arm. The playtest symptoms followed
+   directly.
+2. **Strict 1:1 above eye level read as a wave** (rendered): holding the watch
+   at a fixed view-relative direction while looking up 60 deg puts the hand
+   20+ cm above the eye -- overhead.
+3. **The hand always continued the forearm's line, and the elbow pole always
+   pointed down**, so high or level holds stood the forearm up with the
+   fingers pointing up past the face ("covering the mouth", later "salute").
+4. **A sign error in the first wrist-flexion attempt:** rotating about
+   (forearm x up) by a positive angle turns the hand toward up, so the
+   "levelling" bent the fingers further up. Caught by render; a regression
+   check now covers it (verified to fail with the wrong sign).
+
+## B. The shared rule (single source of truth)
+
+`CharacterPoseState.watch_target_for_pitch(pitch)` gives the wrist target in
+body space (eye at origin):
+
+- **Elevation** = look pitch - 32 deg (1:1), clamped to [-52 deg, 0 deg]:
+  - -52 deg: below that the chest is in the way, so the arm holds and the head
+    bows (from about 20 deg down);
+  - 0 deg: eye level; above that the arm holds in front of the face and the
+    head looks up (from about 32 deg up). No overhead wave.
+- **Distance**: 0.50 m, up to 0.56 m when low (chest clearance), 0.46 m at
+  eye level.
+- The world arm two-bone-IK-solves to it each time it moves more than 1 mm.
+- The first-person rig is ALWAYS the world arm's pose (watch position, forearm
+  direction, face to camera), plus a constant +9 deg framing lift about the
+  eye. The lift keeps the bigger first-person watch off the frame's bottom
+  edge and fades out below -30 deg, where the arm no longer follows. Its
+  raise/lower motion is the world arm's own animation; it stays shown until
+  that arm is fully down.
+
+Additions in the world arm:
+
+- **Clavicle**: the shoulder pivot lifts by at most 2.5 cm up and 1 cm forward
+  when the watch is held high.
+- **Elbow pole**: rises toward shoulder height for high holds, so the forearm
+  lies across in front of the face.
+- **Wrist flexion**: the hand bends 60% back toward horizontal (cap 35 deg).
+  The watch is counter-rotated so it stays fixed on the forearm (distances to
+  wrist and elbow unchanged).
+
+## C. Measured (body space)
+
+| look pitch | wrist y | first-person watch from view centre |
+|---|---|---|
+| -78 | -0.44 (holds) | 25 deg above |
+| -60 | -0.44 (holds) | 7 deg above |
+| -30 | -0.44 | 14 deg below |
+| 0 | -0.28 | ~22 deg below |
+| +30 | -0.02 (eye level) | ~21 deg below |
+| +60 | -0.02 (holds) | below the view |
+
+The wrist travels 42 cm between 30 deg down and 30 deg up, a large, readable
+mirror motion. Upper arm 0.377 m and forearm 0.300 m are exact at every pitch;
+0 first-person torso hits at every pitch.
+
+## D. Character presentation
+
+The first-person forearm is now the same uniform-grey coverall sleeve and the
+hand the same dark work glove as the world body (it was bare skin), so the
+player sees the same arm the mirror and other players see. Geometry
+unchanged.
+
+## E. Rendered verification (`--write-movie`, frames inspected)
+
+Matrix: C released level; C held level, 30/60 deg up, 30/60/78 deg down, yaw
+left/right, mid up->down transition, release while looking down (mid and
+settled), sit/stand then inspect, oblique mirror view at 30 deg down and
+35 deg up. Each captured as player POV, raw mirror feed and an external side
+view, compared against Round 26's final frames and the intermediate passes
+(wave, salute and finger-sign issues were found and fixed this way).
+
+## F. Remaining limitations
+
+- Looking up more than ~45 deg with C held, the watch is below the first-person
+  view (by design: the mirror shows it held at eye level while the head looks
+  up; it does not magically ride with the camera).
+- At 70-80 deg down the watch sits high in the frame.
+- The first-person watch is still a larger, separately modelled viewmodel
+  (10 cm face) than the world watch (4 cm); same position and motion,
+  different scale, for readability.
+- The CSG torso still does not bend; the hand is rigid (no finger curl).
+
+## G. Tests (Round 27)
+
+- `test_look_pose_sync.gd` rewritten for the shared rule:
+  - wrist rises monotonically with pitch;
+  - it moves clearly between 30 deg down and level, and between level and
+    30 deg up, reaching eye level;
+  - it holds above eye level (no overhead wave) and holds below the chest
+    limit;
+  - the wrist sits at the shared target elevation at every pitch;
+  - the first-person watch equals the world watch plus the framing lift at
+    every pitch;
+  - first-person framing stays steady from level to 30 deg up, and at 60 deg
+    up the player looks above the held watch;
+  - fingers are never bent further up than the forearm (verified to FAIL with
+    the old flexion sign);
+  - elbow/wrist stay outside the torso and clear of the head;
+  - the rig hides once the world arm is fully down.
+- `test_watch_raise_pose.gd`: the shoulder may lift by the bounded clavicle
+  amount (<= 3 cm); the watch must stay fixed on the forearm (distances to
+  wrist and elbow); the level elbow bound is < 95 deg.
+- `test_wristwatch.gd` / `test_wristwatch_screen_stability.gd`:
+  - the rig now stays shown until the world arm finishes lowering (0.42 s),
+    so the release waits allow for it;
+  - frustum containment is asserted from -60 to +20 deg, where the watch is
+    held in view;
+  - at 60/75 deg up the rig must be in front of and below the view (the
+    deliberate Round 27 contract; the old "watch glued in view at every
+    pitch" assertion was the inconsistency the playtest reported).
+
+# ROUND 27 FOLLOW-UP: EXTREME DOWNWARD LOOK WITH THE WATCH RAISED
+
+## A. Diagnosis (measured from the player's own camera)
+
+Bounding-box projection proved too crude, so the measurement used rendered
+pixel differences (full frame vs body hidden vs first-person arm hidden),
+C held. Before the fix, body pixels covered 33% / 37% / 31% of the
+lower-centre region at 60 / 75 / 80 deg down.
+
+1. **Which parts were visible:**
+   - the top of the still-self-visible torso (belly bridge, waist, belt,
+     pelvis cylinder) as a flat-topped grey disc, because the chest above it
+     was already hidden from the player's camera;
+   - the shoulder-end caps of the hanging arm tubes as floating stumps about
+     0.35 m from the eye (their shoulders were hidden).
+2. **Torso too far forward relative to the camera: yes.** This body had its
+   torso centred 7-10 cm in front of the eye; a real person's eyes are about
+   10 cm in front of the neck/torso axis. Looking straight down therefore
+   looked onto the top of the belly and shoulders.
+3. **Did the watch target keep diving: no.** The world wrist already holds
+   still from about 20 deg down (the -52 deg elevation chest limit).
+4. **Was the forearm path camera-driven: yes.** Round 26's text-levelling
+   spun the WHOLE first-person arm about the face normal. At steep downward
+   looks that swung the forearm off the real forearm line until it came up
+   nearly vertically from the lower right, reading as a camera-attached prop.
+
+## B. Fixes
+
+- `StandingPose` and `HeadGroup` sit 0.10 m behind the eye (anatomical
+  placement). Only the visuals moved: the camera, collision capsule and the
+  CarryAnchor/LapAnchor are unchanged. IK targets and the eye are converted
+  into pose space.
+- No more arm spin. The first-person arm stays exactly on the world forearm;
+  only the watch's text label auto-levels about its own face normal, like an
+  auto-orienting display.
+- Legs-only self view: the belly bridge, waist, belt and pelvis cylinder join
+  the near-eye chest/shoulders on the mirror-only layer, and both standing
+  arms/hands are mirror-only (standing `HandL`, like `HandR`, became a plain
+  Node3D so its palm can carry a layer). The player's own camera sees thighs
+  and feet, plus the first-person watch arm while C is held. The mirror and
+  every other camera see the complete body.
+- Watch hold distance re-tuned for the new body placement: 0.42 m from the
+  eye (about 0.3 m in front of the chest), 0.52 m at the lowest hold, 0.40 m
+  at eye level. The level elbow is 85 deg, versus 97 deg after the move alone.
+
+## C. Result (pixel coverage of body in the lower-centre region, C held)
+
+| look down | before | after |
+|---|---|---|
+| 60 deg | 33.2% | 13.5% (thigh tops) |
+| 75 deg | 36.9% | 8.4% |
+| 80 deg | 31.4% | 5.7% |
+
+The first-person arm stays at about 5% of the frame and out of the lower
+centre at steep angles. The watch is 10 deg from view centre at 45 deg down,
+11 deg above it at 60 deg down, and 26 deg at 78 deg down. Elbow interior
+71-108 deg at every pitch; 0 torso hits.
+
+## D. Tests
+
+- `test_standing_body_composition.gd`: new structural guarantee -- everything
+  of the body the player's own camera can render is below hip height and at
+  least 0.6 m from the eye; legs stay visible.
+- `test_watch_raise_pose.gd`: arms are mirror-only at rest too; the watch
+  attachment is measured in pose space.
+- `test_look_pose_sync.gd`: real-time wait for the raise (headless frames can
+  be milliseconds).
+
+# ROUND 28: THE RIGGED TECHNICIAN, ANATOMICAL FIRST-PERSON VIEW, ONE SHARED HAND, MAINTENANCE WORKDAYS
+
+## A. Root causes
+
+**Straight-down self view ("two large rounded leg shapes, no torso").**
+Measured from the scene coordinates and confirmed by render:
+
+1. The old CSG body's legs were raked about 20 deg forward: hip caps 3 cm in
+   front of the eye, knees 10 cm, feet 30 cm.
+2. Round 27's legs-only rule hid its torso from the player's camera.
+3. The camera rotated in place at the eye: at 80 deg down, the lower half of
+   the 72 deg frame looks about 26 deg behind vertical.
+
+So a straight-down look landed on two thigh-top spheres directly under the
+camera, with no torso connecting them. Your hypothesis was right in part: a
+real person's eyes sit forward of the torso. But a forward-shifted camera
+alone was not enough (verified by render): with the eye 9-12 cm forward the
+chest still filled the lower view, because real eyes also travel forward and
+down with the neck when looking down.
+
+**First-person fingers missing at 45 deg up.** Two different models: the
+mirror showed the world body's hand, while the player saw a separate
+camera-attached rig whose oversized strap/case sat between the camera and
+its own short finger meshes at upward looks.
+
+## B. Fixes
+
+- **New `scripts/character/technician_rig.gd`
+  (`scenes/character/technician_rig.tscn`):**
+  - a Skeleton3D with 22 humanoid-profile bones and locally generated,
+    smoothly skinned meshes (no external assets);
+  - blend-weighted joints (543 blended vertices);
+  - five-digit gloved hands, coverall, belt, boots;
+  - helmet/visor/headset head;
+  - a BoneAttachment wristwatch with a readable face;
+  - ~1.70 m anthropometric proportions: upper arm 0.32 m, forearm 0.25 m,
+    thigh 0.40 m;
+  - the EYE 12 cm in front of a vertical ear-shoulder-hip-ankle plumb line.
+- **Posing is entirely bone rotation**, so limb lengths are constant:
+  - pose_look (spine/neck/head from CharacterPoseState);
+  - two-bone arm/leg IK;
+  - procedural walk from real movement speed;
+  - sit (legs/hands follow the existing, tested sitting anchors);
+  - lie (flat on the back).
+- **`player_body.gd` drives the rig as the visible body**
+  (`use_rigged_visual`, default true):
+  - the old CSG nodes stay as the tested pose anchors but are not rendered;
+  - setting `layers = 0` at runtime crashed the Godot 4.7 renderer, so
+    visibility is used instead;
+  - false = the legacy visual (fallback, tested);
+  - the public PlayerBody API is unchanged.
+- **Body visibility:** the rig body (torso, arms, hands, legs) is seen by the
+  player AND every other camera; only the head/neck mesh is mirror-only.
+- **Shared hand:** the old first-person rig is suppressed
+  (`suppress_presentation`), so player and mirror see the SAME arm, hand,
+  fingers and watch.
+- **Anatomical eye anchor:** while standing, the camera node's local position
+  follows the rig's POSED head -- `eye_anchor_offset()` uses the same
+  spine/neck/head rotations the mirror shows. At 80 deg down the eye moves
+  24 cm down and 8 cm forward; at a level look the offset is exactly zero.
+  The LookPivot/PitchPivot controller, capsule, movement and interaction ray
+  origin logic are untouched (the ray already lives on the camera).
+- **Watch:**
+  - shared target retuned for the rig: level hold 24 deg below the eye line at
+    0.35 m;
+  - the elbow drops for chest-height holds;
+  - high holds swing the forearm across in front of the face;
+  - the head bows toward the watch while reading;
+  - the dial text is abbreviated to the real 48 mm face ("CHECK IN / CTRL RM").
+
+## C. Rendered verification (inspected)
+
+- **First-person downward, no C** (level, 30/45/60/75/80): at 80 deg the view
+  shows belly, belt, thighs and boots in one continuous body; no grey dome,
+  no disconnected spheres.
+- **Watch** (level, 30 up, 45/60 down, extreme down, release mid-way;
+  first-person and mirror side by side):
+  - one gloved arm with five fingers;
+  - a readable face;
+  - the same gesture in the mirror.
+- **Full character** (front/side/back/three-quarter standing, walking,
+  sitting, lying, watch inspection), standalone and in-game. Defects fixed
+  along the way:
+  - pointed shoulder caps;
+  - flared hip "pockets";
+  - lying face-down / head through the mattress;
+  - missing head when lying;
+  - salute-like high hold;
+  - fingers at the face at level;
+  - oversized watch text.
+- **Physical maintenance:** hand reaching into the filtration cabinet onto
+  the cartridge; carrying; at the station; installed (no floating cartridge).
+
+## D. Workdays (Priority 4)
+
+- **Rotation:** day 1 is unchanged (Slice A/B). From day 2 (after sleeping),
+  DayPlan runs one authored workday from `workday_rotation` (Filter Service ->
+  Calibration -> Electrical Service).
+- **Steps** are ordered references to EXISTING task fields (c01, c02, e02,
+  e05, c05, l02, l07) plus named physical facts reported by the real objects:
+  - storage cabinets: `retrieved:wire` / `retrieved:filter`;
+  - filter housing: `inspected:filter`;
+  - disposal bin: `disposed:used_filter`;
+  - Diagnostics on calibration day: `reviewed:sensor_warning`;
+  - the workstation: `verified` / `closed`.
+- **Separate states:** restore -> verify -> cleanup -> close. The Work Orders
+  [R] verifies; a later [R] closes only once cleanup is done ("Order stays
+  open: used parts still awaiting disposal").
+- **Guidance:** the map room and wristwatch follow the next step.
+- **Calibration day:** Diagnostics reviews the pressure warning instead of
+  raising the electrical fault.
+- **No re-rolls:** puzzle configurations are never regenerated.
+- **Serviced equipment is skipped:** stations keep their repaired state across
+  days and there is no re-fault/restock system yet, so the rotation never
+  schedules a workday for equipment that's already fixed.
+
+## E. Physical interaction (Priority 5)
+
+- `carry_system.gd` emits `item_picked_up(item, from_global)` before
+  reparenting. Gameplay state is unchanged and immediate.
+- The rig's right hand reaches to the part (which stays put), grasps, and
+  carries it in the palm: CarryAnchor follows the palm.
+- Drop at any time returns the part through the existing return/placement
+  logic. The single-item rule is untouched; no duplicates, no losses
+  (tested).
+
+## F. Ambience (Priority 6)
+
+`scripts/audio/station_ambience.gd`: three quiet procedural looping beds
+(ventilation, Engineering machinery, Life Support airflow), driven only by
+real state:
+
+- an electrical crackle while the Engineering power fault is open;
+- strained/quieter airflow while the filter housing is isolated.
+
+## G. Tests
+
+New:
+
+- `test_rigged_character.gd`: bones, skinning, blended weights, anatomy, eye
+  in front of the plumb line, per-camera visibility, no legacy visuals, eye
+  anchor, fingers in the player's view looking up, constant limb lengths,
+  sit/lie/stand, walk, fallback;
+- `test_workdays.gd`;
+- `test_carry_reach.gd`;
+- `test_station_ambience.gd`.
+
+Rewritten (geometry intentionally replaced; equivalent behaviour checks
+kept):
+
+- `test_look_pose_sync.gd` section 5/6;
+- `test_standing_body_composition.gd`: the legs-only rule became an eye in
+  front of the chest surface, plus no torso joint within 0.12 m of the eye
+  at any pitch;
+- `test_watch_raise_pose.gd`, `test_wristwatch.gd`,
+  `test_wristwatch_screen_stability.gd`: "rig visible" -> the shared rig
+  watch is raised and shown.
+
+## H. Known limitations
+
+- The character mesh is procedural low-poly (no textures, simple helmet
+  head, rigid fingers); it is a solid base, not final art.
+- Walking is a procedural cycle; there is no AnimationTree yet.
+- Sitting reuses the legacy sitting anchors; seated shoulder/neck detail is
+  simple.
+- With C held at about 80 deg down, the raised upper arm sits close to the
+  lowered eye on the right of the view.
+- The eye anchor lowers the interaction ray origin up to 24 cm at extreme
+  downward looks (looking at the floor), which is physically correct.
+- Equipment does not re-fault and parts are not restocked across days;
+  workdays therefore run once per unserviced system.
+- The old first-person watch rig and the CSG body remain in the tree (unused
+  visuals) until the legacy fallback is retired.
+
+---
+
+# Round 29 — Carrying bug, bed camera, head, watch range, gait, blending, recurring work
+
+## A. Carrying moved the player backward (Priority 1)
+
+- **Root cause (measured):** every carryable (filter, wire, used filter) is a
+  `StaticBody3D` on collision layer 1, and its collider stayed ENABLED while
+  parented to the carry anchor. Round 28's palm-carry pose holds the filter
+  ~0.36 m from the capsule axis, so its 0.18 m box reached ~0.27 m -- inside
+  FreeMoveBody's 0.30 m capsule. `move_and_slide()` depenetrated the capsule
+  every tick (velocity stayed exactly 0), the player followed the capsule, the
+  hand followed the player, and the item overlapped again: a self-sustaining
+  drift (3.4 m in 3 s with no input) that stopped the moment the item was
+  dropped. The wire did the same, less (0.85 m) -- proved by re-enabling the
+  held collider in a scratch copy of the new test.
+- **Fix (`carry_system.gd`):** a held item leaves the physics world:
+  `_suspend_physics()` saves and zeroes its `collision_layer` at pickup;
+  `_release_physics()` restores it on EVERY release path (drop, drop at feet,
+  consume, take/install). The storage cabinet's own `disabled` gating is
+  untouched (different property), so re-stowing behind a shut door still
+  works.
+- **Drop placement (Priority 6):** drop-at-feet put the item's ORIGIN 3 cm
+  above the floor, sinking both filter cartridges (geometry 0.092 m below
+  their origin) 6 cm into the floor. `item_bottom_offset()` now rests the
+  item's lowest visual/collision point on the floor.
+
+## B. Bed sitting / lying camera (Priority 2)
+
+- **Root cause (measured):** the legacy SittingPose anchors describe a
+  RECLINED sitter (hips 0.20 m in front of and 0.56 m below the eye), but the
+  rig sat upright on those hips, so its eye was 0.38 m IN FRONT of the camera:
+  the camera sat behind the character's head, its neck/shoulders/upper back
+  0.22-0.29 m ahead of the lens.
+- **Fix:** `_pose_rig_seated_recline()` reclines the rig from its pelvis
+  (posterior pelvic tilt 40 %, lumbar 60 %) under two constraints -- pelvis at
+  seat height on the mattress, eye on the seat camera -- solved at a NEUTRAL
+  look so the pelvis stays planted; the look then bends neck/head and the
+  camera follows the posed eye (rotated offset, never an absolute pin, so the
+  laptop editor zoom still moves it). While the laptop is open, the posed eye
+  itself is pinned instead (blend), so laptop/editor framing is unchanged.
+  Seated feet/hands follow the pelvis's fore/aft shift.
+- **Lying:** the camera sits on the lying rig's eye; looking toward the feet
+  lifts the head (chin toward chest, up to 55 deg) so the view runs down the
+  body instead of grazing the chest; the rig is anchored at the shoulders so
+  the head rests at the pillow. (`set_lying()` is still not reachable from
+  gameplay -- sleeping happens seated, timing unchanged.)
+- **Get-up:** the seated body turns 90 deg toward the bunk's open west edge
+  and slides 0.28 m to it while the legs swing down (parallel to the existing
+  stages, same total duration), and the rise stage carries the eye out over
+  the planted feet -- previously the legacy leg swing planted the feet 0.4 m
+  ahead, through the mattress.
+
+## C. Head / helmet / neck (Priority 3)
+
+- **Root cause:** `_ellipsoid()` was wound opposite to `_loft()`, so every
+  ellipsoid -- helmet, chin, visor and both shoulder deltoids -- rendered
+  INSIDE-OUT (back faces only): a featureless glossy black ball for a head and
+  dark holes on the shoulders. Winding fixed.
+- Rebuilt head: matte grey-blue helmet shell (0.20 m wide, 0.24 m tall with
+  chin guard), a separate glossy visor band, ear pads seated on the shell, a
+  helmet neck seal, a 6 cm-radius neck and a raised collar (only ~3 cm of neck
+  shows). The shared look split (spine/neck/head) is unchanged so the
+  approved first-person downward behaviour is unchanged.
+
+## D. Watch inspection above eye level (Priority 4)
+
+- **Root cause:** the shared target's elevation was clamped at eye level, so
+  above ~24 deg up the target was "eye height, 0.33 m ahead" -- ~0.53 m from
+  the shoulder for a 0.565 m arm (39 deg elbow flexion at 35 deg up).
+- **Fix:** above a level look only (`pitch > 0`): the watch keeps rising with
+  the look up to a 32 deg elevation, the reading distance eases to 0.28 m
+  (the shoulder joint is ~13 cm behind the eye; a bent elbow needs the wrist
+  within ~0.44 m of the shrugged shoulder), the wrist comes to the midline,
+  the clavicle shrugs (24 deg) and protracts (14 deg), the elbow pole goes
+  from "out, forearm across the face" (to ~30 deg) to "low and in front"
+  (by 60 deg), the target is measured from the posed eye, and the hand
+  relaxes forward at the wrist. At or below a level look the code path and
+  shared target are exactly Round 28's (tested against a verbatim replica).
+- **Measured:** elbow flexion 81-89 deg from 20 to 70 deg up; dial faces the
+  eye (0.99); watch 25-32 deg below view centre up to ~56 deg.
+- **Anatomical limit:** to keep the watch in view at a 70 deg upward look it
+  would have to sit ~42 deg above the eye line -- above the head (a raised
+  arm). The pose therefore caps the rise; past ~56 deg the watch slips toward
+  the bottom edge (43 deg below centre at 70 deg, partly out of the 72 deg
+  view) while the arm stays a believable bent-elbow check.
+
+## E. Gait and footsteps (Priority 5)
+
+- **Root causes (real W input):**
+  - **Drift against the sounds:** the rig's cycle advanced one step per 0.75 m
+    while footsteps play every 0.85 m, so contacts drifted against the sounds
+    (hip angle at successive sounds: +12/-1/-8 deg).
+  - **Large swing:** ±24 deg pendulum legs with 38 deg knees.
+  - **Sliding:** the "planted" foot slid at 1.38 m/s (77 % of walking speed).
+  - **High frame rates:** at render rates above the 60 Hz physics rate, most
+    frames saw zero displacement and the walk blend collapsed.
+- **Fix:**
+  - **Locked contacts:** `free_move_controller.gd` exposes `gait_position()`,
+    meaning footsteps played plus progress. The legs are locked to it, so
+    every footstep sound is a heel strike by construction.
+  - **IK feet:** feet are placed by leg IK on a 0.55 m sweep (0.25 ahead /
+    0.30 behind), with a swing arc and a 68 % ground-contact fraction. The
+    pelvis drops 2 cm and the arms counter-swing.
+  - **Smoothing:** speed is low-passed; the phase stays continuous across
+    accumulator resets and source switches; side-steps never cross the legs.
+- **Unchanged:** move speed 1.8 m/s and step distance 0.85 m. At that speed
+  and cadence the footprint spacing itself is fixed by physics (speed /
+  cadence); what shrank is how far the legs reach and how much the feet slide.
+- **Measured:**
+  - foot reach 0.24 m ahead of the hip, down from 0.33 m;
+  - stance-phase slide 0.17 m/s, down from 1.38 m/s;
+  - every sound within 0.04 steps of a heel strike, forward, backward,
+    sideways and while turning.
+
+## F. Pickup lifecycle (Priority 6)
+
+Gameplay ownership stays immediate (single-item rule and every task contract
+unchanged); visually the part stays on its shelf until the hand arrives
+(reach 0.45 s, linear outer blend over the IK's own joint easing -- the old
+double ease peaked at ~9 m/s), transfers to the palm at the grasp, returns to
+the carry pose by 1.05 s. The held part is out of the physics world; drops
+rest on the floor; interruptions and rapid pickup/drop resolve
+deterministically (tested for both parts).
+
+## G. Animation blending (Priority 7)
+
+`player_body.gd` stays the single owner of every bone (one composition per
+frame from the shared pose state). Added to it:
+
+- **Pose crossfade:** `technician_rig.gd` gets `snapshot()` /
+  `crossfade_from()`, a 0.4 s world-space crossfade on stand/sit/lie
+  switches. It starts at the switch itself, from the pose actually shown, and
+  an out-of-frame refresh never completes it.
+- **Sit-down preview:** while the sit-down camera tween runs, the visible body
+  eases into the final seated pose already placed at the seat. The logical
+  pose and its timing are unchanged.
+- **Camera blending:** the camera's local target blends across pose switches.
+
+## H. Repeatable workday foundation (Priority 8)
+
+- **Service log:** DayPlan's serviced set became a log, keeping the last day
+  each system was serviced plus `service_history`.
+- **Intervals:** `SERVICE_INTERVAL_DAYS` is filter 4, calibration 3,
+  electrical 5. New API: `is_service_due()` and `days_since_service()`.
+- **Opt-in re-arm:** `register_service_rearm(workday, handler)` and a
+  deterministic `daily_variant_seed()`. A serviced system is scheduled again
+  only when it is due AND its equipment can genuinely re-fault. No station
+  registers yet, so the shipped behaviour equals Round 28's.
+- **Staged plan:**
+  1. Calibration re-arm: re-drift the coupled chambers from the day seed.
+  2. Storage restock: a delivery restores a cabinet's part as a new physical
+     instance, with ownership rules.
+  3. Filter re-arm: fresh cartridge stock, the housing accepts a new service,
+     and a new used cartridge is produced.
+  4. Electrical: a different fixed component faults per day seed.
+
+## I. Tests and rendered verification
+
+- **New tests** (registered in `tests/run_tests.sh`):
+  - `test_carry_no_drift`: proved to fail with the pre-fix collider (7.5 m of drift).
+  - `test_bed_camera`, `test_watch_high_range`, `test_gait_footsteps`
+  - `test_workday_recurrence`, `test_animation_transitions`
+- **Updated for new intent:**
+  - `test_rigged_character`: waits for the crossfade, and for settling after the teleport.
+  - `test_look_pose_sync`: the high-hold intent changed; downward checks are unchanged.
+  - `test_storage_cabinet_depth` and `test_carry_reach`: longer reach timing.
+- **Results:** baseline 84/84; final full runs 90/90 and 90/90 (exit 0);
+  headless startup clean; navigation 38 edges, 5 known, 0 new.
+- **Renders inspected:**
+  - bed: standing by the bunk, sit-down mid-move, seated at −45/−12/+20,
+    woken, get-up leg swing / rise / swap / stood, lying looking at the
+    ceiling and toward the feet;
+  - head close-ups: front, side, three-quarter at neutral, ±40 and the watch
+    holds;
+  - mirror + first-person watch matrix: 0, +20/35/45/60/70, −30/−60/−80;
+  - walking side view at each footstep contact and mid-stride;
+  - filter and wire reach / grasp / carry.
+
+## J. Limitations
+
+- `set_lying()` is still not reached from gameplay; sleep stays seated, with
+  timing unchanged.
+- Above about 56° up the watch drifts to the bottom of the view, and at 70°
+  it is out of view (the anatomical limit). In the mirror the raised forearm
+  sits above the helmet line at 60–70°.
+- At an 0.85 m cadence and 1.8 m/s, footprint spacing is fixed. The visible
+  reach and the slide shrank, but stance slide is about 0.17 m/s, not zero.
+- Gameplay ownership of a picked-up part is immediate; only the visual
+  transfer waits for the grasp (0.45 s).
+- The authored 0.35 s walk-back at the end of the get-up is still brisk
+  (about 4 m/s).
+- No station registers a re-arm handler yet, so recurring work is a
+  foundation only; part restocking is not implemented.
+- (Corrected in Round 30: the "Storage floor gap" reported here was wrong.
+  That point is inside the Storage north wall, and a ray that starts inside a
+  solid reports no hit. A 1,572-sample sweep found no floor holes.)
+
+
+---
+
+# Round 30 — Laptop on the bed, furniture contact, proportions, recurring calibration
+
+## A. Bed laptop (Priority 2)
+
+- **Root cause (rendered + measured):** the Round 29 reclined bed pose moved
+  the rig's pelvis ~10 cm forward of the legacy hip anchor, while the legs
+  still IK'd to the legacy ankle anchors, so the knees folded UP. The laptop
+  stayed on the fixed legacy `LapAnchor`, now between/under the thighs, and
+  the raised knees stood in front of the screen (in the editing view they
+  covered most of it).
+- **Seat style:** `player_body.gd` gains `seated_on_bed`, set by
+  `sleep_state.gd` (`set_seat_style(true)`). The workstation chair keeps the
+  legacy anchors.
+- **Legs:** on the bunk the legs lie out along the mattress (hip joint to
+  ankle 0.74 m, knees soft). The get-up leg swing, which moves the legacy
+  ankle anchors, blends back to them.
+- **Laptop placement:** `LapAnchor` rides on top of the actual thighs (62 %
+  of the way hip→knee, 0.10 m above the thigh centre line). It pitches with
+  the thighs plus the laptop's held 20° tilt, so the base lies along the lap.
+  Its position comes from the NEUTRAL seated placement, so the open laptop
+  never drifts as the player looks around.
+- **Hands:** while the laptop is open, both hands rest on its keyboard.
+- **Unchanged:** laptop/editor framing tests (aim, zoom distance,
+  no-reversal) and sleep/wake timing.
+
+## B. Furniture contact and drop physics (Priority 3)
+
+- **Root causes:**
+  1. 107 visible interior props had no collision at all: mattress, pillow,
+     headboard, desk slab, console desk and kickplate, wash counter and basin,
+     wall shelf, locker, stools, personal container, waste-hatch housing, and
+     more. The drop ray went straight through them.
+  2. The drop was a single ray that placed the item's ORIGIN at one point,
+     with no footprint, clearance or path checks.
+  3. The bunk's interaction collider is an invisible box from 0.40 to 0.75 m,
+     21 cm above the mattress top. Once furniture collided, items rested on
+     thin air.
+- **`scripts/station/furniture_contact.gd`:** the listed props collide on a
+  dedicated contact layer (value 4), never layer 1. The player capsule (mask
+  1), navigation sweeps and interaction ray (now explicitly mask 1) are
+  exactly as before.
+- **Placement solver (`carry_system.gd`):**
+  - **Sweep:** an upright box fitted to the item's VISIBLE meshes (the wire's
+    collision box hangs 3.5 cm below its coil), yawed to the player's facing.
+  - **Path:** cast out from the body to a candidate at carried height, then
+    lifted to chest height to clear counters and desks.
+  - **Fall:** cast straight down onto the first surface on layer 1 or the
+    furniture layer.
+  - **Accept only if:**
+    - the surface is near-level (normal.y > 0.85);
+    - the centre plus at least 3 of 4 inset footprint corners are supported
+      within 2.5 cm, so nothing balances on edges, seams or steps;
+    - the start pose is clear;
+    - the drop is not "down a pit".
+  - **Slide:** a partly supported rest slides toward its supported side, up to
+    3 × 6 cm, before the next candidate (4 distances × 5 angles × 2 heights).
+- **Landing:** the part falls from the hand under gravity (≤ 0.5 s), turning
+  upright, with a small damped settle. It stays out of the physics world until
+  landed, can be caught mid-fall, and its layer is tracked per item.
+- **Hover proxies:** the bunk and the two wall-station hover volumes are in
+  the `placement_proxy` group. The solver ignores them, and the interaction ray
+  looks through a proxy to a carryable part resting inside it, so a part on
+  the mattress can be picked up again.
+- **Storage logic:** facing the OPEN cabinet a part belongs to, Space stows it
+  back on its own shelf slot (prompt "Space: Stow …", stock restored). A part
+  never stows into a cabinet it does not belong to.
+- **Flat floors:** a 1,572-sample sweep found every walkable floor flat
+  (y = 0) with no holes. The station's "uneven surfaces" are its furniture
+  (stacked mattress/pillow/blanket, frame trims, recessed basin, shelf lips,
+  desks, stools, hatch housing).
+
+## C. Proportions (Priority 1)
+
+From the rendered turnaround, the torso was a straight tube: the chest no
+wider than the hips, almost no waist, a flat back and seat, and stick legs.
+Only the mesh rings were changed:
+
+- broader chest (rx 0.178);
+- tapered waist (0.128);
+- seat and shoulder-blade volume added behind;
+- fuller upper thighs (fullness added front-to-back after a first try flared
+  sideways) and a calf.
+
+The chest FRONT surface is unchanged to the millimetre (first-person eye
+clearance), and no bone, joint or pose changed, so the arm, watch, walk and
+head are identical (watch matrix and walk re-rendered).
+
+## D. Recurring maintenance (Priority C)
+
+Calibration is now a genuinely recurring service. `sensor_calibration_station.gd`
+registers its re-arm with DayPlan:
+
+- **When:** once it is due (3 days after its last service) and every system
+  has been serviced once, a new Calibration work order starts.
+- **Drift:** the order comes with a recorded sensor drift. Its
+  required-chamber count (1–3) comes from the day's variant seed, which the
+  real calibration view uses: stable within the day, different across days.
+- **Prompt:** "drift detected" until calibrated.
+
+Filter and electrical do not recur yet: they need part restocking and a
+second physical used part, which is the next staged step.
+
+## E. Tests and rendered verification
+
+- **New tests:**
+  - `test_furniture_contact`: 12 scenarios × 2 parts, stow, hover through
+    proxies, pick-up after settling. Proved to fail without the furniture
+    collision.
+  - `test_bed_laptop`: laptop on the thighs, no thigh penetration, nothing
+    between the eye and the screen, hands on keys, no drift while looking
+    around, get-up restores the anchor, chair unchanged.
+- **Updated:** `test_workday_recurrence` (real calibration recurrence and the
+  seeded requirement in the real view).
+- **Renders inspected:**
+  - seated, laptop open (side and front), editing, closed, woken, get-up;
+  - drops on bed, blanket, desk, counter, console desk, Storage corner and
+    waste-hatch area, plus a mid-fall frame;
+  - character turnaround before/after and mirror;
+  - watch matrix (0, 35, 60, −30, −60), walking side view.
+- **Render-environment note:** with the Godot window occluded, macOS throttles
+  it (0 % CPU, no `frame_post_draw`), so renders now use `--write-movie`.
+  Giving the log editor keyboard focus also stalled a movie render, so the
+  editing frame comes from an earlier non-movie run.
+
+## F. Limitations
+
+- Placement is a deterministic solver with a scripted fall and settle, not a
+  rigid-body simulation: parts do not tumble, roll or stack on each other.
+- Furniture surfaces collide only for parts and placement. The player capsule
+  still passes through un-collided furniture, as before, to keep the locked
+  movement/navigation baseline.
+- Only calibration recurs; part restocking is not implemented.
+- The bed legs-out pose applies only on the bunk; the workstation chair keeps
+  the legacy seated anchors.
+- A small bump remains at the hip joints in the front view.
+
+## G. Late fixes found by the final suite runs
+
+- **Reach speed:** the transition test now samples every render frame and
+  divides by that frame's own engine delta (the old per-tick reading was
+  flaky). Measured that way, the hand's peak reach speed was ~5.7 m/s. The
+  reach is now 0.6 s out and back to the carry pose by 1.2 s, and the return
+  blends the three arm joints in JOINT space between the solved grasp and
+  carry arms; a straight-line IK target swung the elbow at ~7 m/s. Peak is
+  now ~2.8 m/s.
+- **Release snap:** dropping, stowing or installing mid-reach snapped the arm
+  ~0.9 m in one frame. A release now eases from the arm rotations last shown.
+- **Held part hidden by the door:** closing a cabinet during the reach hid and
+  disabled the part already taken (it still sat at its shelf spot). A held
+  part (`carry_system.is_holding()`) is never "stowed".
+- **Final results:** two full runs 92/92 PASS, exit 0; headless startup
+  clean; navigation 5 known, 0 new; 93 test scripts on disk, 92 in the runner
+  (the manual-only one excluded).
+
+---
+
+# Round 31 — Physical storage, restocking, repeatable maintenance, physics, sleeping
+
+## A. Multi-item storage (Priority 1)
+
+- **Stock:** each Storage cabinet holds 4 real, individually retrievable
+  parts: filter cartridges in cabinet 2, 16-gauge harnesses in cabinet 1.
+  These are six new instances of the existing part scenes, three across the
+  front of the shelf plus one in the back row.
+- **Slots and holders:** every authored part defines one SLOT (capacity =
+  real slots). The authored retaining holder (filter clamp ring/arm/strap,
+  wire strap) is duplicated onto every slot.
+- **Placards:** they read the real count: "4 AVAILABLE",
+  "1 AVAILABLE — LOW", "0 AVAILABLE — RESTOCK". Low stock means 1 or fewer.
+- **Retrieval fact:** recorded when stock DROPS. With several parts, "stock
+  reached 0" was no longer the right trigger.
+- **Stowing:** `stow()` returns a part to its own slot if free, otherwise
+  the first free slot. Compatible unused parts (same `item_id`) are adopted
+  as stock, with the cabinet's load-time home parent.
+- **Ownership:**
+  - installed parts are never "stowed", so they never reappear in Storage;
+  - consumed (freed) parts are pruned;
+  - held or reserved parts are never gated by a door;
+  - a door that starts closing cancels any reach into it.
+- **Wire colour:** all 16-gauge spares (group `wire_spare`) take the
+  electrical fault's colour, so the pickup message names the right one.
+
+## B. Restocking (Priority 2)
+
+- **Reserve crate:** `scripts/interactables/supply_crate.gd`, placed in the
+  Storage NW corner: a solid crate with a hinged lid and a real-count
+  stencil. Its reserve of 2 filters and 3 harnesses is real part instances,
+  created once at load, never on open.
+- **Restocking:** open the crate, take a part, open the cabinet, Space to
+  stow. The cabinet adopts it into a free slot, so shelf +1 exactly when
+  reserve −1. A full cabinet refuses.
+- **Supply warnings:** `DayPlan.supply_warnings()` turns low shelf stock into
+  "SUPPLY: FILTER STOCK LOW (n) — RESTOCK FROM RESERVE (m)", shown in the
+  workstation's Work Orders section.
+- **Future deliveries:** a scheduled cargo delivery would instantiate real
+  parts into the crate's reserve slots (a `deliver(scene, count)` call), and
+  could become an ordinary logistics workday step ("receive delivery →
+  restock shelf").
+
+## C. Repeatable maintenance (Priority 3)
+
+All of this is on DayPlan's Round 29–30 foundation:
+
+- **Hooks:** `register_service_rearm(workday, handler, feasible)` with
+  service intervals filter 4, calibration 3, electrical 5 days.
+- **Feasibility:** `is_service_feasible()` means no impossible work order is
+  ever scheduled. Filter and electrical require a clean part on a shelf or in
+  the reserve.
+- **Filter:** the housing tracks the cartridge actually installed. The
+  re-arm returns it to ISOLATE with that cartridge still seated. On removal,
+  the seated cartridge is retired and a NEW physical used cartridge
+  (`used_filter_cartridge.tscn` instance) is ejected, so there is exactly one
+  representation at a time. A clean cartridge is consumed from stock, and the
+  used one must be disposed of before the order can close.
+- **Electrical:** the same fixed 10-wire panel. The re-arm resets the repair
+  state machine to UNDIAGNOSED and picks a DIFFERENT authored fault
+  configuration from the day's seed. It stays fixed for the work order:
+  `_select_repair_config()` keeps it, and debug forcing is ignored. The
+  previously installed spare stays installed.
+- **Calibration:** both how many chambers drift and WHICH ones come from the
+  day's seed (the view shuffles its six chambers with it).
+
+## D. Multi-day progression (Priority 4)
+
+`test_multiday_maintenance.gd` drives:
+
+- **Day 1:** tutorial, unchanged.
+- **Day 2:** filter service (real cabinet, housing, used cartridge, waste
+  bin, verify, close).
+- **Day 3:** calibration. **Day 4:** electrical.
+- **Day 6:** calibration recurs.
+- **Day 7:** a second real filter service on the same housing.
+- **Day 9+:** electrical recurs on a different circuit.
+- **Plus:** restock from the reserve, and "parts exhausted → filter never
+  scheduled".
+
+Restored, verified, cleanup and closed remain separate (verify passes while
+the used cartridge waits; closing needs disposal).
+
+## E. Furniture and physics (Priority 5)
+
+- **Player collision:** the player capsule now collides with the furniture
+  contact layer (mask 1|4): desks, wash counter, console desk, locker, stools,
+  bunk and so on block the body. The workstation operator stool is excluded:
+  you sit on it, and with collision it pushed the player out of the
+  workstation's use range (`test_workstation_sitdown` caught this).
+- **Drops:** the Round 30 solver still finds a validated, reachable,
+  supported spot. The part is set out over that column (0.18 s), then a
+  temporary `RigidBody3D` (box fitted to the visible extent, mask 1|4,
+  exceptions for the player capsule and hover proxies) drops it under real
+  physics; the part follows it until it sleeps.
+- **Validation:** the rest is validated (no interpenetration, level-ish
+  support, within reach). The collision margin is corrected so the visible
+  underside sits on the surface. If the outcome is invalid or slow (>2.5 s),
+  the part settles at the solver rest instead. Measured across 24 test drops:
+  23 physics rests, 1 fallback.
+
+## F. Lying and sleeping (Priority 6)
+
+- **Sleep:** G lies the technician down on the mattress first: a 1.1 s
+  skeleton crossfade (pose switches now take a crossfade duration), with the
+  camera easing to the lying eye and looking up. Then the unchanged
+  eyes-close / hold / open sequence and day reset run.
+- **Wake and get up:** you wake lying. E sits up (1.0 s crossfade back to the
+  seat), then the existing staged get-up runs. The laptop is unavailable
+  while lying.
+- **Tests:** the sleep tests were updated for the added lie-down and sit-up
+  time.
+
+## G. Pickup lifecycle (Priority 7)
+
+- **Grasp-time ownership:** clicking starts a REACH. The part stays where it
+  is, still owned by its shelf, floor or crate, and the one-item rule covers
+  reaches. Ownership transfers at the GRASP, on a single clock:
+  `carry_system` completes it at `REACH_OUT_S` while the body animates the
+  same timeline.
+- **Cancellation:** a reach cancels if the part BECOMES unavailable (hidden,
+  disabled, installed), the door starts closing, the player walks 1 m
+  farther away, interactions become disabled (seat, focused view, sleep), or
+  Space is pressed. The part never moves, so nothing is lost or duplicated.
+- **Tests:** 36 waits were inserted into existing tests that relied on
+  ownership at the click.
+
+## H. Station life (Priority 8)
+
+- **Equipment status lamps** (`equipment_status_lamps.gd`): an emissive bead
+  and tag above the filter housing, the electrical panel and the calibration
+  station. They are driven every frame by each station's real `condition()`:
+  NOMINAL, SERVICE DUE (amber pulse), FAULT (red blink), IN SERVICE,
+  RESTORED.
+- **Maintenance log:** `DayPlan.log_event()` / `day_log()`, written by the
+  real equipment (install, replace, dispose, restock, service) and shown in
+  Work Orders alongside the supply warnings.
+- **Audio:**
+  - Life Support airflow spins down and up (1.5 s ramp) when the housing is
+    isolated and restored;
+  - the Engineering fault crackle fades with the real fault;
+  - a quiet confirmation tone plays when a system turns RESTORED and when a
+    work order closes.
+
+## I. Tests and verification
+
+- **New tests:** `test_multiday_maintenance`, `test_furniture_blocks_player`,
+  `test_grasp_ownership`. Updated: storage and stock counts, sleep timing,
+  furniture-mask intent, grasp waits, the ambience ramps, and the
+  transition-test metric (physics-tick aware).
+- **Rendered and inspected:** both populated cabinets, the open reserve
+  crate, the Storage overview with the real-count placard.
+- **Not rendered:** the harness stalled this round in movie mode (the main
+  loop keeps writing frames but the script's timers stop advancing; no error
+  logged) during the take/stow and lying-sleep shots. Those behaviours are
+  verified by automated tests only; the lying view itself was rendered in
+  Round 29.
+
+# Round 32 — Item physics, cargo resupply, specialised spares, long-term maintenance
+
+## A. Dropped items fall from the hand (Priority 1)
+
+- **Root cause:** Rounds 30–31 released a dropped part by tweening it from
+  the hand to a solver-chosen rest point about 0.6 m ahead (0.18 s, at
+  constant height) and only then starting physics. A per-tick trace measured
+  0.066 m of sideways travel on the first tick and 0.557 m over ten ticks
+  before any fall.
+- **Now:** Space releases the part from the hand pose itself. The release
+  velocity is the player's horizontal velocity plus a gentle 0.15 m/s let-go.
+  A temporary `RigidBody3D` proxy (mask 1|4, collision exceptions for the
+  player capsule and placement proxies, continuous CD) drops it, and the part
+  follows the proxy until it rests.
+- **Place gesture:** when the look ray hits a reachable, upward-facing
+  surface within 1.6 m, the ARM first carries the still-held part out over
+  that point (0.35 s), with a waist lean of up to 35° for low targets. It
+  then lets go a few centimetres above the surface. The disposal hatch is
+  excluded (`no_place` group).
+- **Releasing in tight spots:** the release pose is checked against
+  furniture and walls (box query + line of sight from the eye). The smallest
+  lift (≤8 cm) or pull-back (≤5 cm) that fits is used. Otherwise the release
+  is REFUSED ("No room to release that here.") and the part stays in the
+  hand.
+- **Tunnelling guard:** CSG walls are thin. A per-tick ray between
+  consecutive centres plus a penetration check reverts the proxy to its last
+  good pose.
+- **Landing next to the player:** a part that lands touching the player's
+  capsule stays pickable-only (layer 16) until the player steps away, so it
+  never shoves the body.
+- **Used cartridges:** they now fall too, instead of floating at hand
+  height.
+- **Removed:** the Round 30 rest-point solver and its fallback.
+- **Coverage:** clean filter, used filter, 16GA harness, reserve-crate
+  filter; floor, bed, desk, wash counter, console desk, counter edge (refusal
+  or plain release), locker wall, Storage corner.
+
+## B. Render harness (Priority 2)
+
+`tools/render_harness.gd` provides `start`, `step`, `wait`, `snap` and
+`finish`, plus a watchdog (PROCESS_MODE_ALWAYS) that quits with exit code 2
+and a "RENDER HARNESS STALL at step …" report after 45 s without progress.
+It was verified with a never-firing signal (exit 2).
+
+The Round 31 stall did not reproduce. The take/stow sequence (118 frames)
+and the lying-sleep sequence (403 frames) both completed in movie mode.
+
+## C. Cargo resupply (Priority 3)
+
+- **Port:** `cargo_port.gd` is a secured transfer compartment cut into the
+  airlock's west wall. It has a sliding hatch, latches, an orange restraint
+  strap, a status lamp, a shipment ID panel and 7 typed cargo slots
+  (3 filters, 2 × 16GA, 2 × 22GA).
+- **Schedule:** DayPlan owns it. The first shipment arrives on day 3, then
+  every 4 days. A port still busy delays the next shipment by a day.
+- **Manifests:** each manifest is the real shortfall (shelf + reserve
+  capacity minus parts on hand, including any still in the port), capped by
+  the slots. It is finite and never regenerates.
+- **Receiving procedure:**
+  1. Check the ID.
+  2. Unlock and open (pressure equalise + slide).
+  3. Release the restraint.
+  4. Carry each part to the reserve crate or a shelf. Stock changes only at
+     each real transfer.
+  5. Confirm receipt (exactly once, logged).
+  6. Close and secure.
+- **Before receipt:** the parts stay hidden and unclickable.
+- **Round 32 fix:** confirming in the same frame as the last transfer now
+  works. The port updates "empty" inside `interact()`, not only on its next
+  `_process`.
+
+## D. Specialised electrical spares (Priority 4)
+
+- **Two types:**
+  - power circuits (service, return, backup) need the 16GA power harness;
+  - signal/control circuits (telemetry, relay) need the 22GA shielded signal
+    cable. It is visually distinct: thinner, grey shield, blue connectors,
+    "22GA SIG" tag.
+- **Wrong part:** rejected without being consumed and without losing
+  procedure progress. The message names the compatible part.
+- **Messages:** the traced, wrong-part and "nothing to install" messages now
+  use `required_part_name()` instead of hard-coded 16-gauge text.
+- **First-time repairs** stay on power faults (tutorial unchanged).
+- **Recurring repairs** pick a different configuration whose spare is in
+  stock.
+- **Storage:** typed slots in the electrical cabinet (4 power + 2 signal)
+  and the reserve crate (4 filters, 3 power, 3 signal). Placards list each
+  type.
+
+## E. Scheduling and variety (Priority 5)
+
+- **New workday:** a fourth workday, the Coolant Routing Inspection (L08,
+  the existing valve routing station, 6-day interval, seeded configuration).
+- **Blocked services:** a due service with no usable part is now BLOCKED
+  ("awaiting supplies, next cargo day N") instead of silently skipped. It
+  resumes once stock returns.
+- **Schedule changes:** with four workdays, day 5 is the first coolant
+  inspection, and on day 6 the filter re-service comes up before
+  calibration. `test_workdays`, `test_workday_recurrence` and
+  `test_multiday_maintenance` were updated accordingly.
+- **Closed orders:** a closed order no longer reports an outstanding room
+  (an optional unticked step had kept pointing the watch back at the Control
+  Room).
+- **Filter re-service fix:** a used cartridge disposed earlier in the same
+  frame (still valid until the deferred free) was being re-ejected and then
+  vanished. The housing now treats a queued-for-deletion cartridge as gone.
+
+## F. Sustainability (Priority 6)
+
+`test_sustainability_20days.gd` runs 20 consecutive days. Each day it:
+
+- receives cargo through the real port procedure;
+- restocks shelves from the reserve;
+- performs the assigned service with real parts from real slots;
+- verifies and closes at the workstation;
+- audits the totals (initial + delivered − consumed) and single ownership.
+
+Observed: filter 5, calibration 5, electrical 4 and coolant 3 services;
+5 deliveries; 4 different electrical fault configurations; no blocked days.
+
+## G. UI (Priority 7) and feedback (Priority 8)
+
+- **Work Orders:** adds BLOCKED, CARGO status/next-day, per-type low-stock
+  lines, a compact `STOCK (shelf+reserve)` line and an `UPCOMING:` line
+  (next due day per system, from the service log).
+- **Wristwatch:** when no order is open and a shipment waits, it shows
+  "CARGO READY / AIRLOCK".
+- **Feedback:**
+  - the port's status lamp, mechanical sounds and hatch/strap animation;
+  - the distinct tagged signal cable;
+  - type-aware part guidance.
+
+## H. Fixes found by this round's renders and full suite
+
+- **No floor below:** a release with nothing solid within 3 m below (off
+  the mapped station) is refused, and the part stays in the hand. The old
+  solver refused here; the new physics drop briefly did not
+  (`test_carry_drop` caught it).
+- **22GA cables were not reachable:** the cables sat on the electrical
+  cabinet floor, under the full-depth shelf with 9 cm of clearance. A
+  standing look ray hit the shelf (Shelf, y 1.175) first. They are now in
+  the upper shelf's back row, and `test_electrical_spare_types` ray-checks
+  reachability.
+- **Task messages were drawn off-screen (pre-existing, also in HEAD):**
+  `TaskMessageLabel` used the top-centre preset with negative offsets, so it
+  was drawn above the screen. It is now bottom-anchored, just above the
+  interaction prompt.
+- **Shared HUD message label:** an older writer's timer (for example the
+  1.5 s pickup message) hid newer messages from other objects. Writers now
+  stamp `msg_owner` and only hide their own message. The cargo port's
+  messages auto-hide after 4 s.
+- **Older tests updated** for the signal-cable spares and per-type stock:
+  - `test_electrical_wire_randomization` carries the 22GA cable for the
+    telemetry and relay faults;
+  - `test_storage_cabinet_depth`, `test_grasp_ownership` and
+    `test_furniture_contact` count stock per type.
+
+## I. Rendered and inspected this round
+
+Non-movie SubViewport and POV captures through `tools/render_harness.gd`,
+with no stalls:
+
+- **Drops:** a floor drop from the hand; the place gesture onto the wash
+  counter; the counter edge (falls to the floor beside it); the 16GA wire
+  placed on the desk.
+- **Cabinet:** both cable types visible in the electrical cabinet from a
+  standing view.
+- **Messages:** the wrong-part message on screen.
+- **Cargo port:** arrived (closed, "SHIPMENT ARRIVED"); open and restrained;
+  the contents (3 filters, one tagged 22GA, one 16GA); empty and awaiting
+  confirmation; received; secured again.
+- **Other:** the reserve crate after the transfer; the Work Orders screen
+  with the CARGO and STOCK lines; the POV while carrying a delivered part.
+
+Not rendered: the wristwatch cargo hint (covered by an automated test only)
+and the "before" state of the drop bug (proven by the numeric per-tick
+trace, not by a frame).

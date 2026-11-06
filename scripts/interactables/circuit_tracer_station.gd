@@ -40,6 +40,9 @@ var _last_wrong_guess: StringName = &""
 
 
 func _ready() -> void:
+	# Round 30: this collider is a hover/click volume, not a physical
+	# surface -- carry_system.gd's placement solver ignores the group.
+	add_to_group(&"placement_proxy")
 	_sync_world_diorama()
 
 

@@ -35,6 +35,12 @@ func _init() -> void:
 	_check("mouse-look locked while asleep", not look.input_enabled)
 	_check("movement suppressed while asleep", not free_body.active)
 
+	# Round 31: the technician first LIES DOWN on the mattress (1.1s), then
+	# the unchanged eyes-closing sequence runs.
+	var body: Node = main.get_node("Player/PlayerBody")
+	await create_timer(1.1).timeout
+	_check("lay down on the bed before closing the eyes (lying pose)", body.is_lying() and sleep_state.is_lying_in_bed())
+	_check("eyes still open while lying down", eyes.color.a < 0.5)
 	await create_timer(0.35).timeout # past eyes_close_duration
 	_check("eyes overlay opaque (closed) mid-sequence", eyes.color.a > 0.9)
 
@@ -47,6 +53,7 @@ func _init() -> void:
 	await create_timer(0.45).timeout # past eyes_open_duration
 	_check("eyes overlay transparent again (open)", eyes.color.a < 0.05)
 	_check("back to SITTING after waking (not auto-standing)", sleep_state.is_sitting() and not sleep_state.is_sleeping())
+	_check("wakes LYING on the bed", body.is_lying())
 	_check("mouse-look restored after waking", look.input_enabled)
 	_check("wristwatch glance shown automatically", wristwatch.visible)
 
@@ -56,7 +63,9 @@ func _init() -> void:
 	# Getting up afterward still works normally (reuses existing, tested
 	# get-up sequence -- nothing new built for standing up).
 	sleep_state.end_sitting()
-	await create_timer(2.6).timeout
+	await create_timer(0.6).timeout
+	_check("E from lying first sits up (seated pose)", body.is_sitting())
+	await create_timer(3.2).timeout
 	_check("get-up after waking still works", not sleep_state.is_sitting())
 	_check("movement restored after standing", free_body.active)
 

@@ -56,6 +56,7 @@ func _init() -> void:
 	# here specifically through an opened cabinet.
 	var carry := main.get_node("Player/CarrySystem")
 	wire.interact()
+	await create_timer(0.7).timeout  # Round 31: the hand owns the part only at the grasp
 	_check("wire can still be picked up normally once the cabinet is open", carry.is_carrying())
 
 	# Closing the cabinet while the wire is OUT (already carried) must

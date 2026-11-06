@@ -65,6 +65,7 @@ func _init() -> void:
 	player.global_position = wire_pos
 	for i in 3: await process_frame
 	wire.interact()
+	await create_timer(0.7).timeout  # Round 31: the hand owns the part only at the grasp
 	_check("S01: correct wire retrieved and now carried", carry.is_carrying() and carry.carried_item_id() == &"wire_control_16ga")
 
 	# Back to Engineering (direct, no Control detour): E05 Replace Damaged Wire.

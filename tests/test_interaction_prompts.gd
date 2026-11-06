@@ -128,6 +128,7 @@ func _init() -> void:
 	_check("looking at wire: pick-up prompt shown", prompt_label.text == "Click: Pick Up Wire Component")
 
 	wire.interact()
+	await create_timer(0.7).timeout  # Round 31: the hand owns the part only at the grasp
 	await process_frame
 	_check("wire picked up", carry.is_carrying())
 	await _aim_at(look_pivot, pitch_pivot, wire_eye, wire.global_position)

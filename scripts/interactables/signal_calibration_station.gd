@@ -94,6 +94,9 @@ var _noise_scale: float = 1.0
 ## authored rest pose/_frequency/_gain var defaults (which already
 ## match _PROFILES[0]) and gets a real sync on first interact()/nudge.
 func _ready() -> void:
+	# Round 30: this collider is a hover/click volume, not a physical
+	# surface -- carry_system.gd's placement solver ignores the group.
+	add_to_group(&"placement_proxy")
 	if _world_diorama != null:
 		_world_diorama.sync_full_state(_frequency, _gain, 0.0, 0.0, false)
 

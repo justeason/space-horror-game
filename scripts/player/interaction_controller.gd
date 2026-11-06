@@ -175,8 +175,18 @@ func _raycast_hovered() -> Object:
 	var origin := global_position
 	var target := origin - global_transform.basis.z * interact_distance
 
-	var query := PhysicsRayQueryParameters3D.create(origin, target)
+	# Round 30: world/interactable layer only -- furniture contact surfaces
+	# (layer 3, furniture_contact.gd) never block or steal hover.
+	var query := PhysicsRayQueryParameters3D.create(origin, target, 1 | 16)
 	var result := space_state.intersect_ray(query)
+	# Round 30: a loose part resting INSIDE a hover proxy volume (e.g. on the
+	# mattress, within the bunk's invisible click box) must still be the
+	# thing you pick up: look through proxies for a carryable behind them.
+	if result and result.get("collider") is Node and (result["collider"] as Node).is_in_group(&"placement_proxy"):
+		var q2 := PhysicsRayQueryParameters3D.create(origin, target, 1 | 16, [(result["collider"] as CollisionObject3D).get_rid()])
+		var r2 := space_state.intersect_ray(q2)
+		if r2 and r2.get("collider") is Node and (r2["collider"] as Node).has_method("return_to_rest"):
+			result = r2
 
 	if result and result.has("collider"):
 		var collider = result["collider"]
@@ -205,7 +215,10 @@ func _update_prompt() -> void:
 	if text == "" and _sleep_state != null and _sleep_state.is_near_bed():
 		text = "E: Sit Down"
 	if _carry_system != null and _carry_system.is_carrying():
-		var drop_hint := "Space: Drop %s" % _carry_system.carried_item_display_name()
+		var verb := "Drop"
+		if _carry_system.has_method("stow_target") and _carry_system.stow_target() != null:
+			verb = "Stow"
+		var drop_hint := "Space: %s %s" % [verb, _carry_system.carried_item_display_name()]
 		text = "%s    %s" % [text, drop_hint] if text != "" else drop_hint
 	_set_prompt_text(text)
 

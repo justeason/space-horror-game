@@ -76,13 +76,38 @@ var _failed_insert_flash: bool = false
 var _missing_part_flash: bool = false
 
 
+## Round 31 Priority 3: recurring filter service. The cartridge actually
+## installed is tracked; when its service interval comes round, DayPlan
+## re-arms this housing (back to ISOLATE with that cartridge still seated)
+## and the procedure runs again: the cartridge that comes OUT becomes a
+## real used cartridge item (a fresh used_filter_cartridge instance once
+## the previous one has been disposed of), a clean one from Storage goes in.
+const _USED_SCENE := preload("res://scenes/interactables/used_filter_cartridge.tscn")
+var _installed_cartridge: Node3D = null
+var _used_parent: Node = null
+var _used_carry_path: NodePath
+var _used_msg_path: NodePath
+var _service_count: int = 0
+
+
 func _ready() -> void:
+	if _used_cartridge != null:
+		_used_parent = _used_cartridge.get_parent()
+		var cs: Node = _used_cartridge.get_node_or_null(_used_cartridge.carry_system_path)
+		var ml: Node = _used_cartridge.get_node_or_null(_used_cartridge.message_label_path)
+		_used_carry_path = cs.get_path() if cs != null else NodePath()
+		_used_msg_path = ml.get_path() if ml != null else NodePath()
+	var dp: Node = get_node_or_null(day_plan_path)
+	if dp != null and dp.has_method("register_service_rearm"):
+		dp.register_service_rearm(dp.Workday.FILTER_SERVICE, _rearm_for_service, _clean_cartridge_available)
 	_sync_world_diorama()
 
 
 func interact() -> void:
 	if _filter_view == null:
 		return
+	if _day_plan.has_method("record_fact"):
+		_day_plan.record_fact(&"inspected:filter")
 	if _active_difficulty == -1:
 		_active_difficulty = GameSettings.get_difficulty()
 	_filter_view.open_station(self)
@@ -184,7 +209,22 @@ func remove_old_cartridge() -> Dictionary:
 	_stage = Stage.ALIGN_INSERT
 	_cartridge_angle_deg = _START_ANGLE_DEG
 	_sync_world_diorama()
-	if _used_cartridge != null and _used_cartridge.has_method("eject_at"):
+	if (not is_instance_valid(_used_cartridge) or _used_cartridge.is_queued_for_deletion()) and _used_parent != null:
+		# The previous used cartridge was disposed of: the cartridge coming
+		# out now is a new physical used item. (Round 32: a cartridge
+		# disposed earlier in the SAME frame is still "valid" until the
+		# deferred free runs -- it must not be re-ejected and then vanish.)
+		_used_cartridge = _USED_SCENE.instantiate()
+		_used_cartridge.name = "UsedFilterCartridge%d" % (_service_count + 1)
+		_used_cartridge.carry_system_path = _used_carry_path
+		_used_cartridge.message_label_path = _used_msg_path
+		_used_parent.add_child(_used_cartridge)
+	if is_instance_valid(_installed_cartridge):
+		# The (hidden, seated) cartridge that came out IS the used one now --
+		# exactly one physical representation at a time.
+		_installed_cartridge.queue_free()
+		_installed_cartridge = null
+	if is_instance_valid(_used_cartridge) and _used_cartridge.has_method("eject_at"):
 		_used_cartridge.eject_at(global_transform * Transform3D(Basis(), eject_local_offset))
 	return {"ok": true, "removed": true, "stage": _stage}
 
@@ -224,6 +264,10 @@ func attempt_insert() -> Dictionary:
 			var item: Node3D = _carry_system.take_carried_item_if_matches(_REQUIRED_ITEM_ID)
 			if item != null and item.has_method("mark_installed"):
 				item.mark_installed(self, installed_cartridge_local_transform())
+				_installed_cartridge = item
+				_service_count += 1
+				if _day_plan != null and _day_plan.has_method("log_event"):
+					_day_plan.log_event("Installed clean filter cartridge")
 		_stage = Stage.CLOSE_LATCHES
 		_sync_world_diorama()
 		return {"ok": true, "seated": true, "stage": _stage}
@@ -261,3 +305,41 @@ func _sync_world_diorama() -> void:
 	if _world_diorama == null:
 		return
 	_world_diorama.sync_full_state(_stage, _latch_open, _cartridge_angle_deg)
+
+
+func _rearm_for_service(_seed: int) -> void:
+	_stage = Stage.ISOLATE
+	_latch_open = {1: false, 2: false}
+	_cartridge_angle_deg = _START_ANGLE_DEG
+	_failed_insert_flash = false
+	_missing_part_flash = false
+	_sync_world_diorama()
+
+
+## Feasibility for DayPlan: a clean cartridge on a shelf or in the reserve.
+func _clean_cartridge_available() -> bool:
+	for c in get_tree().get_nodes_in_group(&"storage_cabinet"):
+		if c.stock_count(_REQUIRED_ITEM_ID) > 0:
+			return true
+	for r in get_tree().get_nodes_in_group(&"supply_reserve"):
+		if r.reserve_count(_REQUIRED_ITEM_ID) > 0:
+			return true
+	return false
+
+
+func service_count() -> int:
+	return _service_count
+
+
+## Equipment condition (Round 31 Priority 8), from real state only:
+## in_progress mid-procedure, service_due when today's work order needs
+## it, restored once serviced today, nominal otherwise.
+func condition() -> StringName:
+	var dp: Node = get_node_or_null(day_plan_path)
+	if _stage != Stage.ISOLATE and _stage != Stage.COMPLETE:
+		return &"in_progress"
+	if dp != null and dp.workday == dp.Workday.FILTER_SERVICE and not dp.is_task_done(&"l02"):
+		return &"service_due"
+	if dp != null and dp.is_task_done(&"l02"):
+		return &"restored"
+	return &"nominal"

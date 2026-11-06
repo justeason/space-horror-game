@@ -88,6 +88,8 @@ const ROOMS := [
 ]
 
 var _current_section: Section = Section.HOME
+## Round 28: last workday verify/close result shown under Work Orders.
+var _workday_status: String = ""
 ## Defaults to Control Room (index 1): that's physically where the
 ## player is standing while reading this screen.
 var _selected_room_index: int = 1
@@ -281,7 +283,7 @@ func _room_info_text(room_id: StringName, room_name: String) -> String:
 			return "%s — Electrical panel, maintenance connection.%s" % [room_name, e09_note]
 		&"storage":
 			if _day_plan.required_component_id != &"" and not _day_plan.is_task_done(&"e05"):
-				return "%s — Component shelving. Control Wire (16-gauge, %s) available here." % [room_name, _fault_color_name().to_lower()]
+				return "%s — Component shelving. %s available here." % [room_name, preload("res://scripts/station/part_names.gd").display(_day_plan.required_component_id, _fault_color_name())]
 			return "%s — Component shelving. Nothing currently needed from here — trace the Engineering circuit (E02) first if a fault is open." % room_name
 		&"airlock":
 			return "%s — Reached via Engineering's maintenance branch. No equipment." % room_name
@@ -294,7 +296,22 @@ func _refresh_work_orders() -> void:
 	if lines.size() > 1 or lines[0] != "No open work orders.":
 		lines = lines.duplicate()
 		lines.append("")
-		lines.append("[R] Verify Repaired System (C05)")
+		if _day_plan.has_method("is_workday_active") and _day_plan.is_workday_active():
+			lines.append("[R] Verify / Close Work Order")
+			if _workday_status != "":
+				lines.append(_workday_status)
+		else:
+			lines.append("[R] Verify Repaired System (C05)")
+	# Round 31: supply warnings (real stock) + today's maintenance log.
+	var warn: Array = _day_plan.supply_warnings() if _day_plan.has_method("supply_warnings") else []
+	var log: Array = _day_plan.day_log() if _day_plan.has_method("day_log") else []
+	if not warn.is_empty() or not log.is_empty():
+		lines = lines.duplicate()
+		lines.append("")
+		for w in warn:
+			lines.append(w)
+		if not log.is_empty():
+			lines.append("LOG — DAY %d: %s" % [_day_plan.day_number, "; ".join(log.slice(maxi(0, log.size() - 4)))])
 	_work_orders_list.text = "\n".join(lines)
 
 
@@ -303,6 +320,12 @@ func _refresh_work_orders() -> void:
 ## repair is actually done must report the still-broken status, never
 ## silently pass (MILESTONE1_DESIGN.md Part 4.4/6.10).
 func _run_verify() -> bool:
+	# Round 28 workdays: verify the restored equipment, then (after any
+	# cleanup) close the order -- two separate presses, two separate states.
+	if _day_plan.has_method("is_workday_active") and _day_plan.is_workday_active():
+		_workday_status = _day_plan.workday_verify_or_close()
+		_refresh_work_orders()
+		return _day_plan.is_maintenance_verified()
 	var verified_anything := false
 	if _day_plan.assignment_task_id == &"e06" and _day_plan.is_task_done(&"e06"):
 		_day_plan.mark_done(&"c05")
@@ -361,6 +384,15 @@ func _refresh_diagnostics() -> void:
 
 
 func _run_c02() -> void:
+	# Round 28: on Filter/Calibration workdays Diagnostics reviews THAT
+	# day's warning; only the electrical workday (and day 1) raises the
+	# Engineering power fault.
+	if _day_plan.has_method("is_workday_active") and _day_plan.is_workday_active() and _day_plan.workday != _day_plan.Workday.ELECTRICAL_SERVICE:
+		if _day_plan.workday == _day_plan.Workday.CALIBRATION:
+			_day_plan.record_fact(&"reviewed:sensor_warning")
+		_refresh_diagnostics()
+		_refresh_work_orders()
+		return
 	if not _day_plan.is_task_done(&"c02"):
 		_day_plan.mark_done(&"c02")
 		_day_plan.trigger_fault()

@@ -71,7 +71,25 @@ var _pending_sequence_warning: bool = false
 var _v3_opened_with_v2_open: bool = false
 
 
+## Round 32 Priority 5: recurring COOLANT ROUTING inspection. When due,
+## DayPlan re-arms the manifold: a fresh attempt with the day's routing
+## configuration (seeded: fixed all day, varies by day).
+func _rearm_for_service(seed: int) -> void:
+	_config_index = absi(seed) % _CONFIGS.size()
+	reset_attempt()
+
+
+func condition() -> StringName:
+	if _day_plan.is_task_done(&"l08"):
+		return &"restored" if _day_plan.workday == _day_plan.Workday.COOLANT_INSPECTION else &"nominal"
+	if _day_plan.workday == _day_plan.Workday.COOLANT_INSPECTION:
+		return &"in_progress" if not _open_order.is_empty() else &"service_due"
+	return &"nominal"
+
+
 func _ready() -> void:
+	if _day_plan != null and _day_plan.has_method("register_service_rearm"):
+		_day_plan.register_service_rearm(_day_plan.Workday.COOLANT_INSPECTION, _rearm_for_service)
 	_sync_world_diorama()
 
 

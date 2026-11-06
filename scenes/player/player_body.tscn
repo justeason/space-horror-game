@@ -30,6 +30,7 @@ rim = 0.35
 script = ExtResource("1_body")
 
 [node name="StandingPose" type="CSGCombiner3D" parent="."]
+position = Vector3(0, 0, 0.1)
 
 [node name="ShoulderL" type="CSGSphere3D" parent="StandingPose"]
 transform = Transform3D(0.776237, 0.193538, 0, -0.120961, 0.485148, 0, 0, 0, 0.92, -0.16, -0.335, -0.05)
@@ -179,7 +180,7 @@ height = 0.24
 sides = 24
 material = SubResource("Mat_uniform")
 
-[node name="HandL" type="CSGCombiner3D" parent="StandingPose"]
+[node name="HandL" type="Node3D" parent="StandingPose"]
 position = Vector3(-0.236, -0.98, -0.2)
 
 [node name="HandR" type="Node3D" parent="StandingPose"]
@@ -573,15 +574,9 @@ size = Vector3(0.08, 0.08, 0.1)
 material = SubResource("Mat_dark")
 
 [node name="HeadGroup" type="CSGCombiner3D" parent="."]
+position = Vector3(0, 0, 0.1)
 layers = 4
 cast_shadow = 0
-
-[node name="Neck" type="CSGCylinder3D" parent="HeadGroup"]
-transform = Transform3D(1.05, 0, 0, 0, 1, 0, 0, 0, 0.95, 0, -0.255, -0.06)
-radius = 0.058
-height = 0.12
-sides = 24
-material = SubResource("Mat_dark")
 
 [node name="Collar" type="CSGTorus3D" parent="HeadGroup"]
 transform = Transform3D(1.2, 0, 0, 0, 1, 0, 0, 0, 1.05, 0, -0.298, -0.06)
@@ -591,36 +586,61 @@ sides = 28
 ring_sides = 10
 material = SubResource("Mat_uniform")
 
-[node name="Head" type="CSGSphere3D" parent="HeadGroup"]
-transform = Transform3D(0.9, 0, 0, 0, 1.08, 0, 0, 0, 1.02, 0, -0.085, -0.045)
+[node name="NeckPivot" type="Node3D" parent="HeadGroup"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.3, -0.06)
+
+[node name="Neck" type="CSGCylinder3D" parent="HeadGroup/NeckPivot"]
+transform = Transform3D(1.05, 0, 0, 0, 1, 0, 0, 0, 0.95, 0, 0.045, 0)
+layers = 4
+cast_shadow = 0
+radius = 0.058
+height = 0.12
+sides = 24
+material = SubResource("Mat_dark")
+
+[node name="HeadPivot" type="Node3D" parent="HeadGroup/NeckPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.13, 0.005)
+
+[node name="Head" type="CSGSphere3D" parent="HeadGroup/NeckPivot/HeadPivot"]
+transform = Transform3D(0.9, 0, 0, 0, 1.08, 0, 0, 0, 1.02, 0, 0.085, 0.01)
+layers = 4
+cast_shadow = 0
 radius = 0.1
 radial_segments = 32
 rings = 18
 material = SubResource("Mat_dark")
 
-[node name="Jaw" type="CSGSphere3D" parent="HeadGroup"]
-transform = Transform3D(0.92, 0, 0, 0, 0.78, 0, 0, 0, 0.95, 0, -0.155, -0.052)
+[node name="Jaw" type="CSGSphere3D" parent="HeadGroup/NeckPivot/HeadPivot"]
+transform = Transform3D(0.92, 0, 0, 0, 0.78, 0, 0, 0, 0.95, 0, 0.015, 0.003)
+layers = 4
+cast_shadow = 0
 radius = 0.068
 radial_segments = 28
 rings = 14
 material = SubResource("Mat_dark")
 
-[node name="Visor" type="CSGSphere3D" parent="HeadGroup"]
-transform = Transform3D(0.86, 0, 0, 0, 0.3, 0, 0, 0, 1, 0, -0.075, -0.057)
+[node name="Visor" type="CSGSphere3D" parent="HeadGroup/NeckPivot/HeadPivot"]
+transform = Transform3D(0.86, 0, 0, 0, 0.3, 0, 0, 0, 1, 0, 0.095, -0.002)
+layers = 4
+cast_shadow = 0
 radius = 0.1
 radial_segments = 32
 rings = 16
 material = SubResource("Mat_visor")
 
-[node name="EarPadL" type="CSGCylinder3D" parent="HeadGroup"]
-transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, -0.097, -0.09, -0.04)
+[node name="EarPadL" type="CSGCylinder3D" parent="HeadGroup/NeckPivot/HeadPivot"]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, -0.097, 0.08, 0.015)
+layers = 4
+cast_shadow = 0
 radius = 0.028
 height = 0.022
 sides = 20
 material = SubResource("Mat_watch_metal")
 
-[node name="EarPadR" type="CSGCylinder3D" parent="HeadGroup"]
-transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, 0.097, -0.09, -0.04)
+[node name="EarPadR" type="CSGCylinder3D" parent="HeadGroup/NeckPivot/HeadPivot"]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, 0.097, 0.08, 0.015)
+layers = 4
+cast_shadow = 0
 radius = 0.028
 height = 0.022
 sides = 20

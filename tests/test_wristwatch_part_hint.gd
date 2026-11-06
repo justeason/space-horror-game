@@ -50,6 +50,7 @@ func _init() -> void:
 	await _release(KEY_C)
 
 	wire.interact() # pick up the correct spare
+	await create_timer(0.7).timeout  # Round 31: the hand owns the part only at the grasp
 	_check("now carrying the matching part", carry.is_carrying() and carry.carried_item_id() == dp.required_component_id)
 
 	await _press(KEY_C)

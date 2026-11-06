@@ -82,7 +82,7 @@ func _init() -> void:
 
 	# 10. Sleep -> eyes-closing transition -> minimal reset -> wake.
 	sleep_state.begin_sleep()
-	await create_timer(2.0).timeout
+	await create_timer(3.2).timeout   # Round 31: lie down (1.1s) + the unchanged eyes sequence
 	_check("awake again after the night", sleep_state.is_sitting() and not sleep_state.is_sleeping())
 	_check("next-day reset cleared yesterday's completed work", not dp.is_task_done(&"c01") and not dp.is_task_done(&"e06") and not dp.is_task_done(&"c05"))
 	_check("assignment cleared for the new day", dp.assignment_task_id == &"")
@@ -90,7 +90,7 @@ func _init() -> void:
 	# The player can immediately get up and the whole loop is ready to
 	# run again -- no stuck state.
 	sleep_state.end_sitting()
-	await create_timer(2.6).timeout
+	await create_timer(3.8).timeout   # Round 31: sit up from lying (1.0s) first
 	_check("standing again, ready for a new day", not sleep_state.is_sitting() and free_body.active)
 
 	print("")

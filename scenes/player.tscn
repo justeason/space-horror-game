@@ -25,6 +25,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/circuit_tracer_diorama.tscn" id="26_tracerdiorama"]
 [ext_resource type="Script" path="res://scripts/ui/signal_calibration_view.gd" id="27_signalview"]
 [ext_resource type="PackedScene" path="res://scenes/ui/signal_calibration_diorama.tscn" id="28_signaldiorama"]
+[ext_resource type="Script" path="res://scripts/player/character_pose_state.gd" id="29_posestate"]
 
 [node name="Player" type="Node3D"]
 script = ExtResource("1_move")
@@ -42,6 +43,7 @@ reticle_path = NodePath("../../../HUD/Reticle")
 carry_system_path = NodePath("../../../CarrySystem")
 
 [node name="FirstPersonWatchRig" parent="LookPivot/PitchPivot/Camera3D" instance=ExtResource("19_watchrig")]
+pose_state_path = NodePath("../../../../PoseState")
 
 [node name="Flashlight" type="Node3D" parent="LookPivot/PitchPivot/Camera3D"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.12, -0.08, -0.05)
@@ -59,6 +61,12 @@ spot_attenuation = 1.2
 [node name="PlayerBody" parent="." instance=ExtResource("6_body")]
 look_pivot_path = NodePath("../LookPivot")
 watch_rig_path = NodePath("../LookPivot/PitchPivot/Camera3D/FirstPersonWatchRig")
+pose_state_path = NodePath("../PoseState")
+
+[node name="PoseState" type="Node" parent="."]
+script = ExtResource("29_posestate")
+look_pivot_path = NodePath("../LookPivot")
+player_body_path = NodePath("../PlayerBody")
 
 [node name="LaptopView" type="Node" parent="."]
 script = ExtResource("9_laptopview")
@@ -127,9 +135,11 @@ mouse_filter = 2
 
 [node name="TaskMessageLabel" type="Label" parent="HUD"]
 visible = false
-anchors_preset = 5
+anchors_preset = 7
 anchor_left = 0.5
+anchor_top = 1.0
 anchor_right = 0.5
+anchor_bottom = 1.0
 offset_left = -260.0
 offset_top = -110.0
 offset_right = 260.0

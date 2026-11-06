@@ -64,7 +64,12 @@ func _setup(main: Node, force_fault: StringName) -> Dictionary:
 	var terminal: Node = panel.get_node("Terminal")
 	terminal.interact() # E01
 	terminal.interact() # E02 -- _trace() runs here; config is now locked
+	# Round 32: signal/control circuits (telemetry, relay) take the 22GA
+	# shielded signal cable, not the 16GA power harness.
+	if panel.required_component_id == &"wire_signal_22ga":
+		wire = main.get_node("Interactables/WireSignal1")
 	carry.pick_up(wire)
+	await create_timer(0.7).timeout  # Round 31: the hand owns the part only at the grasp
 	terminal.interact() # opens the focused procedure for real
 	await process_frame
 
@@ -324,7 +329,7 @@ func _test_telemetry_config_via_real_clicks() -> void:
 	_check("[telemetry] relevant subset is [coolant, telemetry, sensor_feed]", panel.relevant_roles() == [&"coolant", &"telemetry", &"sensor_feed"])
 	_check("[telemetry] supply (row A) is NOT part of this attempt's relevant circuit", not panel.is_relevant(&"supply"))
 	_check("[telemetry] relay (row B, other config) is NOT part of this attempt's relevant circuit", not panel.is_relevant(&"relay"))
-	_check("[telemetry] carried wire recolored to match Purple", wire.get_node("CoilLoopA").material.albedo_color.is_equal_approx(Color(0.5, 0.15, 0.65, 1)))
+	_check("[telemetry] carries the compatible 22GA signal cable (Round 32)", wire.item_id == &"wire_signal_22ga")
 
 	panel.toggle_isolation()
 	_check("[telemetry] isolated", panel.is_isolated())
@@ -401,7 +406,7 @@ func _test_relay_config_via_real_clicks() -> void:
 	_check("[relay] fault role is relay (Brown)", panel.fault_role() == &"relay")
 	_check("[relay] fault color name is Brown", panel.fault_color_name() == "Brown")
 	_check("[relay] relevant subset is [sensor_feed, auxiliary, relay]", panel.relevant_roles() == [&"sensor_feed", &"auxiliary", &"relay"])
-	_check("[relay] carried wire recolored to match Brown", wire.get_node("CoilLoopA").material.albedo_color.is_equal_approx(Color(0.45, 0.3, 0.15, 1)))
+	_check("[relay] carries the compatible 22GA signal cable (Round 32)", wire.item_id == &"wire_signal_22ga")
 
 	panel.toggle_isolation()
 	# See the [telemetry] test's identical comment just above.

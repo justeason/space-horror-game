@@ -43,6 +43,7 @@ func _init() -> void:
 
 	var carry := main.get_node("Player/CarrySystem")
 	cartridge.interact()
+	await create_timer(0.7).timeout  # Round 31: the hand owns the part only at the grasp
 	_check("filter cartridge can be picked up normally once cabinet2 is open", carry.is_carrying() and carry.carried_item_id() == &"filter_cartridge")
 
 	cabinet.interact()

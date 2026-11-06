@@ -89,6 +89,7 @@ func _init() -> void:
 	# uses) to confirm it reaches the same end state this test has
 	# always checked for.
 	wire.interact()
+	await create_timer(0.7).timeout  # Round 31: the hand owns the part only at the grasp
 	_check("wire picked up", carry.is_carrying())
 	panel.terminal_interact(&"damaged")
 	_check("terminal click opens the procedure, not an immediate install", panel.procedure_stage() == &"isolate")

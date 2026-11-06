@@ -54,6 +54,10 @@ var footsteps = null
 
 var active: bool = false
 var _distance_since_step: float = 0.0
+## Round 29 Priority 5: footsteps played so far (monotonic). With
+## _distance_since_step this gives the gait position the visible legs are
+## locked to -- see gait_position().
+var _steps_played: int = 0
 
 
 ## This body exists in the world from scene load (parked wherever its
@@ -131,6 +135,7 @@ func _update_footsteps(position_before: Vector3) -> void:
 	_distance_since_step += moved
 	if _distance_since_step >= step_distance:
 		_distance_since_step = fmod(_distance_since_step, step_distance)
+		_steps_played += 1
 		footsteps.play_step()
 
 
@@ -144,3 +149,16 @@ func sync_to_eye_position(eye_world_pos: Vector3) -> void:
 
 func current_eye_position() -> Vector3:
 	return global_position + Vector3(0, eye_height, 0)
+
+
+## Round 29 Priority 5: gait position in STEPS -- the integer part counts
+## footstep sounds played, the fraction is progress toward the next one
+## (same accumulator, same step_distance). player_body.gd places a heel
+## strike exactly at every integer, so each footstep sound coincides with
+## a foot contact by construction.
+func gait_position() -> float:
+	return float(_steps_played) + _distance_since_step / step_distance
+
+
+func horizontal_velocity() -> Vector3:
+	return Vector3(velocity.x, 0.0, velocity.z)

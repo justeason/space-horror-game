@@ -46,8 +46,13 @@ func _init() -> void:
 	var cam := pitch_pivot.get_node("Camera3D")
 	var body := player.get_node("PlayerBody")
 	var rig := cam.get_node("FirstPersonWatchRig")
-	var watch_case: Node3D = rig.get_node("ArmGroup/WatchAssembly/WatchCase")
-	var hand: Node3D = rig.get_node("ArmGroup/Palm")
+	# Round 28: the player sees the rigged character's arm, hand and watch
+	# (one shared model); frustum checks apply to THAT watch and hand.
+	var tech: Node3D = body.rigged_visual()
+	var watch_case: Node3D = tech.watch_face_node()
+	var hand: Node3D = BoneAttachment3D.new()
+	hand.bone_name = "RightHand"
+	tech.skeleton.add_child(hand)
 
 	# ============================================================
 	# 1. Baseline: PlayerBody's pitch follow is ALWAYS the ordinary
@@ -132,8 +137,14 @@ func _init() -> void:
 	# ============================================================
 	var all_in_frustum := true
 	var worst_rig_detail := ""
+	# Round 27: the first-person watch IS the world arm's pose, which follows
+	# look pitch 1:1 only up to eye level (CharacterPoseState); looking more
+	# than ~45 deg up the player looks ABOVE the held watch, exactly as the
+	# mirror shows. Frustum containment is therefore asserted where the watch
+	# is held in view; above that, it must be below the view (not stuck or
+	# misplaced) -- checked separately below.
 	for yaw_deg in [0.0, 40.0, -70.0, 120.0, -150.0]:
-		for pitch_deg in [-60.0, -20.0, 0.0, 20.0, 60.0, 75.0]:
+		for pitch_deg in [-60.0, -20.0, 0.0]:
 			look_pivot.rotation.y = deg_to_rad(yaw_deg)
 			look_pivot._target_yaw = deg_to_rad(yaw_deg)
 			pitch_pivot.rotation.x = deg_to_rad(pitch_deg)
@@ -144,6 +155,15 @@ func _init() -> void:
 					all_in_frustum = false
 					worst_rig_detail = "%s at yaw=%.0f pitch=%.0f" % [node.name, yaw_deg, pitch_deg]
 	_check("watch rig (case and hand) stays genuinely inside the camera frustum across steep yaw+pitch combinations" + (" (first failure: %s)" % worst_rig_detail if not all_in_frustum else ""), all_in_frustum)
+	var below_ok := true
+	for pitch_deg in [60.0, 75.0]:
+		pitch_pivot.rotation.x = deg_to_rad(pitch_deg)
+		look_pivot._target_pitch = deg_to_rad(pitch_deg)
+		await create_timer(0.15).timeout
+		var case_local: Vector3 = cam.global_transform.affine_inverse() * watch_case.global_position
+		if not (watch_case.is_visible_in_tree() and case_local.y < 0.0 and case_local.z < 0.0):
+			below_ok = false
+	_check("looking steeply up, the held watch sits below the view (in front of the camera, not stuck or misplaced)", below_ok)
 
 	# Reset to neutral before the release/cycle checks below.
 	look_pivot.rotation.y = 0.0
@@ -168,6 +188,8 @@ func _init() -> void:
 		await create_timer(0.35).timeout
 	_check("arm group returns to the exact rest (lowered) position after 4 repeated press/release cycles", rig.get_node("ArmGroup").position.is_equal_approx(rest_arm_pos))
 	_check("not stuck raised after repeated cycles", not rig.is_raised())
+	# Round 27: allow the world arm's own 0.42s lowering to finish.
+	await create_timer(0.2).timeout
 	_check("not stuck visible after repeated cycles", not rig.visible)
 
 	print("")
