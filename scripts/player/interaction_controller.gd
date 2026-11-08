@@ -209,6 +209,11 @@ func _raycast_hovered() -> Object:
 func _update_prompt() -> void:
 	if _prompt_label == null:
 		return
+	# Round 34: while on the bunk (sitting / lying / laptop) the sleep state
+	# owns the prompt ("E: Get Up · Sleep after shift ..."). Writing here
+	# too showed "E: Sit Down" while lying awake after waking.
+	if _sleep_state != null and _sleep_state.has_method("is_sitting") and (_sleep_state.is_sitting() or _sleep_state.is_laptop_open() or _sleep_state.is_editing()):
+		return
 	var text := ""
 	if _hovered != null and _hovered.has_method("get_interact_prompt"):
 		text = _hovered.get_interact_prompt()
@@ -218,7 +223,21 @@ func _update_prompt() -> void:
 		var verb := "Drop"
 		if _carry_system.has_method("stow_target") and _carry_system.stow_target() != null:
 			verb = "Stow"
+			# Round 33: the parts carrier is UNLOADED into a container (and
+			# only docked back into the cargo port).
+			var held: Object = _carry_system._carried_item
+			if held != null and held.has_method("is_carrier") and not _carry_system.stow_target().has_method("carrier_docked"):
+				verb = "Unload"
+			elif held != null and held.has_method("is_carrier"):
+				verb = "Dock"
 		var drop_hint := "Space: %s %s" % [verb, _carry_system.carried_item_display_name()]
+		# Round 36: a receptacle may phrase it for the situation
+		# ("Return empty module", "Upload diagnostic data", ...).
+		var st: Node = _carry_system.stow_target() if _carry_system.has_method("stow_target") else null
+		if st != null and st.has_method("stow_hint"):
+			var h: String = st.stow_hint(_carry_system._carried_item)
+			if h != "":
+				drop_hint = "Space: " + h
 		text = "%s    %s" % [text, drop_hint] if text != "" else drop_hint
 	_set_prompt_text(text)
 

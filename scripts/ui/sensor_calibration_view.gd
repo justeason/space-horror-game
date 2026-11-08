@@ -498,24 +498,44 @@ func open_station(station: Node) -> void:
 			order[i] = order[j]
 			order[j] = t
 		active = order.slice(0, fault_count)
-	for ch in CHAMBERS:
-		# Only this attempt's active (faulty) chambers start away from
-		# their target; the rest start already solved. Difficulty still
-		# independently scales _coupling/_tolerance/_stability_duration
-		# below (how forgiving the attempt is), never how many chambers
-		# are broken.
-		_setpoint[ch] = START_VALUE if ch in active else _TARGETS[ch]
-		_reading[ch] = START_VALUE if ch in active else _TARGETS[ch]
-		_velocity[ch] = 0.0
-		_prev_gap[ch] = -1.0
-	_damping = START_DAMPING
+	# Round 37: the STATION owns the six chambers' state. A calibration
+	# task in progress (or finished) is adopted as-is -- the same values
+	# the physical dials show -- never re-rolled on reopen.
+	var key: String = station.calibration_instance_key() if station.has_method("calibration_instance_key") else ""
+	var adopt: bool = _debug_forced_count == -1 and station.has_method("has_calibration_state") and station.has_calibration_state(key)
+	if adopt:
+		_setpoint = station.cal["setpoint"]
+		_reading = station.cal["reading"]
+		_velocity = station.cal["velocity"]
+		_damping = float(station.cal["damping"])
+		_coupling = station.cal["coupling"]
+		fault_count = int(station.cal["active_count"])
+		for ch in CHAMBERS:
+			_prev_gap[ch] = -1.0
+	else:
+		_setpoint = {}
+		_reading = {}
+		_velocity = {}
+		for ch in CHAMBERS:
+			# Only this attempt's active (faulty) chambers start away from
+			# their target; the rest start already solved. Difficulty still
+			# independently scales _coupling/_tolerance/_stability_duration
+			# below (how forgiving the attempt is), never how many chambers
+			# are broken.
+			_setpoint[ch] = START_VALUE if ch in active else _TARGETS[ch]
+			_reading[ch] = START_VALUE if ch in active else _TARGETS[ch]
+			_velocity[ch] = 0.0
+			_prev_gap[ch] = -1.0
+		_damping = START_DAMPING
+		_coupling = _coupling_for_difficulty(difficulty)
 	_stability_timer = 0.0
 	_dragging_control = &""
 	_use_cylinder_display = false # circular dial is the default/primary style
-	_coupling = _coupling_for_difficulty(difficulty)
 	_tolerance = _TOLERANCE_BY_DIFFICULTY.get(difficulty, 4.0)
 	_stability_duration = _STABILITY_DURATION_BY_DIFFICULTY.get(difficulty, 1.8)
 	_active_fault_count = fault_count
+	if not adopt and station.has_method("store_calibration"):
+		station.store_calibration(key, _setpoint, _reading, _velocity, _damping, _coupling, fault_count)
 	_showing_first_use_hint = not _ever_opened and not _done
 	_hint_timer = _FIRST_USE_HINT_DURATION
 	_ever_opened = true
@@ -527,6 +547,7 @@ func open_station(station: Node) -> void:
 
 ## Duck-typed hook called by focused_interaction_state.gd on any exit.
 func on_focus_exit() -> void:
+	_sync_station()
 	visible = false
 	_station = null
 	_dragging_control = &""
@@ -539,9 +560,17 @@ func cancel_requested() -> void:
 	# next attempt starts clean from START_VALUE/START_DAMPING.
 
 
+## Round 37: the damping (a float) is copied back; the chamber
+## dictionaries are the station's own objects already.
+func _sync_station() -> void:
+	if _station != null and "cal" in _station and _station.cal.has("setpoint") and is_same(_station.cal["setpoint"], _setpoint):
+		_station.cal["damping"] = _damping
+
+
 func _process(delta: float) -> void:
 	if not visible or _station == null or _done:
 		return
+	_sync_station()
 
 	var fine: bool = Input.is_key_pressed(KEY_SHIFT)
 	var rate: float = COARSE_RATE * (FINE_RATE_FACTOR if fine else 1.0)

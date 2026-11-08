@@ -8081,3 +8081,1644 @@ with no stalls:
 Not rendered: the wristwatch cargo hint (covered by an automated test only)
 and the "before" state of the drop bug (proven by the numeric per-tick
 trace, not by a frame).
+
+# Round 33 — Checkpoint, persistent game state, technician workdays, maintenance expansion
+
+## A. Phase 1 checkpoint
+
+- **Commit:** `4ef6688` "Checkpoint: Rounds 26-32 rig, maintenance, cargo,
+  inventory and physics", local only and NOT pushed. `main` is 2 ahead of
+  `origin/main`.
+- **Contents:** 121 files: 62 modified and 59 added (new scripts with their
+  `.uid` files, the character rig, the render harness, 40 test files).
+- **Excluded:** `CLAUDE.md.save` (left untracked), `.claude/` (ignored),
+  `tests/.last_run.log` (ignored).
+- **Validated first:** 99/99 tests and 2,431 checks; the 5 known nav
+  failures, no new ones; clean headless start; `git diff --cached --check`
+  clean.
+
+## B. Day hint (user request)
+
+`DayPlan.day_started(day)` fires at each new day, and `today_title()` /
+`is_new_shift()` describe it.
+
+- **Workstation:** the title bar always reads "DAY N · SECTION". Home shows
+  "NEW SHIFT — TODAY IS DAY N", the scheduled work, and "Open [1] Overview",
+  until the morning check-in (C01). After that it shows "TODAY: DAY N — …".
+- **Laptop (bunk):** the title is "SESSION LOG — DAY N". The subtitle reads
+  "New shift. Report to the Control Room workstation." / "Shift in progress.",
+  and the status line shows today's work. This replaces the old prototype
+  placeholder text.
+
+## C. Save / load (`scripts/station/save_game.gd`, node `SaveGame` in main.tscn)
+
+- **Schema v1:** a JSON document with a header (`schema`, `game`, `day`),
+  `day_plan`, `difficulty`, `equipment` (by stable id), `items`,
+  `station_used`, `player` and `laptop`.
+  - Values are tagged (`$i`, `$sn`, `$v3`, `$xf`, `$d`) so ints, StringNames,
+    vectors, transforms and int-keyed dictionaries round-trip exactly.
+  - Typed arrays are restored with `assign()`.
+- **Stable item IDs:** node names. Authored parts (`FilterCartridge2`,
+  `WireSignal1`), crate parts (`ReserveFilter1`), delivered parts
+  (`CargoCS0002_5`), ejected parts (`UsedFilterCartridge3`) and the
+  `CargoCarrier`.
+- **One owner per part:**
+  - cabinet slot, reserve slot or port slot;
+  - in the carrier (cradle) or docked (the carrier itself);
+  - installed (filter housing or electrical panel);
+  - seated (used cartridge still inside the housing);
+  - loose (world transform) or held.
+- **Equipment** (fields restored, visuals snapped without animation or
+  sound): filter housing, electrical panel (config, repair stage, procedure,
+  disconnect order), calibration station (drift), valve manifold, cargo port
+  (state, manifest, receipts), supply crate. DayPlan gets its own fields;
+  **no re-arm runs on load**, so faults are restored, not re-rolled.
+- **Safe save boundary:** saving is refused, with the reason shown, while:
+  - a reach, place or physics settle is in progress;
+  - a focused equipment panel is open;
+  - the player is on the bunk (sitting, lying, sleeping);
+  - the cargo hatch is moving.
+
+  A part held in the hand is saved and returns to the hand. Calibration
+  minigame progress is not mid-saved; the day's recorded drift is.
+- **Atomic write:** the save is serialised to `<save>.tmp`, read back and
+  validated. The previous save becomes `<save>.bak`, then the tmp is renamed
+  over the save.
+- **Recovery:** a missing, empty, truncated, corrupt or unsupported (newer
+  schema) main file falls back to the backup. A save that fails validation
+  never replaces anything.
+- **Validation:** duplicate part ids, two parts claiming one slot, unknown
+  types, invalid owners, more than one held part and dangling references are
+  all rejected, and a rejected load leaves the world untouched.
+- **Loading:** reloads the scene, then restores before the player resumes:
+  1. consumed parts are removed;
+  2. delivered or ejected parts are recreated;
+  3. every part is parked;
+  4. each is placed into exactly its owner.
+- **UI** (workstation [5] SAVE / LOAD): shows the current shift day and the
+  saved game.
+  - **[R]** saves.
+  - **[L]** loads.
+  - **[N]** pressed twice starts a new game. It never deletes or overwrites
+    the save until the player saves again.
+
+## D. Daily routine, briefing, shift report
+
+- **Morning briefing** (Overview, from real state):
+  - the day, and the carry-over note if any;
+  - station health from each system's live `condition()`;
+  - today's order and its priority step;
+  - blocked, cargo, supply and upcoming lines.
+- **End-of-shift report:** built from structured counters that the real
+  equipment writes through `log_event(text, kind)`:
+  - equipment serviced (service log) and orders closed;
+  - inspections, parts consumed, discarded and restocked;
+  - cargo parts received;
+  - unfinished work and supply concerns.
+
+  Work Orders [R] submits it once nothing is left to verify or close; this
+  is the shift-completion action ("SHIFT COMPLETE — rest in the Living
+  Quarters"). The report is kept in `shift_history`.
+- **Carry-over:** an order whose equipment is NOT restored carries into the
+  next day with its facts and task progress (`carried_over_from`). A
+  restored-but-unverified order is reported, not carried. Routine
+  inspections never carry.
+- **Retrieval facts:** now recorded at the grasp (`on_item_taken`), not
+  inferred from per-frame stock differences. The per-frame version was
+  timing-dependent, and the 20-day save/load comparison exposed it.
+
+## E. New maintenance tasks
+
+On days with no service due, DayPlan schedules ROUTINE work, alternating:
+
+- **Routine Inspection Round:** log the filter housing, coolant manifold and
+  power panel status at their physical status tags, plus a **supply audit**
+  (the electrical cabinet's count, readable only with the door open).
+- **Routine Communications Check:** the M02 signal check on the existing
+  console, plus sensor-array and power readings.
+
+Filing at the workstation **cross-checks** every logged reading against the
+equipment's live state. A stale reading fails the filing and must be re-read.
+Inspection tags (`inspection_tag.gd`) are pickable-only (layer 16), so they
+never block the player or physics.
+
+## F. Cargo carrier
+
+A removable parts carrier (`cargo_carrier.gd`) docks in the cargo port, and
+shipments are packed into it.
+
+- **Before release:** the restraint must be released before it can be
+  lifted.
+- **Carrying:** the whole delivery is carried as ONE item (the one-item rule
+  holds), and the parts ride along unclickable.
+- **Unloading:** Space at an open reserve crate or cabinet unloads every part
+  with a free compatible slot through that container's own `stow()`; stock
+  changes exactly then. The rest stay in the tray.
+- **Return:** the empty carrier docks back (Space at the open port).
+- **Single parts:** they can still be taken from the docked carrier one by
+  one.
+- **In transit:** parts in an undocked carrier count toward cargo needs and
+  audits.
+- **Targeting fixes:**
+  - the crate's inner floor is now part of its body, so looking into the
+    open crate targets it;
+  - looking at a part stowed in an open container targets that container.
+
+## G. Operational detail, reliability, HUD
+
+- **Environment readout** (Control Room west wall, `environment_readout.gd`):
+  live airflow %, filter dP, main bus T-2 voltage, coolant loop flow, sensor
+  drift and cargo port status, all derived from equipment state.
+- **Test runner:** each test is now bounded:
+  - `TEST_TIMEOUT_S` (default 600 s);
+  - a test that printed a SCRIPT ERROR and then went silent for
+    `ERROR_IDLE_S` (default 20 s) is killed and reported as TIMEOUT instead
+    of hanging the suite. Verified with a deliberately hanging probe (killed
+    after 3 s; the suite continued).
+- **HUD messages:** new writers use `scripts/ui/hud_message.gd`. Messages are
+  owner-stamped, and the hide timer is a child of the label, so a scene
+  reload no longer fires callbacks into a freed scene. This removed the
+  "Lambda capture … was freed" errors seen after loading.
+
+## H. Root causes found while rendering this round
+
+- **Render-harness stall (Round 31 mystery): SOLVED.**
+  `RenderingServer.frame_post_draw` is not emitted while macOS isn't drawing
+  the window (minimized, occluded, display asleep). Process frames keep
+  running: measured +435 process frames and 0 post-draw signals in 3 s
+  minimized. Any `await frame_post_draw` then hung silently.
+  `render_harness.gd` now waits for post-draw for at most 2 s, then calls
+  `RenderingServer.force_draw()`, which is verified to produce a frame while
+  minimized, and logs it. The stall report includes the window mode. The
+  watchdog caught two such stalls this round before the fix.
+- **Status lamps above the ceiling (since Round 31):**
+  `EquipmentStatusLamps` computed lamp positions in `_ready()`, when the
+  stations' visuals were not yet at their final transforms. The filter and
+  coolant lamps landed at y≈6, above the Life Support ceiling, invisible.
+  They are now built two frames after ready, and `_top_of()` ignores visuals
+  more than 1 m from the station. The lamps, tags and inspection points now
+  sit just above each station, and each is reachable by a look ray.
+- **Briefing placement:** the full briefing pushed the Overview's station map
+  off-screen in the rendered frame. The briefing is now on Home, the first
+  screen when sitting down; Overview keeps the action and the priority line.
+- **Carrier prompts:** "Space: Unload Parts Carrier" at a container, "Space:
+  Dock Parts Carrier" at the port.
+
+## I. Rendered and inspected (Round 33)
+
+- **Screens:**
+  - workstation Home on day 1 and day 2 (NEW SHIFT — TODAY IS DAY N);
+  - laptop session log on day 1 and day 2;
+  - Overview before and after check-in;
+  - the inspection work order;
+  - cross-check failed ("power logged NOMINAL, now FAULT");
+  - verified, then the shift report;
+  - the Save/Load screen after saving.
+- **POV:**
+  - an inspection point with its prompt, and the logged message;
+  - the refused save ("Not saved: Finish handling the part first.");
+  - the loaded world ("Progress loaded — Day 7.");
+  - the carrier at the open port, at the crate, and after unloading
+    ("Unloaded 3 parts").
+- **External:**
+  - storage stock, the loose dropped filter and the loaded carrier in the
+    port, each before saving and after loading (identical);
+  - the reserve crate after the transfer;
+  - the environment readout on day 1 and day 2 (live values).
+- **Regression:** bed sit, lie, eyes closed, wake and get up; wristwatch
+  raised at five pitches with the mirror.
+
+## J. Known limitations and roadmap
+
+- **One save slot:**
+  - no autosave;
+  - no mid-minigame save;
+  - save and load only from the workstation;
+  - loading reloads the scene (about a second);
+  - the user-facing save lives at `user://savegame.json` (+ `.bak`).
+- **Routine workdays:** they only fill quiet days. The routine
+  communications check reuses M02 as-is: its target is not re-randomised,
+  so a previously solved dial can complete quickly.
+- **Optional morning actions:** no new Living Quarters actions this round
+  (the laptop log and the wristwatch remain optional).
+- **Readout scope:** the environment readout is one panel. Other
+  decorative status lights (Overview's 8-light row) are still static.
+- **Roadmap:**
+  - autosave at the sleep boundary, with a slot picker;
+  - re-randomised comms targets;
+  - multiple concurrent orders per day;
+  - more live gauges at the equipment itself.
+
+## K. Late fix: startup script errors hidden behind passing tests
+
+The headless smoke start reported 4 SCRIPT ERRORs. The workstation's
+`_ready()` built the Home briefing, which called `condition()` on stations
+that were not yet ready, so they had no DayPlan reference. The same 4 errors
+appeared in 106 of the 107 tests (520 lines), and every one still reported
+PASS.
+
+- **Fix:** the first Home render is deferred, and the briefing skips
+  stations that are not ready.
+- **Runner:** any test whose output contains a SCRIPT ERROR is now reported
+  as ERRORS (failed), even if its checks passed. After the fix: 0 SCRIPT
+  ERRORs across the suite.
+- **Known intermittent:** `test_bed_camera` "get-up: no body snapping"
+  measures bone travel per rendered frame. It failed once in five runs
+  (0.164 m against the 0.12 limit; typical 0.014–0.057). A single long
+  frame under load can trip it. It was left unchanged and is reported.
+
+# Round 34 — Load crash, daily shift, automatic completion, clickable laptop, menus, settings
+
+## A. Save/load crash (release blocker) — root cause and fix
+
+- **Symptom:** your playtest log (`user://logs/godot2026-11-06T18.18.46.log`)
+  shows `SCRIPT ERROR: Cannot call method 'set_input_as_handled' on a null
+  value at workstation_state.gd:244`, 225 `Condition "!is_inside_tree()"`
+  errors from the same `_unhandled_input`, then an abrupt end (hard
+  crash).
+- **Root cause:** `SaveGame.load_game()` called
+  `get_tree().reload_current_scene()` synchronously INSIDE the
+  workstation's `_unhandled_input` ([L] key). The old scene was torn down
+  while its own input callback was still executing: `get_viewport()`
+  became null, out-of-tree transforms were read, and the renderer crashed.
+- **Fix:**
+  - the save is read and validated first, and a bad save never touches the
+    running game ("Load failed: …");
+  - the scene change is deferred until after input dispatch and guarded
+    against re-entry; New Game uses the same path;
+  - the workstation's handler is null-safe.
+- **Evidence:** `test_load_via_workstation_input` reproduced the exact error
+  through real pushed key events before the fix. After the fix it passes
+  (16 checks): three repeated loads, no save, a corrupt save (running
+  game kept), and no SCRIPT ERRORs. Your real save (copied, read-only)
+  loads cleanly.
+
+## B. Days begin in the bunk
+
+- **Start:** `SleepState.start_day_in_bed()` lies the technician in the
+  bunk with eyes closed, then the eyes open into the existing wake (lying,
+  wristwatch glance, E sits up and gets up).
+- **Used by:**
+  - New Game from the main menu, the workstation [N], or the pause menu;
+  - loading an AUTOSAVE (the start of a day).
+- **Sleep already woke the player in the bunk.**
+- **Loading a manual mid-day save** restores the saved position; the
+  player is never moved to bed.
+- **The day only advances through sleep.**
+- **`GameFlow.start_mode`** carries the intent across the scene change. A
+  station opened directly (tests, F6) is left as authored.
+
+## C. Ten-minute shift
+
+- **Clock:** `DayPlan.shift_elapsed_s` counts in `_process`, so it stops
+  when the tree is paused (the pause menu). Menus and loading are other
+  scenes.
+- **Duration:** `scripts/station/game_config.gd` `SHIFT_DURATION_S = 600`
+  (a central dev setting, separate from difficulty).
+- **Sleep before the end:** refused with "Shift in progress — mm:ss
+  remaining." The seated prompt shows "Sleep after shift (mm:ss)".
+- **At the end:**
+  - the shift ends by itself, the report is generated automatically from
+    real recorded work, and "Daily shift ended — you may return to your
+    quarters." is shown;
+  - nobody is teleported, and overtime is allowed;
+  - unfinished unrestored work carries over (Round 33 rule).
+- **Persistence:** the clock is saved and restored.
+- **Shown on:** the workstation Work Orders (SHIFT mm:ss remaining /
+  SHIFT ENDED + report), the wristwatch (third token) and the laptop
+  Shift Report app.
+
+## D. Automatic completion (event-driven)
+
+- **Re-evaluation:** every recorded fact or task re-evaluates the open order
+  (`DayPlan._auto_advance()`).
+- **Equipment restored:** the self-test VERIFIES automatically (electrical
+  c05 / "verified"). Step labels now say "(automatic)".
+- **Verified and cleanup done:** the order CLOSES automatically
+  ("<System> complete.").
+- **Cleanup stays mandatory:** the used filter must be disposed of before
+  closure.
+- **Routine inspections:** the cross-check runs automatically on the last
+  reading; a stale reading is cleared with "Cross-check failed — re-read:
+  …".
+- **Cargo duty:** opens with each shipment and completes itself once
+  received, every part put away (none left in the carrier) and the hatch
+  secured.
+- **Removed:** the manual "Submit end-of-shift report" action. The
+  workstation [R] still works, idempotently, and never reopens a closed
+  job.
+
+## E. Clickable laptop and Personal Log
+
+- **Click bodies:** `laptop.gd` adds two pickable-only click bodies, the
+  whole laptop and the screen.
+- **Mapping:** `screen_uv()` maps a world hit to screen pixels from geometry
+  (the screen's local X = height, toward the hinge = down; local Z = width,
+  with "right" taken from the viewer's camera), not from the rotated/flipped
+  CSG UV convention.
+- **Seated on the bunk:** looking at the laptop shows "Click: Open Laptop"
+  and a click opens it.
+- **Screen:** an app bar — **Personal Log**, **Shift Report**, **Close
+  Laptop**; while editing, **◀ Back** and **Save**.
+  - Clicks use the reticle; while editing a visible cursor is used (the
+    camera is locked on the screen).
+  - Clicks are delivered into the SubViewport as real mouse events.
+- **F/T** remain optional shortcuts.
+- **Log content** is preserved and saved.
+
+## F. Small loose parts no longer block walking
+
+- **Root cause:** a landed part went back to collision layer 1, which the
+  player capsule collides with (mask 1|4), and the capsule has no step-up.
+  A 9 cm filter was a wall.
+- **Fix:** small loose parts rest on the pickable-only layer 16:
+  - the interaction ray (1|16) still hits them;
+  - the drop proxy still lands on floors and furniture (mask 1|4);
+  - the player walks over them;
+  - held parts are still layer 0 (they never push).
+- **Exception:** the parts-carrier tray stays solid.
+- **Test:** proven by `test_loose_parts_walkable`, which fails with the old
+  layer.
+
+## G. Menus and settings
+
+- **Main menu** (`scenes/ui/main_menu.tscn`, now the project's main scene):
+  - Continue (newest valid slot);
+  - New Game (asks first if a save exists; never deletes it);
+  - Load Game (manual + autosave slots, with day and time);
+  - Settings, Credits (only verifiable facts), Quit.
+- **Pause menu** (`PauseMenu`, Esc): Resume, Save (disabled with the reason
+  when unsafe), Load, Settings, Return to Main Menu, Quit.
+- **Esc priority:** a seated workstation, an open laptop or editor, a
+  focused equipment panel, or sleeping keeps Esc. Esc in the pause menu goes
+  back or resumes.
+- **Settings** (`GameSettings`, `user://game_settings.cfg`, independent of
+  saves), all applied for real:
+  - volumes for the Master/Ambient/SFX/UI/Voice buses
+    (`default_bus_layout.tres`; ambience → Ambient, effects and footsteps →
+    SFX);
+  - fullscreen and window size;
+  - mouse sensitivity and invert Y (read by `look_controller.gd`);
+  - language.
+- **Localization:** runtime `Translation` tables (en, zh_CN) for menu,
+  pause, settings, credits and a few prompts, with a CJK system-font
+  fallback behind the default font. The rest of the game is still
+  English-only.
+
+## H. Autosave and persistent ids
+
+- **Autosave slot** `user://autosave.json` (+ `.bak`): written atomically
+  only after a completed sleep → new-day wake. It is never the manual slot,
+  and only in the real game flow, so tests and F6 never write the player's
+  autosave.
+- **Shared writer:** both slots use the same atomic writer (tmp → validate →
+  .bak → rename).
+- **Schema v2:** each item record carries a stable `pid` (an explicit
+  `persist_id` meta, else its deterministic node name). `PID_ALIASES` maps
+  renamed ids; v1 saves (no pid) still load.
+
+## I. Task guidance
+
+`DayPlan.guidance()` gives the ONE next physical step (the open work order
+first, then the cargo duty) with a short form. It advances by itself as
+facts arrive.
+
+- **Shown on:** Work Orders (NEXT: …), the Home briefing (Priority) and the
+  wristwatch ("REPLACE FILTER / LIFE SUP · 07:12").
+- **Cargo steps:** CARGO ID → OPEN HATCH → RELEASE → CARRY TRAY → UNLOAD
+  TRAY → CONFIRM → RETURN TRAY → SECURE HATCH.
+- **Inspection steps:** LOG FILTER / LOG COOLANT / LOG POWER / AUDIT SPARES
+  …
+
+## J. Workload policy (Priority 14)
+
+| Day type | Assignments |
+| --- | --- |
+| Quiet | one routine inspection or comms check (no service due) |
+| Normal | one maintenance order; on delivery days plus the short cargo duty |
+| Busy | the electrical repair (longest), plus at most the cargo duty |
+
+Never more than one maintenance order plus the cargo duty per shift.
+Guidance orders them deterministically (order first). Difficulty stays
+separate from task volume and shift length.
+
+## K. Future station AI (Priority 12) — design only
+
+- **What it is:** a station operations AI (voice and console text, no body
+  at first) that introduces the job on day 1:
+  - the workstation briefing;
+  - inspections at the status tags;
+  - Storage and typed spares;
+  - the cargo port and carrier.
+- **Behaviour:**
+  - event-driven: it subscribes to `DayPlan.task_completed`,
+    `workday_step_completed`, `notify`, `shift_ended_signal` and the
+    `guidance()` changes;
+  - it speaks only on a NEW first-time event or after a long idle on the
+    same step;
+  - skippable and mutable (Voice bus + a setting), with no separate
+    progression system.
+- **Implementation:** a `StationAI` node with a line table keyed by event
+  and a "first time" set saved in DayPlan.
+- **Later:** it can become narratively important; no hidden identity
+  early.
+
+## L. Future personal laptop (Priority 13) — foundation in place
+
+The app bar is the extension point: each app is a button plus a view in
+`session_log_screen.gd`.
+
+- **Planned apps:**
+  - messages (fictional, authored);
+  - photos (fictional placeholders until the author supplies real ones);
+  - a daily schedule;
+  - an ORIGINAL falling-block puzzle (own rules and art; no commercial
+    assets or branding).
+- **No anomalies yet.** Later horror can alter familiar files subtly.
+
+## M. Found while rendering this round, and test status
+
+- **Wrong prompt while lying awake (since Round 31):** the HUD read "E: Sit
+  Down" while lying awake in the bunk. The interaction controller (re-enabled
+  on wake) overwrote the sleep state's prompt. The sleep state now owns the
+  prompt whenever the player is on the bunk ("E: Get Up · Sleep after shift
+  (mm:ss)").
+- **Pause menu during transitions:** the pause menu no longer opens during a
+  workstation sit/stand transition. Pausing froze the stand-up tween;
+  `test_workstation_sitdown` caught it.
+- **Notification over the raised watch:** while the watch is raised, HUD
+  notifications move to the top of the screen; they had covered the watch
+  face.
+- **Small UI fixes:** the settings checkboxes are now labelled "On"; the
+  credits text wraps cleanly; the Work Orders [R] hint is hidden once the
+  order is closed.
+- **Tests:**
+  - **New this round (8):** `test_load_via_workstation_input`,
+    `test_loose_parts_walkable`, `test_laptop_clicks`,
+    `test_shift_day_system`, `test_menus_settings`, plus the reworked Round
+    33 routine/inspection tests.
+  - **Updated to the new rules:** automatic completion, the shift clock,
+    the laptop prompt, the loose-part layer.
+- **Load-sensitive tests:** `test_gait_footsteps` (foot slide) and
+  `test_animation_transitions` (watch→idle blend) measure motion per frame.
+  Each failed once in a full suite run while the machine was swapping (0.68
+  m/s, 0.375 m/tick), and passed 3/3 when rerun (0.16 m/s, 0.059 m/tick).
+  They were left unchanged and are reported as timing-sensitive.
+
+# Round 35 — Five physical maintenance tasks, station consequences, busier days, simpler workstation
+
+## A. Interface
+
+- **Workstation Settings ([6]):** the SAME `GameSettings` store as the main
+  and pause menus (`user://game_settings.cfg`): difficulty, five bus
+  volumes, fullscreen, window size, mouse sensitivity, invert Y, reduce
+  visual effects, language.
+  - Up/Dn selects a row and Left/Right (or [R]) changes it; changes apply
+    immediately.
+  - Verified: the main-menu panel shows the same values, they are
+    persisted, and the language updates live.
+- **Laptop:**
+  - clicking the visible log TEXT opens the zoomed editor, the same as
+    [Personal Log];
+  - [< Save & Back] returns to the desktop;
+  - the reticle is fed to the screen as mouse motion, so on-screen buttons
+    show hover highlights.
+- **One-line Work Orders:** each assignment is ONE row:
+  `TAG — next physical action · Room  progress` (for example
+  "BREAKER — Reset breaker B-02 · Engineering  c/o 3/4").
+  - Rows advance by themselves from equipment state.
+  - Up/Dn selects; Enter opens an optional detail panel (full step list,
+    breaker table, seal sections, channel states …); the
+    REPORT row appears when the shift ends.
+  - Labels are kept short (≤ 56 chars); truncation is only a fallback.
+- **Home** is a 7-line briefing (systems, duties + shift clock, priority,
+  cargo, carry-over).
+- **Watch:** one objective, destination and time.
+- **Fonts:** the default font lacks ▶ ↑ ↓ ← → ✓ ↺ ◀ ▲ ▼, which rendered as
+  blanks in the frames. ASCII replacements are used: `>`, Up/Dn,
+  Left/Right, done, c/o, <, +/−.
+
+## B. Task categories and concurrent orders (DayPlan)
+
+- **Categories:** A quick (5–20 s), B interactive (20–90 s), C full job
+  (2–5 min), D multi-room chain (2–6 min). Category is time/complexity;
+  difficulty only changes assistance and tolerances.
+- **Orders:** the main workday stays as it was. The new tasks are ORDERS in
+  `DayPlan.orders` ({id WO-nnnn, type, category, priority, day, seed,
+  status, carried_from}).
+  - The EQUIPMENT is authoritative and answers `order_done()`,
+    `order_next()`, `order_progress()`, `order_detail()`,
+    `order_feasible()` and `order_rearm(seed)`.
+  - DayPlan polls and closes each order automatically.
+- **Schedule:**
+  - One new type is introduced per early day: breaker d2, vent d3, loads
+    d4, seal d5, data d6. The newcomer gets a +2 budget allowance, so its
+    introduction never stalls.
+  - Each day is then filled up to a time-weighted budget: quiet 7 / normal
+    9 / busy 11 points (A1, B2, C/D3; main job 3; cargo 2). Day type is
+    seeded; days 2–3 are always quiet.
+  - The schedule is deterministic by day seed; there are no duplicate open
+    types; no hatch-seal order is issued on a cargo day (interlock); an
+    unfinished order carries over ("c/o").
+  - Observed in tests: 2–6 concurrent duties.
+
+## C. The five tasks
+
+- **Breaker (Engineering west wall, `breaker_panel.gd`):** B-01 Quarters,
+  B-02 Life Support (also the fans), B-03 Engineering, B-04 Comms
+  lighting.
+  - A trip puts out that zone's main light and turns on a dim red
+    emergency light.
+  - Resetting is refused while the cause is present: the unrepaired wiring
+    fault (B-03), or an active overload. Switching a healthy breaker off is
+    a real, recoverable mistake.
+- **Vent grille (Life Support west wall, `vent_grille.gd`):** two clips →
+  hinged cover → four duct sections with real dirt (drawn as a debris layer
+  that fades as you scrub) → close → secure.
+  - Efficiency = 1 − 0.4 × mean dirt, which feeds airflow.
+- **Power distribution (Engineering south wall, `power_distribution.gd`):**
+  three channels with +/− controls, load bars, lamps and a bus voltmeter.
+  - Bus V = 28 − 0.6 × Σ|setting − demand| (−1 V while overloaded).
+  - An overload (excess ≥ 2) trips B-03 after 45 s.
+  - An under-powered LS-FANS channel cuts airflow.
+  - The order completes after 4 s of stable balance.
+  - EASY shows targets, NORMAL shows UNDER/OK/OVER, HARD shows bars and
+    voltage only.
+- **Hatch seal (airlock, `hatch_seal.gd`):** four sections with
+  debris/misaligned-clip faults, an inspection-mode lever and a
+  pressure-hold test.
+  - Faults leak and lower cabin pressure; the test passes only with no
+    faults and the hatch secured.
+  - Cargo interlock both ways.
+- **Data transfer (`data_port.gd`, `data_module.gd`):** module DM-7 is a real
+  carried item.
+  - Control upload port → Engineering capture port (records REAL readings
+    plus a station-state signature) → back to Control.
+  - Data captured before a change to loads, breakers, wiring or sensors is
+    STALE and rejected.
+
+## D. Environment
+
+- **`environment_model.gd`:** airflow (filter × vent × fans), cabin pressure
+  (seal leak) and O₂ partial pressure (follows airflow). They are separate
+  variables with slow time constants, fully reversible, never fatal.
+- **Effects:** MILD gives a faint vignette; SIGNIFICANT gives a stronger
+  vignette plus a slight slow view drift (≤ 6 mm offset, no roll or blur),
+  with a HUD warning. "Reduce visual effects" disables the visuals but keeps
+  the warnings.
+- **The readout** adds cabin pressure, O₂, bus A and tripped breakers.
+
+## E. Audio
+
+New synthesized SFX: breaker snap, relay, seal-test hiss, latch, module
+insert, warning tone, power down/up and scrub. They play one at a time on the
+SFX bus.
+
+## F. Save/load
+
+- **New sections:** `equipment2` (each new device's `state_dict()`),
+  `environment`, the data module's payload and its `dataport` owner, and
+  DayPlan `orders`/`day_type`/`_order_seq`.
+- **No re-roll:** loading restores state; nothing is regenerated.
+- **New safe-save blockers:** data transfer in progress, pressure test
+  running.
+- **Test:** `test_r35_save` covers a mid-task save into a fresh station.
+
+## G. Intermittent animation tests — root causes
+
+- **`test_animation_transitions`:** under load Godot runs catch-up physics
+  ticks (two ticks inside one render frame shorter than 2/60 s). The probe
+  assumed one tick and over-read motion by up to 1.7×. It now counts the
+  ticks.
+- **`test_gait_footsteps`:** foot-slide time was wall-clock milliseconds
+  between bunched samples. It now uses counted physics ticks.
+- Thresholds are unchanged. Reruns: 0.072–0.074 m/tick (limit 0.1) and
+  0.16 m/s (limit 0.45).
+
+## H. Tests and limitations
+
+- **New tests:** `test_r35_equipment` (49 checks), `test_r35_scheduling_ui`,
+  `test_r35_save`; `test_laptop_clicks` extended.
+- **Limitations:**
+  - workstation settings are keyboard-driven (no mouse on that screen);
+  - only lighting zones are wired to breakers (no other equipment
+    shutdown beyond the fans);
+  - the seal's good state is subtle visually;
+  - pre-existing minigame views still use ▲▼←→ glyphs.
+
+# Round 36 — Station Operations Assistant (voice), interaction fixes, filter variants, thermal probe
+
+## A. Vent grille retaining clips (Priority 1) — root cause and fix
+
+- **Reproduced first** (`test_vent_clips`, real interaction ray, nine standing
+  positions straight/left/right/near/far/looking down, aiming at the centre of
+  the VISIBLE clip):
+  - clips released, cover closed (the re-secure case): **0 / 18** hits —
+    the ray hit nothing, the airflow gauge, or the grille cover;
+  - clips secured: 9 / 18.
+- **Root causes (two):**
+  1. **The visual moved, the collider did not.** Releasing a clip slid its
+     mesh 7 cm right (x 0.22 → 0.29) while its click box stayed at x 0.22:
+     the box spanned x 0.18–0.26 and the released mesh x 0.26–0.32 — no
+     overlap. Aiming at what you saw missed (or hit the gauge).
+  2. **The cover's click box covered the lower clip from above.** The cover
+     box (y ±0.20, z to 0.039) sat directly above the lower clip's box
+     (y −0.20 to −0.25, z 0.005–0.055). From standing eye height (1.6 m, the
+     grille centre is at 1.1 m) the ray to the lower clip passes through the
+     cover box first — and clicking the cover of a closed grille with both
+     clips released **reopened the grille** instead of latching it. That is
+     the "lower clip often cannot be secured" report; the upper clip has
+     nothing above it, so it worked "sometimes" (depending on where you aimed).
+- **Fix (`vent_grille.gd`):**
+  - each clip is a TURN LATCH on the frame (pivot `Clip0`/`Clip1`, lever
+    `Lever`): secured = the orange lever stands across the cover's edge in
+    front of the plate (it visibly holds it shut); released = grey lever
+    turned 90° to lie along the frame, clear of the cover;
+  - ONE fixed click volume per clip (11 × 10 × 6 cm) encloses BOTH lever poses
+    — the target never drifts from the hardware;
+  - the cover's click volume stops 3.5 cm short of the top/bottom edges, so it
+    is never in front of a clip from any standing angle;
+  - frame enlarged so the clips sit on it (no floating hardware);
+  - prompts name the clip ("Click: Secure lower clip"); with the cover open a
+    clip says "(close the grille first)" and refuses (the lever would block
+    the cover); serviced = clean + cover closed + both clips secured.
+- **After:** 18/18 from every stance in both states; 2–2.5 cm off-centre still
+  hits; either order; open/close without cleaning; partial cleaning; reopen
+  after completion; repeated cycles; save/load with the cover open and with
+  exactly one clip secured (31 checks).
+
+## B. Diagnostic module return / undo (Priority 2)
+
+- **Root cause:** neither data port had anything hoverable while EMPTY. The
+  carry system's Space "stow" needs a hovered receptacle with
+  `accepts_item()`; with none, an unused module could only be dropped.
+  (The existing tests called `port.stow()` directly, so they never saw it.)
+- **Fix:**
+  - `click_part.gd` can be a RECEPTACLE: `accepts_item/stow/stow_hint` are
+    forwarded to the owning equipment (`part_accepts_item`, `part_stow`,
+    `part_stow_hint`); `interaction_controller.gd` uses the hint for the
+    "Space: …" line; `carry_system.gd` lets a receptacle report its own
+    outcome (no generic "Stowed:" overwrite);
+  - each data port has a real SOCKET part (`Click_slot`); Space or a click
+    seats the module;
+  - one payload state machine, `data_port.payload_state()`: `empty`, `ready`
+    (valid for the open request), `stale` (station changed since capture OR
+    captured before today's request), `uploaded`, `data` (no request);
+  - contextual hints: "Return empty module to dock", "Insert module for
+    capture", "Insert module: upload diagnostic data", "Insert module (data
+    STALE - recapture required)"; the module's own prompt and screen show the
+    state (EMPTY / DATA D5 / STALE D5 / SENT D5);
+  - an EMPTY module in the Control dock is simply DOCKED (no fail sound, no
+    progress); data from before today's request is now STALE (it used to be
+    accepted if the station signature matched);
+  - the "no removal during transfer" guard now works (the module sits in the
+    port's slot node: the guard looked one level too high and never ran).
+- Single-item carry, one owner, save/load of docked/carried/empty/captured/
+  stale: unchanged architecture (`test_data_module_return`, 36 checks, real
+  Space key events).
+
+## C. Filter service variants (Priority 3)
+
+- **What was fixed before:** target keyway 135°, replacement start rotation
+  0°, both latches engaged, old cartridge seated — identical every service;
+  nothing about the condition was per-service state.
+- **Four legitimate conditions of the same fixed housing**
+  (`filter_housing_station.gd`, `Variant`):
+
+  | Variant | Found as | Correction | New cartridge starts at |
+  | --- | --- | --- | --- |
+  | STANDARD | both latches engaged, cartridge on its keyway | normal | 0° |
+  | LOOSE_LATCH | latch L2 already released (hanging open) | release L1 only; L2 must still be re-engaged | 270° |
+  | SEIZED_LATCH | latch L1 crusted with residue | three firm pulls work it free, then it releases | 90° |
+  | COCKED | old cartridge turned 90° off its keyway | turn it back to the mark before it will pull out | 180° |
+
+  The old cartridge's contamination differs per variant (dust / heavy dust /
+  oily residue / soot). The focused view states what was found ("Found: …")
+  and shows it (released latch, residue crust, the old cartridge's own keyed
+  tab off the mark).
+- **Selection:** `DayPlan.register_service_variant()` — called ONCE when a
+  NEW filter service event is generated (first-time or due; never on
+  carry-over, reload, or reopening), deterministic by the day seed, never the
+  same as the previous service. In-progress procedures are never re-rolled.
+- **Saved:** `_variant`, `_last_variant`, `_variant_day`, `_old_angle_deg`,
+  `_seize_left` (plus the existing stage/latches/angle). Older saves load as
+  STANDARD.
+- Physical cartridge, inventory ownership, used-cartridge ejection, disposal
+  and automatic closure are unchanged. Multi-day tests now use
+  `tests/filter_service_solver.gd`, which completes any variant through the
+  station's own public calls.
+
+## D. Darker breaker outages (Priority 4)
+
+- **Why it was still bright:** each breaker switched off ONE OmniLight, while
+  the global `WorldEnvironment` ambient (0.25) kept lighting every surface
+  everywhere, and the red emergency light was strong (0.6 over 5 m).
+- **Now (`breaker_panel.gd`):**
+  - each lighting circuit owns every normal light in its room (Quarters now
+    includes the bunk light);
+  - during an outage a `ReflectionProbe` over that room's volume overrides
+    the ambient there (`ambient_mode = COLOR`, 18 % of the normal fill). It
+    exists only while the breaker is off, so normal lighting is bit-for-bit
+    unchanged and no other room darkens;
+  - a restrained red emergency light (0.32, range 3.6 m) stays on high on the
+    room wall;
+  - a dim amber battery LOCATOR light on the breaker panel comes on whenever
+    any breaker is off, so the panel stays findable even with Engineering
+    dark;
+  - the flashlight is untouched.
+- **Rendered, same camera:** Life Support mean luminance 41.4 normal → 13.7
+  tripped (−67 %) → 41.4 restored; Engineering 34.1 → 13–18 → 34.1; the
+  Control Room next door stays 73.6 throughout. Save/load during an outage
+  restores the dark state.
+
+## E. Station Operations Assistant (Priority 5)
+
+- **What it is:** a calm, impersonal station automation voice over the
+  internal speakers, with a one-line caption and a small source light
+  (`STATION OPS`). No body, no portrait, no supernatural hints, no identity.
+- **Architecture:**
+  - `scripts/station/station_ai.gd` (node `StationAI` in main.tscn);
+  - `scripts/audio/speech_provider.gd` (speech backend).
+- **Triggers — event-driven from REAL state only (no parallel quest system):**
+  - `DayPlan.order_rows()`: each assignment's next physical step (`short`)
+    → step lines; completion → acknowledgement;
+  - the day-1 orientation fields (c01 / e06 / c05 / c02 / e05);
+  - arriving within ~2 m of equipment whose task is OPEN (first time) →
+    that procedure's lesson;
+  - real alarms: a new breaker trip (outage / overload trip), Bus A overload,
+    cabin pressure / O₂ severity;
+  - equipment hooks via `event()`: cargo/seal interlocks
+    (`equipment_base.ai_event()`, `cargo_port.gd`) and the missing filter
+    cartridge.
+- **Priority:**
+  - safety > first-time instruction > information;
+  - a safety line interrupts anything lower and has a 75 s cooldown;
+  - non-safety lines keep their order, wait while a focused equipment view is
+    open, during sleep/wake (eyes closed) or the workstation sit/stand tween,
+    and while paused;
+  - a non-safety line interrupted by a focused view replays afterwards.
+- **No nagging:**
+  - every lesson plays once (the `taught` set);
+  - step and completion lines for a task only play after its equipment
+    lesson (i.e. the player is actually doing that job);
+  - later services of the same task are silent — DayPlan's HUD notices
+    remain.
+- **First day:** greeting → job → wristwatch (C) → "Press E to get up, then
+  report to the Control Room" (or "Report to the Control Room" when not in
+  the bunk) → at the workstation: Home / Work Orders, check in (Overview,
+  R), orders close automatically → day-1 slices (loose connection,
+  verification, diagnostic, fault, repair) → equipment lessons as they come
+  up.
+- **Later days (Priority 8):** one line on waking: "Day 5. Three assignments
+  are scheduled. Power restoration is the current priority. Life Support
+  filter service can follow." — from the real rows, never reading the whole
+  list. Shift end: a full line the first time, then just "Shift complete."
+- **Lessons covered:**
+  - workstation, wristwatch, electrical service, Storage, breaker, power
+    distribution, vent, hatch seal (+ interlocks), diagnostic transfer,
+    thermal survey, filter service (+ missing part, disposal), calibration,
+    coolant routing, comms check, inspection round, cargo (+ return tray),
+    disposal, shift end / sleep;
+  - plus alarms.
+- **Controls:**
+  - **H** repeats the last instruction (or states the current task from
+    `DayPlan.guidance()`);
+  - **J** skips the current line;
+  - the player is never locked and never has to wait.
+- **Settings** (`GameSettings`, in the menu settings panel AND the
+  workstation [6]): Assistant guidance (on/off), Assistant voice (off =
+  captions only), Assistant captions. Speech volume = Master × Voice
+  settings; Voice 0 mutes.
+- **Caption placement:**
+  - top-centre (y 98–170), below the wristwatch label and the raised-watch
+    message position;
+  - low (above the task-message line) while seated at the workstation, so
+    the screen stays clear;
+  - top-right over a full-screen equipment view (safety lines only).
+- **Localization:** EN and Simplified Chinese caption tables; speech follows
+  the language.
+- **Save/load:**
+  - `station_ai` section: taught lessons, intro done, last day announced,
+    last instruction;
+  - loading never replays the intro;
+  - a pre-Round-36 save (no section) is treated as already oriented;
+  - a New Game starts fresh.
+
+## F. Speech backend — what is real and what is not
+
+- **Speech providers, in order:**
+  - **Recorded voice files** `res://audio/voice/<lang>/<key>.ogg|wav` on the
+    Godot Voice bus. **None exist** — none were invented; this is the seam
+    for recorded voice later.
+  - **Platform text-to-speech** through Godot's `DisplayServer.tts_*`
+    (enabled by project setting `audio/general/text_to_speech=true`). On this
+    Mac: AVSpeechSynthesizer, voices **Samantha (en-US)** and **Tingting
+    (zh-CN)**.
+  - **None (captions only)** with an honest reason (headless display, setting
+    off, no installed voice).
+- **Verified for real** (`tools/verify_station_ai_speech.gd`, real display):
+  - an English and a Chinese line were spoken (the OS synthesizer reported
+    speaking, then finished: 5.8 s and 4.8 s);
+  - a safety line interrupted an instruction (one voice at a time);
+  - Voice 0 muted;
+  - freeing the station mid-sentence stopped the speech;
+  - clean exit.
+- **Limitations:**
+  - OS TTS does not pass through Godot's audio buses (the Voice/Master
+    settings scale its volume parameter instead);
+  - Godot's movie writer cannot record it;
+  - voice quality depends on installed OS voices;
+  - on other platforms the voice list differs — not verified here.
+- **No synthesizer callbacks:** an utterance callback left registered at exit
+  crashed the process (`libc++abi … recursive_mutex lock failed`) in a probe.
+  The provider polls `tts_is_speaking()` instead and always stops on exit.
+- A short synthesized two-tone "PA chime" before each line plays on the
+  Godot Voice bus.
+
+## G. Airlock seal fault visibility (Priority 6)
+
+- **Generation was valid:** every seal order had 1–2 faults (now checked
+  over 60 seeds).
+- **What was wrong:** the fault was a 4–5 cm coloured box that could not be
+  told apart from a healthy rim at standing distance (confirmed in renders).
+- **Now (`hatch_seal.gd`):** physical hardware per section, visible before
+  inspection:
+  - **debris**: a pale fibre wad and grit lodged on the gasket;
+  - **misaligned clip**: one steel bracket twisted 40°, tipped and lifted off
+    the gasket, with a bright strip of bare channel where the gasket has
+    lifted;
+  - **rolled lip** (new): a length of gasket bulging out of its groove,
+    exposing the bare metal channel.
+- Healthy sections show two aligned brackets for comparison. An inspection
+  lamp over the hatch lights in INSPECT mode.
+- Prompts and work-order lines name the correction (Remove debris / Realign
+  clip / Reseat gasket). The hold test reflects the real leak; corrections
+  persist; save/load restores the exact faults; the cargo interlock is
+  unchanged both ways.
+
+## H. Portable thermal probe survey (Priority 7)
+
+- **New order type** `thermal` (category D, from day 7):
+  "Thermal survey: power terminals".
+- **Probe TP-3** (`thermal_probe.gd`): a real carried tool (body, orange grip,
+  sensing tip, readout). It lives in its charging/data dock on the Control
+  Room west wall (`thermal_survey.gd`, node `Equipment/ThermalSurvey`).
+- **Terminal block TB-A** is new hardware under the Engineering power
+  distribution panel: three cable-lug terminals (A1 LS-FANS, A2 ENG-AUX,
+  A3 COMMS), each with a measuring point and a lug nut.
+- **Temperature from REAL state:**
+  - `T = 28 + 9 × setting`, plus `8 × excess load` (doubled while
+    overloaded), plus 44 if that lug is loose;
+  - abnormal when more than 12 °C above the expected value for the load;
+  - so an overloaded channel reads abnormal too.
+- **Procedure and reasons to travel:**
+  - The order loosens one lug, and all lugs look alike — only the probe
+    finds which one.
+  - Take the probe → measure A1–A3 → re-torque the hot lug. This is only
+    allowed once it has been measured hot: "don't disturb a live joint
+    without a reason".
+  - Re-measure: readings taken before a change are outdated.
+  - Dock the probe in Control; docking uploads the survey. The order closes
+    only with three current normal readings AND the probe docked.
+- **Recovery:** the probe can be docked unused or mid-survey at any time
+  (nothing is lost) and never gets stuck.
+- **Save/load:** tool location (dock / hand / loose), readings, the armed
+  fault, request / upload state.
+- **Saving:** blocked during a 1.1 s measurement.
+
+## I. Other fixes found this round
+
+- **Player settings wiped by the difficulty writer (pre-existing,
+  Round 10/34):**
+  - `GameSettings._save()` wrote a NEW config file holding only the
+    difficulty, discarding the `player` section (volumes, language,
+    window…);
+  - every save/load test calls `set_difficulty()`, so each full test run
+    reset the player's settings file — on this machine it held only
+    `difficulty=1` when inspected this round. Values lost earlier cannot be
+    recovered.
+  - **Fixes:** `_save()` now keeps the other sections, AND the test runner
+    gives tests their own file (`SMH_SETTINGS_PATH=user://test_game_settings.cfg`,
+    `GameSettings.settings_path()`), so the suite never touches the player's
+    settings again.
+- **Chinese text rendered blank (pre-existing, Round 34):**
+  - a `SystemFont` resolves only the first of its `font_names`;
+  - "PingFang SC" cannot be loaded by FreeType on macOS (every launch logged
+    `FreeType: Error loading font: ''`), so the CJK fallback was dead;
+  - `localization.gd` now probes each candidate and uses the first with CJK
+    glyphs (Hiragino Sans GB here). Zh menus, settings and captions render
+    (seen in renders); the FreeType errors are gone.
+
+- **Regression caught by the full suite, fixed:**
+  - the assistant's H/J keys were also taken while the laptop log editor
+    was open, so typed "h" letters disappeared (5 laptop/editor tests
+    failed);
+  - H/J now only act in free roam (interactions enabled); the editor,
+    the seated workstation and the focused views keep the keyboard.
+- **Caption placement**, found in renders:
+  - a non-safety line in progress when a focused view opens is paused and
+    replayed afterwards, instead of covering the view's title;
+  - captions move low while seated at the workstation.
+
+## J. Tests and rendered verification
+
+- **New tests (6):**
+  - `test_vent_clips` (31 checks)
+  - `test_data_module_return` (36)
+  - `test_filter_variants`
+  - `test_r36_lighting_seal`
+  - `test_thermal_probe` (32)
+  - `test_station_ai` (41)
+- **Helper:** `tests/filter_service_solver.gd`.
+- **Updated to the new rules:** the multi-day filter tests and
+  `test_save_load` (solver); `test_menus_settings` (settings path).
+- **Real-display tool:** `tools/verify_station_ai_speech.gd`.
+- **Rendered and inspected** (scratchpad, not committed):
+  - outage normal / tripped / restored (Life Support, Engineering, Control
+    unchanged);
+  - vent clips secured / released / opening / open / cleaned / closed with
+    clips released / single clip states / after service / side close-ups;
+  - module docked / carried with the return hint / returned / captured /
+    ready for upload;
+  - all four filter variants plus seized-pull and cocked-removal;
+  - seal healthy / faulty / inspect lamp / close-ups / repaired PASS;
+  - probe docked / carried / at TB-A / measuring / HOT reading / returned;
+  - assistant greeting, breaker and vent lessons, caption with the watch
+    raised, disabled, zh caption, safety caption over a focused view;
+  - workstation Home / Work Orders / Settings with the assistant rows; bed;
+    main menu; settings panel EN / ZH.
+
+## K. Known limitations
+
+- Speech is OS text-to-speech, not recorded voice acting; it bypasses the
+  audio buses (volume is scaled instead) and is verified on macOS only.
+- Dynamic "current task" repeats (H) speak the English action text in
+  Chinese mode.
+- The filter variants and seal faults are deliberately small, realistic
+  details; the focused view's "Found:" line and the prompts carry the
+  meaning.
+- Only one portable instrument (the thermal probe) was added — chosen over
+  three similar tools.
+- The laptop was not re-rendered open this round; its automated tests
+  still pass.
+
+# Round 37 — Visual-first operations: emergencies, map-first workstation, spatial intercom, UI scaling, six-gauge sync
+
+## A. Fullscreen UI scaling (Priority 1)
+
+- **Root cause:** `project.godot` had no `[display]` stretch settings, so
+  every screen-space Control kept its pixel size. In fullscreen
+  (2880×1800 on this Retina Mac, or 1920×1080 / 4K) the 340 px pause panel
+  and 16 px buttons shrank to a small patch.
+- **Fix:**
+  - `display/window/stretch/mode = "canvas_items"`, `aspect = "expand"`,
+    1152×648 base: menus, HUD and captions scale with the window; the 3D
+    view still renders at native resolution;
+  - a new **Interface scale** setting (80–150 %) multiplies the factor
+    (`root.content_scale_factor`);
+  - the settings list scrolls inside a fixed area with Back always visible
+    (it no longer fit the base height).
+- **Mouse hit areas:** follow the stretch transform automatically.
+- **Verified:**
+  - **Test:** the pause panel keeps the same screen fraction (54 %) at
+    1152×648 / 1920×1080 / 2560×1440 / 3840×2160; buttons stay on-screen;
+    a click at the Resume button's real window position presses it.
+  - **Rendered:** windowed 1280×720 and real fullscreen 2880×1800 look
+    identical in proportion; switching back to windowed works without a
+    restart.
+
+## B. Six calibration gauges (Priority 2)
+
+- **Root cause:** the focused view owned the six chambers' values and
+  reset them on every open ("the next attempt starts clean"). The physical
+  station had one static decorative dial.
+- **Now:** `sensor_calibration_station.gd` owns the ONE state —
+  setpoints, readings, velocities, damping, coupling, active count:
+  - the view adopts those very dictionaries while open (shared
+    references) and writes the damping back;
+  - with the view closed, the station keeps integrating the same
+    coupled springs;
+  - six real dials (A–F: face, ticks over the same 280° sweep, a green
+    target mark, a red needle, an in-range lamp) always show
+    `cal.reading`.
+- **Persistence:** a calibration TASK is one instance keyed by day + drift
+  seed: never reset on reopen, saved/loaded exactly (`state_dict`), and a
+  new recurring drift starts a new instance. Outside a task, opens are
+  practice attempts, as before, still written into the station state so
+  the dials stay truthful.
+- **Proof:** `test_r37_calibration_gauges` (dial error ≤ 0.04 units, open
+  / partial / closed / reopened / loaded / completed / new drift).
+- **Rendered:** before, focused, partial, after close, calibrated, at
+  0.75 m and 1.3 m.
+
+## C. Station intercom speakers and spatial voice (Priority 3)
+
+- **Speakers** (`station_speakers.gd`): eight ceiling-mounted units, no
+  colliders —
+  - Living Quarters, Control, Engineering, Life Support, Storage, Comms,
+    Airlock, and the main junction (corridors);
+  - each has a grille, trim ring, an LED and a faint glow while sounding.
+- **Unit selection:** the player's room's unit, else the nearest; chosen
+  at the start of a line and kept for the whole line.
+- **Spatial voice (real):**
+  - macOS's built-in `say` renders each line to a 16-bit WAV on a worker
+    thread, cached in `user://voice_cache/`;
+  - it is loaded at runtime (`AudioStreamWAV.load_from_file`) and played
+    by the chosen unit's `AudioStreamPlayer3D` on a new **Intercom** bus
+    (high-pass 220 Hz, low-pass 6.2 kHz, faint short reverb), which sends
+    into **Voice**, so the Voice/Master settings and mute apply directly;
+  - static lines are pre-rendered in the background; render tasks are
+    awaited on exit;
+  - local only: no network, no credentials.
+- **Fallback:** where `say` is missing (other OSes), or a render fails,
+  the Round 36 OS TTS speaks (non-positional). The source unit's light
+  still shows; the backend string says which is in use.
+- **Measured on the audio device** (`tools/verify_spatial_voice.gd`,
+  Intercom bus peak meters, Engineering speaker):
+
+  | Listener position | Left | Right |
+  | --- | --- | --- |
+  | Facing the speaker | −16.0 dB | −15.7 dB |
+  | Speaker on the right | −22.4 dB | −16.3 dB |
+  | Speaker on the left | −13.2 dB | −19.3 dB |
+  | 8 m away | −29.4 dB | −29.9 dB |
+
+  The assistant's own line played spatially from that unit (−4.6 dB
+  peak). This is level-meter evidence, not human listening.
+- **Voice character:** Samantha at 168 wpm (Tingting at 185 for Chinese),
+  pitch 0.985, intercom band-limiting, subtle room.
+
+## D. Emergency severity (Priority 4)
+
+- **Severity scale:** 0 normal, 1 routine, 2 warning, 3 emergency, each
+  from the equipment's own `order_severity()`:
+
+  | Equipment | Routine | Warning | Emergency |
+  | --- | --- | --- | --- |
+  | Vent | dirty | airflow < 80 % | — |
+  | Breaker | — | tripped (room dark) | — |
+  | Seal | — | leaking | — |
+  | Data | transfer | — | — |
+  | Thermal | survey | hot terminal measured | — |
+  | Power | imbalance | LS fans under-powered | Bus A overloaded |
+  | Electrical workday | — | unrepaired | — |
+
+- **Timed emergency:** the only one today is a Bus A overload, whose real
+  consequence is the B-03 trip:
+  - routine balancing orders can no longer START overloaded (that used to
+    run the trip timer while the player slept);
+  - overloads come from `DayPlan.plan_emergency()`: from day 5, about one
+    day in four (14 of 80 days measured), at a fixed shift time between
+    2:00 and 5:00 (day seed);
+  - `power_distribution.surge()` drops one channel's demand so its output
+    exceeds it by 2; an emergency balancing order opens.
+- **Countdown length:** `OVERLOAD_TRIP_S` raised 45 → 90 s. Route lengths
+  to the panel are 1–16 m (≤ 9 s walking at 1.8 m/s, estimated along
+  doorway waypoints), plus getting up and ~10 s to correct the channels.
+- **Recovery:** reduce the channel; if it tripped, balance then reset
+  B-03.
+
+## E. Countdown and warning feedback (Priorities 5–6)
+
+- **One model** (`station_status.gd`): room severities, duties and the
+  active emergency, all derived; nothing saved.
+- **Countdown:** the equipment's own timer (`_overload_s`, saved). It
+  pauses with the tree, never restarts on reopening or loading, and
+  vanishes when cleared or once the trip happens.
+- **Surfaces:**
+  - a compact top banner, "POWER OVERLOAD · ENGINEERING · 01:24 Reduce
+    COMMS output" (hidden while seated: the workstation shows its own
+    strip);
+  - the raised watch: "! PWR OVERLOAD / ENGINEER 01:24".
+- **Lights:**
+  - red wall beacons in Engineering plus the corridor at its doorway
+    (others exist for Life Support / Airlock and only light for their own
+    emergencies);
+  - slow 0.5 Hz pulse, no strobe;
+  - a **Steady warning lights** setting gives constant light;
+  - distinct from breaker-outage emergency lighting and the panel
+    locator.
+- **Alert tone:** a two-tone alert on the room speaker at onset and once
+  at 30 s.
+- **Assistant lines:** "Warning. Engineering power overload. Breaker trip
+  imminent." / "Thirty seconds to breaker trip." / "Breaker B-03 tripped.
+  Emergency lighting active…" / "Overload cleared."
+  - safety priority and cooldowns;
+  - the voice waits for the alert tone (no clash).
+
+## F. Map-first workstation (Priorities 7–9)
+
+- **Shell:** `workstation_shell.gd` is the visible interface: three
+  sections, every control clickable.
+- **OPERATIONS (default):**
+  - **Map:** the real topology (copied from the existing map layout). Each
+    room shows its highest severity:
+    - neutral = normal;
+    - orange outline + circle = routine (gentle pulse);
+    - amber fill + diamond = warning;
+    - red pulsing fill + "!" triangle = emergency (steady when requested).
+  - **Room panel:** clicking a room lists its duties, one line each;
+    clicking a duty shows a few details.
+  - **Actions:** CHECK IN, VERIFY REPAIR, DIAGNOSTIC (overlay), CAMERA (+
+    NEXT CAM); the footer gives the most urgent duty; a red strip shows an
+    emergency.
+- **RECORDS:** today's log, shift reports, service history.
+- **SYSTEM:**
+  - every setting as a clickable row (and `<`);
+  - SAVE GAME / LOAD GAME / NEW GAME, using the established safe deferred
+    load;
+  - saved / autosave status (disk is read only when the page opens or
+    after an action).
+- **Mouse:** seated, the cursor is visible; each mouse event is projected
+  onto the monitor face (camera ray → `screen_uv_on_ray`) and pushed into
+  the screen SubViewport; nothing reaches the world.
+  - **Verified:** a rendered marker at the mapped RECORDS tab lands on it;
+    a test click presses the right tab.
+- **Keys kept:** 0/1 Operations, 2 tasks, 3 Diagnostic, 4 Camera, 5 Save/
+  Load and 6 Settings (System), **7 Records** (new), arrows, R, Esc.
+- **The old seven sections** remain as the hidden keyboard/text model
+  (existing tests read them).
+- **Glyphs:** all 17 non-ASCII UI symbols (arrows, triangles, °, …) are
+  present in the font chain now that the CJK fallback really loads
+  (`tools/audit_glyphs.gd`).
+
+## G. Personal laptop (Priority 11)
+
+- **Messages:** eight short, ordinary fictional messages arriving by day
+  (sister, a friend, payroll, a dental reminder, mum); an unread count;
+  read state saved; checked for horror vocabulary.
+- **Schedule:** DayPlan's real day, shift clock, open duties, next cargo,
+  plus a few personal notes.
+- **Photos:** an honest empty album — "No photos have been synced to this
+  device yet". No imagery was invented or borrowed; content pending.
+
+## H. Save/load
+
+- **New saved state:**
+  - the emergency plan;
+  - the overload timer (already in the power state);
+  - the six-chamber calibration state;
+  - read messages;
+  - settings `ui_scale` and `steady_warnings` (settings file).
+- **Not saved:** map / banner / beacons are derived. Loading during an
+  emergency keeps the remaining time (tested).
+
+## I. Tests
+
+- **New (6):**
+  - `test_r37_ui_scale`
+  - `test_r37_calibration_gauges`
+  - `test_r37_emergency`
+  - `test_r37_workstation`
+  - `test_r37_speakers` (renders real speech with `SMH_SPATIAL_SPEECH=1`)
+  - `test_r37_laptop_personal`
+- **Real-display tools:**
+  - `tools/verify_spatial_voice.gd`
+  - `tools/verify_station_ai_speech.gd` (now the OS-TTS fallback)
+  - `tools/audit_glyphs.gd`
+
+- **Found by the full suite (fixed):**
+  - `test_laptop_clicks` failed after the stretch change. The test
+    projected a point with `unproject_position()` (VIEWPORT coordinates)
+    and pushed it as a WINDOW event; with canvas_items stretch (headless
+    window 64×64) those differ. The game itself is consistent: handlers
+    use `event.position` in viewport space.
+  - The test now maps through the root's final transform.
+  - Also hardened: every caption / emergency-banner Control now ignores
+    the mouse (display-only overlays never swallow clicks).
+- **Found in renders (fixed):**
+  - the HUD emergency banner sat on the seated workstation's tab bar
+    (now hidden while seated; the monitor has its own strip);
+  - the Operations footer said "All assignments complete." on day 1 (it
+    now shows the most urgent duty from the status model).
+
+## J. Known limitations
+
+- Spatial speech uses macOS `say`. On other platforms speech falls back
+  to non-positional OS TTS (reported as such).
+- Voice quality depends on installed voices; no recorded voice acting.
+- No acoustic occlusion: a unit's voice is heard through walls with
+  distance attenuation only (units are chosen by the player's room).
+- Only one timed emergency type (Bus A overload). Life Support and seal
+  problems are warnings (their modelled consequences are slow and
+  non-fatal).
+- Photos has no content yet.
+- The old seven workstation sections still exist (hidden) as the
+  keyboard/test model.
+- Tests write the voice cache to `user://voice_cache/` (a cache, not
+  saves or settings).
+
+# Round 38 — Cameras, exterior & EVA, observation discrepancy foundation, interior upgrade, laptop desktop, portable tools
+
+## A. Camera network (`scripts/surveillance/camera_network.gd`, node `CameraNetwork`)
+
+Twelve live cameras. Each is a SubViewport camera (384×288) that renders
+ONLY while its feed is on screen (`UPDATE_ALWAYS` while displayed,
+otherwise `UPDATE_DISABLED`). The console's own feed is gated off while
+the player stands in the Control Room. Camera housings are on visual
+layer 16, which every camera excludes.
+
+| ID | Label | Mount → target | Blind spot |
+|---|---|---|---|
+| INT-01 | CONTROL ROOM | existing `CameraControlRoom` | under the camera, the console's west side |
+| INT-02 | MAIN CORRIDOR | existing `CameraCorridor` | the Control Room doorway behind the camera |
+| INT-03 | JUNCTION | existing `CameraCorridorEnd` | the Comms tunnel mouth |
+| INT-04 | ENGINEERING | (-2.78,2.95,6.72) → (-4.6,0.9,3.7) | the breaker-panel alcove right below the camera |
+| INT-05 | LIFE SUPPORT | (-1.48,2.95,11.82) → (-4.1,0.9,10.0) | the doorway behind the camera |
+| INT-06 | STORAGE | (-5.55,2.95,7.05) → (-7.2,0.7,8.9) | the near cabinet face |
+| INT-07 | AIRLOCK | (-4.8,2.22,2.85) → (-4.8,1.0,-2.2) | the tunnel corner by Engineering |
+| INT-08 | COMMS | (3.22,2.95,8.12) → (1.4,1.0,6.3) | the alcove behind the camera |
+| EXT-01 | HULL OVERVIEW | (7.5,6.5,-9.5) → (-1.5,0.8,3.5) | the north face of every module |
+| EXT-02 | AIRLOCK HATCH | (-3.45,3.05,-3.75) → (-4.8,0.9,-2.75) | directly beneath the camera mount |
+| EXT-03 | OBSERVATION | (-1.62,3.25,2.92) → (-3.6,1.0,0.2) | the walkway behind the antenna mast |
+| EXT-04 | ANTENNA A1 | (-4.12,2.55,2.45) → (-2.85,0.75,0.75) | the far side of the feed box |
+
+API: `ids()`, `feed(id)`, `info(id)`, `camera(id)`, `request(requester, id)`,
+`is_rendering(id)`, `sees(id, point, tolerance)`. `sees()` uses frustum plus
+line of sight; sight rays ignore the EVA tether walls (collision layer value 4).
+
+**Workstation.** There are four tabs: OPERATIONS / CAMERAS / RECORDS /
+SYSTEM. CAMERAS lists the interior and exterior cameras and shows the
+selected live feed with `LIVE mm:ss`, the blind-spot note and a mini plan
+marking the camera. `< MAP` returns to Operations. The OPS "CAMERAS"
+button and the old `[Surveillance]` section key both open the tab. The
+network renders a feed only while the Cameras tab is shown and the
+player is seated.
+
+## B. Exterior spacecraft (`scripts/exterior/exterior_builder.gd`, node `Exterior`)
+
+- **Space:** a star sphere and a planet with an atmosphere rim, both
+  procedural. A Sun `DirectionalLight3D` lights only the EXTERIOR visual
+  layer (1<<11), so it never leaks into the rooms.
+- **Hull:** plating is generated on every outward wall face. A face counts
+  as outward when a probe 0.3 m outside it is not inside any floor
+  footprint. Roofs and undersides are plated too.
+- **Equipment:** radiators, a solar wing truss, a comms dish, a cable
+  tray and nav lights.
+- **External airlock hatch:** frame, red door, wheel handle, hazard marks
+  and a label.
+- **EVA courtyard:** the deck floor, handrails and floodlights, plus
+  tether walls on collision layer value 4. The player capsule collides
+  with them; sight and interaction rays do not.
+
+## C. EVA (`scripts/exterior/eva_system.gd`, node `EvaSystem`)
+
+- **Sequence:** suit locker (Airlock, recessed) → inner panel "CYCLE OUT"
+  (3.5 s depressurise, pressure readout) → outside at the hatch → walk the
+  courtyard (mag-boots) → outer panel "CYCLE IN" → repressurise.
+- **Cycle-out blockers** (`cycle_out_blocker()`): no suit; the cargo port
+  is not SECURED; a hatch-seal inspection or test is in progress.
+- **While outside:**
+  - presentation: visor overlay, Ambient bus low-pass, Station AI on a
+    non-positional `suit_radio` unit;
+  - refused: saving ("Return inside through the airlock first."), the
+    cargo port, and seal inspection;
+  - failsafe: the tether returns you to the hatch if you ever leave the
+    deck.
+- **Saved:** only `suited`. A save is impossible outside, so a load
+  always starts inside.
+
+## D. Exterior maintenance with a consequence: antenna feed A1 (`antenna_mast.gd`, order type `antenna`)
+
+- **Fault model:** feed A1 can be `ok`, `loose` or `corroded` (seeded).
+  `link_quality()` = feed factor (1.0 / 0.35 / 0.55) × comms power
+  (breaker B-04).
+- **Effects of the link quality:**
+  - shown on the Comms **LINK panel** (TEST);
+  - degrades the Comms room's state;
+  - surfaces as the work order ANTENNA, category D, from day 8.
+- **Chain:** TEST LINK (Comms) → SUIT UP → CYCLE OUT → FIX FEED A1 (open
+  the cover, reseat or clean the connector, close) → CYCLE IN → VERIFY
+  LINK (Comms). The order closes only on a verified good link.
+- **Multi-room chain:** Comms → Airlock → exterior → Airlock → Comms.
+
+## E. Window / camera discrepancy foundation (`observation_discrepancy.gd`)
+
+**Shared observation region:** the EVA courtyard around mast A1 and the
+outer-hatch walkway. Three views cover it:
+
+- the Control Room **observation port**, a DIRECT view;
+- **EXT-03** and **EXT-04**, camera views;
+- partly **EXT-02**, a camera view.
+
+**Mechanism:**
+
+- `camera_network` removes layer 19 (CAMERA_ONLY) from every direct view:
+  the player, the observation port and the mirror.
+- It removes layer 20 (DIRECT_ONLY) from every surveillance camera.
+
+**Modes:**
+
+| Mode | Effect |
+|---|---|
+| `camera_figure` | a suited figure by the hatch, visible on camera only |
+| `window_object` | a tethered bag by the mast, visible through the port only |
+| `displaced` | the same bag by the mast for the eyes and by the hatch on camera |
+
+**Control:** `trigger(mode, seconds, source)` / `clear()`.
+
+- `source` must be `"event"` (the future narrative system) or `"debug"`.
+- `"debug"` is refused outside debug builds.
+- It is never random and never saved; a load starts clean.
+- `history` records every trigger.
+
+## F. Observation port (`wall_watch_window.gd`, rewritten to the locked design)
+
+- **Physical form:** a round port with a thick bolted rim standing proud
+  of the wall and the glass recessed behind the bezel. It has no
+  `interact()`.
+- **The glass:** shows a portal render from the player's actual eye: an
+  off-axis frustum through the glass with the near plane past the wall
+  and hull. Parallax is therefore correct as you move.
+- **Rendering cost:** the portal renders only while the player is in the
+  Control Room.
+- **Kept from the old design:** `set_feed_override()` and `camera_path`
+  remain as seams.
+
+## G. Interior aesthetic (`scripts/station/station_decor.gd`, node `StationDecor`)
+
+Industrial spacecraft with restrained cyberpunk accents. Nothing has
+collision, so navigation is unchanged (verified by the capsule sweep).
+
+- **Rooms:**
+  - chamfered ceiling cladding;
+  - perimeter light strips in the zone colour;
+  - kick plates and module signage (e.g. "COMMS · M-5");
+  - one identity per room: Engineering pipe runs and a cable tray,
+    Life Support duct and pipes, the Control status strip, the Quarters
+    warm cove light, Storage hazard posts, and the Comms transceiver rack
+    with status LEDs plus a ceiling cable bundle.
+- **Corridors:** ribs every 0.75 m (skipped near mounted equipment), a
+  centre light strip and handrails.
+- **Lighting obeys power:** each strip belongs to a breaker zone and goes
+  dark while that zone is off (polled every 0.5 s; `strip_lit(zone)`).
+
+## H. Atmosphere / sound (`station_ambience.gd`)
+
+Three new quiet room beds were added to the existing ventilation,
+engineering and life-support beds:
+
+- a Comms electronic whine, silent while B-04 (communications) is off;
+- an Airlock coolant-pump throb;
+- a faint Storage hum.
+
+While outside, the Ambient bus is low-passed (EVA).
+
+## I. Laptop
+
+- **Zoom bug root cause:** the laptop's EDITING (zoomed) state was
+  hard-wired to the personal-log editor. Zooming therefore always opened
+  the log, and any other app could not be used zoomed.
+- **Fix:** zoom (focused use) is now separate from the log app.
+  - Clicking an icon while unzoomed requests focus (`app_requested(&"focus")`)
+    and opens that app after the zoom.
+  - Zooming out returns to the desktop.
+  - The text entry is editable only while zoomed and in the log.
+- **Desktop:** taskbar (Desktop / Save / Save & Back / Close) and app icons:
+  Personal Log, Messages, Schedule, Photos, Files, Shift Report, Cargo Drop.
+- **Files** (`laptop_files.gd`): folders Personal, Photos, Messages,
+  Journal, Documents and Entertainment, holding text, image, message, log
+  and app entries. Photos are original procedural pictures (dinner, house,
+  the dog Pip, the coast, a watch).
+- **Cargo Drop** (`cargo_drop_game.gd`): an original falling-crate game
+  on an 8×12 grid. Pieces are 1–3 crates; a full row ships for
+  100 × rows² points. The best score is saved.
+
+## J. Portable tools (`portable_meter.gd`, `tool_rack.gd`)
+
+- **Tool rack:** in Engineering, with two docked slots.
+- **AFM-2 airflow meter:**
+  - measure ports at the LS air vent and the air-filter housing;
+  - readings come from the real vent, fan and filter state;
+  - measuring the vent sets `vent.airflow_checked`.
+- **LD-5 leak detector:**
+  - signal = clamp(leak / 1.2, 0.5, 1) / (1 + (d / 0.3)²) near the hatch
+    seal;
+  - a signal above 0.6 marks that seal segment inspected.
+- **Carrying and saving:** both tools follow the one-item carry rule; the
+  rack and the tools' payloads are saved.
+
+## K. Dynamic failures, variety, proficiency, AI
+
+- **Dynamic failures:** the antenna feed degrades (seeded); comms power
+  depends on B-04; the existing overload emergency remains.
+- **Proficiency:**
+  - families: electrical, life_support, mechanical, communications, eva;
+  - each completed work order, and each day's main workday, credits its
+    families exactly once (keyed by order ID or day/workday);
+  - ranks: Trainee (0), Technician (1–2), Qualified (3–5), Senior (6+);
+  - shown on RECORDS.
+- **Proficiency-gated variety:**
+  - harder filter variants (SEIZED / COCKED) need life_support ≥ 1;
+  - two-fault seals need mechanical ≥ 2;
+  - the timed overload emergency needs electrical ≥ 1.
+- **Quarters life** (`quarters_life.gd`): galley tea (3 s brew → mug)
+  and a meal once per day, plus a photo frame.
+- **AI tuning:**
+  - new lines for the suit, being outside, the interlock, the antenna,
+    the comms link, the tools and the measure ports;
+  - step narration is skipped once the family is Qualified (≥ 3).
+
+## L. Save / load
+
+Saved:
+
+- EVA `suited`;
+- the antenna (feed, cover, request day, link checked, verified day);
+- the tool rack and tool payloads;
+- quarters (tea, drank and meal days);
+- proficiency and `_credited`;
+- the laptop `game_best`.
+
+Not saved:
+
+- the discrepancy (always starts clean);
+- camera selection.
+
+Saving is refused during EVA.
+
+## M. Tests
+
+New tests:
+
+- `test_r38_cameras_exterior`: network, gating, sight, the discrepancy
+  layers and trigger rules, hull, port portal.
+- `test_r38_eva`: real W-key walking outside, interlocks, tether
+  failsafe, save refusal, the antenna chain.
+- `test_r38_tools`: the rack, both tools, measurements, the return.
+- `test_r38_laptop_station`: the zoom fix, desktop apps, files, photos,
+  the game, quarters, decor and lighting.
+
+`test_station_ambience` gained the Comms B-04 checks. Updated tests:
+`test_laptop_clicks`, `test_r37_laptop_personal`, `test_r37_workstation`
+(four tabs), `test_r37_speakers`, `test_r37_emergency` and
+`test_filter_variants` (proficiency gates).
+
+The navigation sweep (`test_station_capsule_sweep`) still shows only the
+5 known pre-existing failures.
+
+## N. Known limitations
+
+- The observation port is a camera-backed portal with correct parallax,
+  not a real opening in the wall.
+- EVA is mag-boot walking on a deck, not 6-DOF free flight.
+- Photos are stylised procedural images.
+- Spatial speech remains macOS-only, and there is no acoustic occlusion.
+- The old seven workstation sections still exist (hidden) as the
+  keyboard/test model.
+- **Pre-existing geometry quirk:** `JunctionEastWallNorth` (x≈1.4)
+  stands inside the Comms footprint, so the usable Comms room is about
+  x 1.5–3.3. It is unchanged from HEAD and was left alone.
+
+# Round 39 — Real airlock & tethered EVA, sealed hull, daily routine, work-based shift, laptop desktop
+
+## A. Personal laptop: a proper close-up of the desktop (Priority 1)
+
+- **Root cause.** Round 38 tied "zoomed in" to opening an app: clicking the laptop only opened it unzoomed, and the desktop itself had no close-up state.
+- **Fix.**
+  - A click on the laptop from the bunk now opens it AND zooms in on the desktop (`sleep_state.open_laptop(zoom_in=true)`).
+  - A click on the open, unzoomed screen that presses nothing also zooms in.
+  - Zooming in keeps the current view; T still asks for the Personal Log (`set_pending_app`).
+  - `< Save & Back` / Esc zoom out; Close shuts the laptop.
+- **Zoom framing.** The zoom distance is now computed (`_editor_distance()`) from the real camera FOV, keep-aspect mode and viewport aspect, so the 0.24 × 0.14 m screen fills ~88 % of the view on any window shape. The old fixed 0.2 m distance under- or over-filled non-16:9 windows.
+- **Desktop ("driftwood").**
+  - Wallpaper (the technician's own coast photo) and a top menu bar showing brand, current app, controls and a day/shift clock.
+  - Pictogram desktop icons and a sticky "today" note (day, today's work, eat + drink, new messages, the basil).
+  - Apps open in an opaque window; Files entries have type icons.
+- **Foundation for future content.** `laptop_files.register(folder, rec)` / `folders()` add folders and files at runtime, without editing the constant table.
+
+## B. Stray corridor bars / unpainted bars (Priority 2)
+
+Root causes:
+- **Bars in the corridor.** Round 38's `StationDecor` took a corridor's run direction from its floor proportions. The 1.6 × 1.4 m main corridor was therefore dressed *across* its width: a rib post stood in the walkway and a handrail spanned it. Both were walk-through.
+- **Trip bars at doorways.** Room kick plates ran along the full floor edge, across doorways.
+- **"Unpainted" bars.** Five blockout wall fragments (`CommsWestWall*`, `CommsSouthWallWest`) floated inside the north Junction: 1 m tall pieces at y 1.1–2.1, with brightly lit hull plating visible behind them.
+
+Fixes:
+- Decor now follows the REAL walls (`_collect_walls` / `_side_walls` / `_side_face`):
+  - a corridor's axis and interior width come from its side walls;
+  - trim sits on the walls' inner faces;
+  - kick plates are placed per wall segment, never across an opening;
+  - sides without walls get no trim.
+- The five fragments were removed from `main.tscn`. The Comms strip got a proper west wall, plus raises up to the 3.2 m ceiling (see C).
+
+## C. Sealed hull (Priority 3)
+
+- **Leak sweep.** `tests/test_r39_hull_seal.gd` casts rays in 26 directions from ~1,460 sample points (three heights over every interior floor, each visible from a walkable navigation node) against solid geometry. A ray that escapes, or first hits exterior geometry, is a leak.
+- **Before.** About 340 leaking rays at ~100 gap locations.
+- **After.** 0.
+- **`StationSeal`** (`scripts/station/station_seal.gd`) adds 25 collidable panels in the neighbouring wall/floor material:
+  - **Control ↔ Quarters doorway.** The 0.2 m slot between the two walls is filled; the doorway gets a floor threshold and a header. A separate jamb narrowing the Control-side door was tried and dropped: it pinched the navigation path.
+  - **Corridor → Junction.** Shoulder walls (the junction is wider than the corridor).
+  - **Junction → Life Support.** A corner block closing the tunnel/bend corner (no floor, walls or ceiling existed there), plus a small slit filler.
+  - **Life Support ↔ Storage connectors.** C/D west closure, D floor and ceiling strips, the pocket floor and ceiling, and lintels.
+  - **Lintels** wherever a 2.8 m connector meets a 3.2 m room: Engineering (south, west, east), Storage (south, north), Life Support (south, west) and the Comms door.
+  - **Comms.** West closure, plus raises above the Junction walls.
+
+## D. Living Quarters layout (Priority 4)
+
+- The Round 38 galley stood in front of the closet's doors. It is now on the south wall, between the doorway and the bunk (`GALLEY = (3.1, 0, -1.18)`, facing into the room).
+- The closet access zone is clear (tested).
+- Lived-in touches: a basil plant on the desk, a wall calendar with crossed-off days, and a rug by the bunk.
+
+## E. Eating and drinking are part of the day (Priority 5)
+
+- **Galley.**
+  - WATER dispenser (a drink).
+  - HOT WATER → tea mug (a drink).
+  - MEAL PACKS (food).
+- **Gesture.** Each plays a visible hand-to-mouth gesture (`player_body.begin_consume`): the right arm brings the actual pouch or mug to the mouth (two bites / a sip with a tilt). The target follows the head bone, so it works whatever the head pitch. The effect lands when the gesture ends; hands must be free.
+- **DayPlan.**
+  - A MEAL routine row ("Eat and drink at the galley", Quarters, progress n/2) is required work. It shows on the map, the watch and the laptop note.
+  - A day ending without both leaves the technician UNDERFED the next day: movement × 0.85, a faint vignette and an AI reminder, until they eat.
+  - The shift report lists meals.
+
+## F. Airlock, EVA, cameras, exterior (Priority 6)
+
+- **Real two-hatch airlock** (`scripts/exterior/airlock_chamber.gd`, node `AirlockChamber`).
+  - **Chamber.** The tunnel's south end (z −0.5 … −2.5).
+  - **Hatches.** A hinged INNER hatch with a porthole (z −0.4, swings into the chamber) and a hinged OUTER hatch (z −2.6, red, swings out onto the hull). Both are framed bulkheads with hazard-striped jambs and flush sills.
+  - **EXIT** (chamber panel): close inner → depressurize 14.7 → 0 psi → open outer.
+  - **ENTER:** close outer → repressurize → open inner.
+  - **Outside panel:** opens the outer hatch, cycling down first if needed, so the technician is never locked out.
+  - **Station-side panel:** brings the chamber to station pressure and opens the inner hatch.
+  - **Feedback.** A chamber light (green / amber / red), a large psi readout, and panel screens showing state, pressure and both hatches.
+  - **Interlocks, re-checked at each step:**
+    - never both hatches open;
+    - the inner hatch opens only at ≥ 14.5 psi, the outer only at ≤ 0.2 psi;
+    - no venting with an unsuited person in the chamber (the sequence aborts);
+    - a hatch never closes on someone in its doorway (the sequence waits: "Clear the hatch");
+    - the cargo port must be secured and seal inspection/testing idle.
+  - **Not saved.** A load always restores the default; saving is refused while not default.
+  - The old solid bulkhead and the decorative hatch props were removed.
+- **Suit.** `player_body.set_eva_suit` → `technician_rig.set_eva_suit`: white garment, light gloves and boots, orange accents, a life-support pack, a chest unit, and a bubble helmet with a gold visor. The helmet is mirror/camera-only, like the head.
+  - In view: the visor frame and "SUIT 4.3 psi O2 · O2 % · TETHER · AMB".
+  - The suit state is saved.
+- **Tethered zero-g EVA.**
+  - **Outside** = beyond the outer hatch plane or off the hull footprint.
+  - **Movement** (`free_move_controller.zero_g`): no gravity; W/S push along the look direction, A/D strafe, Space/C rise/sink, gentle thrust and slow stabilising drag. No footsteps; the body floats with relaxed legs.
+  - **Tether.** Auto-clipped to ring A1 at the hatch. Clicking ring A2 (walkway) or A3 (mast) within reach re-clips it.
+  - **Cable.** A visible sagging cable to the suit; an inelastic 5.5 m limit plus a failsafe.
+  - Round 38's invisible tether walls were removed; the handrails remain as translation aids.
+- **Cameras curated to six:** INT-02 corridor, INT-04 Engineering, INT-05 Life Support, INT-07 AIRLOCK CHAMBER (now inside it, looking at the outer hatch), EXT-02 airlock hatch, EXT-03 observation. The other table entries are documented but not built.
+- **Observation port from outside.** A real exterior port at the window's position (rim, sun hood, dark glass with a faint cabin glow, label "OBS PORT C-1"). It sits behind the inside portal camera's near plane. The discrepancy foundation is unchanged (EXT-02 / EXT-03 still cover the shared region).
+- **Hull finish** (`exterior_builder._dress_hull`):
+  - painted module bands and large module IDs on every roof;
+  - panel seams, roof vents and junction boxes;
+  - gold insulation blankets on exterior walls;
+  - hazard chevrons over the outer hatch;
+  - the registry marking "KESTREL-7 · RELAY & SURVEY STATION".
+- **EVA tasks.** The antenna A1 chain now reads AIRLOCK EXIT / FIX FEED / AIRLOCK ENTER. NEW work order `lens` (day 9, EVA family; `camera_lens_task.gd`):
+  - the EXT-02 lens gets a real grime film just inside the camera's near plane, so the feed is visibly smeared;
+  - chain: CHECK FEED (Cameras tab) → SUIT UP → AIRLOCK EXIT → WIPE LENS (float up to the camera; two wipes) → AIRLOCK ENTER → VERIFY FEED.
+
+## G. Shift by work, end of day (Priority 7)
+
+- **Progress.** `shift_progress()` is the done share of today's required work: check-in, main workday steps (partial), open orders, cargo duty and the meal routine. It is shown as "DAY n · 45 %" (laptop clock, workstation header, watch), not as a countdown.
+- **End of shift.** When the work is complete, a 45 s WRAP UP follows ("Work complete. Wrap up, then rest."). Then the shift ends: "Shift over. Return to your bunk", and the watch shows SHIFT OVER / BUNK · REST.
+- **Staying up.** After a 60 s grace, `tiredness()` ramps over 90 s: walking slows to 0.7 ×, a dark vignette closes in (`fatigue_vignette.gd`), and the AI reminds the player every 90 s.
+- **Hard limit.** The old 10-minute clock remains the end of the working day. Unfinished work carries over as before.
+- **Days start in bed.** New games, new days and autosave loads start in the bunk (verified).
+
+## H. Station AI onboarding (Priority 8)
+
+- **Rewritten lines** for the new flow: `eva_suit` (4.3 psi, chamber, EXIT), `eva_outside` (tether, drift) and `eva_interlock`.
+- **New first-time lines:**
+  - `airlock_intro` (proximity topic at the chamber panel), `airlock_cycle_out` and `airlock_cycle_in`;
+  - `lens_intro`;
+  - `meal_intro` (proximity topic at the galley while the meal routine is open).
+- **New reminders:** `underfed` (morning), `work_complete` and `bed_reminder`.
+- **Existing first-time lines** (breaker, vent, power, seal, data module, thermal, filter and others) are unchanged.
+- **Proficiency.** The lens task counts toward the EVA family.
+
+## I. Save / load additions
+
+- **DayPlan:** `underfed`, `work_done_at_s`, `awake_after_shift_s`.
+- **Quarters:** tea, drank and meal days, plus the mug.
+- **Lens task:** dirt, request day, checked, verified day.
+- **EVA:** suited (the visuals follow on load).
+- **Airlock:** deliberately not saved.
+
+## J. Tests
+
+- **New:**
+  - `test_r39_hull_seal` (leak sweep);
+  - `test_r39_airlock_eva` (real W-key walk through both hatches, zero-g, tether limit and re-clip, the antenna repair, interlocks, a per-frame safety invariant, save/load);
+  - `test_r39_routine_layout` (closet clear, decor clear of walkways and doorways, seal panels, meal routine and gesture, work-based shift, tiredness, underfed, save/load, day starts in bed, file registry).
+- **Updated:**
+  - `test_laptop_clicks` (zoom on open; blank-click zoom);
+  - `test_shift_day_system` (progress text);
+  - `test_r38_laptop_station` (gesture timing; 6 cameras);
+  - `test_r38_cameras_exterior` (curated set; INT-07 in the chamber).
+- **Replaced:** `test_r38_eva` (the old teleport flow no longer exists), by `test_r39_airlock_eva`.
+
+## K. Known limitations / trade-offs
+
+- **EVA movement.** Gentle thrusters with auto-drag, not full 6-DOF momentum. There is no roll axis and no handrail-grab traversal yet (the rails are visual aids).
+- **Hatch animation.** Hatches swing on a simple eased hinge, with no dogging-wheel animation.
+- **Pressure** is a single chamber value; there is no gas model.
+- **Helmet lighting.** The helmet is mirror/camera-only, so it is not lit by the exterior-only floodlights on cameras.
+- **Seal panels** are plain wall-material boxes. They close the seams but do not add new architecture.
+- **Meal model.** One meal + one drink per day; no hunger meter by design (low friction).
+- **Hard limit.** The shift's hard limit is still the old clock (the 10-minute balance setting).
+- **Pre-existing:** the Junction wall at x ≈ 1.4 inside the Comms footprint (Round 38 note) and the 5 known navigation-sweep edges.

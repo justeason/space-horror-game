@@ -66,6 +66,72 @@ func _ready() -> void:
 				light.queue_free()
 
 
+# ---------------------------------------------------------------------
+# Round 36: service VARIANT presentation -- the old cartridge's own keyed
+# tab (shows a cocked cartridge), its contamination pattern, a seized
+# latch's residue, a pre-released latch (sync_full_state handles that).
+# ---------------------------------------------------------------------
+const _CONTAMINATION_TINT := [Color(0.42, 0.32, 0.18), Color(0.3, 0.24, 0.14), Color(0.2, 0.17, 0.1), Color(0.14, 0.13, 0.13)]
+var _old_tab_root: Node3D
+var _old_body_mat: StandardMaterial3D
+var _residue: Array = []   # per latch: residue overlay box
+
+
+func _ensure_variant_props() -> void:
+	if _old_tab_root != null:
+		return
+	_old_tab_root = Node3D.new()
+	_old_tab_root.name = "OldTabRoot"
+	_old_tab_root.position = Vector3(0.155, 0, 0)
+	_old_cartridge.add_child(_old_tab_root)
+	var tab := CSGBox3D.new()
+	tab.size = Vector3(0.025, 0.03, 0.012)
+	tab.position = Vector3(0, 0.1, 0)
+	var tm := StandardMaterial3D.new()
+	tm.albedo_color = Color(0.95, 0.85, 0.3)
+	tm.emission_enabled = true
+	tm.emission = Color(0.35, 0.3, 0.08)
+	tab.material = tm
+	_old_tab_root.add_child(tab)
+	var body: CSGCylinder3D = _old_cartridge.get_node_or_null("Body")
+	if body != null and body.material != null:
+		_old_body_mat = (body.material as StandardMaterial3D).duplicate()
+		body.material = _old_body_mat
+	for index in [1, 2]:
+		var r := CSGBox3D.new()
+		r.size = Vector3(0.044, 0.05, 0.006)
+		r.position = Vector3(0, -0.015, 0.0145)
+		var rm := StandardMaterial3D.new()
+		rm.albedo_color = Color(0.45, 0.28, 0.12)
+		rm.roughness = 1.0
+		r.material = rm
+		r.visible = false
+		_latch_bodies[index].add_child(r)
+		_residue.append(r)
+
+
+func sync_variant(variant: int, old_angle_deg: float, seized_pulls_left: int) -> void:
+	_ensure_variant_props()
+	set_old_cartridge_angle(old_angle_deg)
+	if _old_body_mat != null:
+		_old_body_mat.albedo_color = _CONTAMINATION_TINT[clampi(variant, 0, 3)]
+	# Seized latch L1: residue crust until it has been worked free.
+	(_residue[0] as Node3D).visible = variant == 2 and seized_pulls_left > 0
+	(_residue[1] as Node3D).visible = false
+
+
+func set_old_cartridge_angle(angle_deg: float) -> void:
+	_ensure_variant_props()
+	_old_tab_root.rotation.x = deg_to_rad(angle_deg)
+
+
+func animate_latch_wiggle(index: int) -> void:
+	var root: Node3D = _latch_bodies[index].get_parent()
+	var tw := create_tween()
+	tw.tween_property(root, "rotation:x", deg_to_rad(14.0), 0.08)
+	tw.tween_property(root, "rotation:x", 0.0, 0.12)
+
+
 func set_active(value: bool) -> void:
 	_active = value
 

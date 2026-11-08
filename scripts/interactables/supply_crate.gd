@@ -151,6 +151,16 @@ func _build_shell() -> void:
 	_shape.shape = bs
 	add_child(_shape)
 	_sync_shape()
+	# Round 33: the crate's inner FLOOR is part of its body too, so looking
+	# into the open crate targets it (Space stows / unloads the carrier);
+	# parts lying on that floor are still hit first.
+	var floor_cs := CollisionShape3D.new()
+	floor_cs.name = "InnerFloor"
+	var fbs := BoxShape3D.new()
+	fbs.size = Vector3(SIZE.x - 2.0 * WALL, WALL, SIZE.z - 2.0 * WALL)
+	floor_cs.shape = fbs
+	floor_cs.position = Vector3(0, WALL * 0.5, 0)
+	add_child(floor_cs)
 
 
 func _process(_delta: float) -> void:
@@ -204,6 +214,8 @@ func is_in_reserve(item) -> bool:
 func accepts_item(item: Node) -> bool:
 	if not (_open and _gate_open) or item == null or not ("item_id" in item):
 		return false
+	if item.has_method("is_carrier"):
+		return item.can_unload_into(self)
 	if item.has_method("is_installed") and item.is_installed():
 		return false
 	return _free_slot(item.item_id) != -1
@@ -222,6 +234,35 @@ func stow(item: Node3D) -> bool:
 	_slots[item] = g
 	reserve_received += 1
 	return true
+
+
+## Round 33 save/load helpers.
+func slot_index_of(item: Node) -> int:
+	if not is_in_reserve(item):
+		return -1
+	for i in _slots_def.size():
+		if to_global(_slots_def[i][1]).distance_to(_slots[item]) < 0.03:
+			return i
+	return -1
+
+
+func persist_place(item: Node3D, idx: int) -> bool:
+	if idx < 0 or idx >= _slots_def.size():
+		return false
+	var g: Vector3 = to_global(_slots_def[idx][1])
+	if item.has_method("set_rest_global"):
+		item.set_rest_global(Transform3D(global_basis, g), self)
+	item.return_to_rest()
+	if not _items.has(item):
+		_items.append(item)
+	_slots[item] = g
+	return true
+
+
+func persist_refresh() -> void:
+	_items = _items.filter(func(it): return is_instance_valid(it))
+	_apply_gating()
+	_refresh_label()
 
 
 func capacity(item_id: StringName) -> int:

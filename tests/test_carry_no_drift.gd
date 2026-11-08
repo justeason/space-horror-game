@@ -100,7 +100,10 @@ func _init() -> void:
 		await create_timer(0.9).timeout
 		var msg: Label = player.get_node_or_null("HUD/TaskMessageLabel")
 		_check("%s: dropped at the feet (not carrying)%s" % [tag, "" if not carry.is_carrying() or msg == null else " -- refused: " + msg.text], not carry.is_carrying())
-		_check("%s: drop restores the item's collision layer" % tag, item.collision_layer == layer_before)
+		# Round 34 Priority 7: a small part resting loose on the floor sits on
+		# the pickable-only layer (16) so it never blocks the player.
+		_check("%s: a part dropped on the floor rests on the loose-part layer (16)" % tag, item.collision_layer == 16)
+		layer_before = item.collision_layer
 		var floor_hit: Dictionary = item.get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(item.global_position + Vector3(0, 0.3, 0), item.global_position - Vector3(0, 1.0, 0), 1, [item.get_rid()]))
 		# The VISIBLE underside rests on the floor (Round 30 solver; the
 		# wire's collision box hangs 3.5cm below its coil by design).

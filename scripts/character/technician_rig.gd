@@ -805,3 +805,75 @@ func pose_leg_ik(side: String, ankle_target: Vector3) -> void:
 	var cur_f: Vector3 = Basis(q_u) * f_r
 	set_global(lo_b, Basis(Quaternion(cur_f, (a - k).normalized())) * Basis(q_u) * parent_g)
 	set_global(side + "Foot", parent_g)
+
+
+# ======================================================================
+# Round 39 Priority 6D: the EVA SUIT on the same rig -- white pressure
+# garment (the coverall / gloves / boots recoloured), a life-support PACK
+# on the back, a chest control unit, and a bubble HELMET with a gold sun
+# visor over the head. The helmet is MIRROR_ONLY like the head (never in
+# the wearer's own view); the pack and chest unit are ordinary geometry.
+# ======================================================================
+const SUIT_WHITE := Color(0.88, 0.88, 0.85)
+const SUIT_GLOVE := Color(0.78, 0.78, 0.76)
+const SUIT_BOOT := Color(0.55, 0.56, 0.58)
+const SUIT_STRIPE := Color(0.9, 0.42, 0.1)
+var suit_on: bool = false
+var _suit_body: MeshInstance3D
+var _suit_helmet: MeshInstance3D
+
+
+func set_eva_suit(on: bool) -> void:
+	suit_on = on
+	if on and _suit_body == null:
+		_build_suit()
+	(_mats["coverall"] as StandardMaterial3D).albedo_color = SUIT_WHITE if on else COL_COVERALL
+	(_mats["coverall"] as StandardMaterial3D).roughness = 0.9 if on else 0.82
+	(_mats["glove"] as StandardMaterial3D).albedo_color = SUIT_GLOVE if on else COL_GLOVE
+	(_mats["boot"] as StandardMaterial3D).albedo_color = SUIT_BOOT if on else COL_BOOT
+	(_mats["accent"] as StandardMaterial3D).albedo_color = SUIT_STRIPE if on else COL_ACCENT
+	if _suit_body != null:
+		_suit_body.visible = on
+		_suit_helmet.visible = on
+
+
+func _build_suit() -> void:
+	for pair in [["suit_pack", Color(0.82, 0.82, 0.8), 0.7, 0.1], ["suit_dark", Color(0.2, 0.21, 0.23), 0.5, 0.4], ["suit_shell", Color(0.92, 0.92, 0.9), 0.35, 0.05], ["suit_visor", Color(0.85, 0.62, 0.18), 0.08, 0.95]]:
+		var m := StandardMaterial3D.new()
+		m.albedo_color = pair[1]
+		m.roughness = pair[2]
+		m.metallic = pair[3]
+		_mats[pair[0]] = m
+	var pack := Surf.new()
+	var dark := Surf.new()
+	var uc := _w({"UpperChest": 0.7, "Chest": 0.3})
+	# Life-support pack on the back (+z is behind the technician).
+	_box(pack, Vector3(0, 1.22, 0.2), Vector3(0.36, 0.5, 0.16), uc)
+	_box(dark, Vector3(0, 1.22, 0.285), Vector3(0.28, 0.38, 0.015), uc)
+	_box(dark, Vector3(-0.13, 1.5, 0.2), Vector3(0.05, 0.08, 0.05), uc)
+	# Chest display / control unit (visible when looking down).
+	_box(pack, Vector3(0, 1.2, -0.16), Vector3(0.2, 0.12, 0.07), _w({"Chest": 1.0}))
+	_box(dark, Vector3(0, 1.21, -0.197), Vector3(0.14, 0.06, 0.005), _w({"Chest": 1.0}))
+	_suit_body = MeshInstance3D.new()
+	_suit_body.name = "SuitMesh"
+	_suit_body.mesh = _commit([[pack, "suit_pack"], [dark, "suit_dark"]])
+	skeleton.add_child(_suit_body)
+	_suit_body.skeleton = NodePath("..")
+	_suit_body.skin = skeleton.create_skin_from_rest_transforms()
+	var shell := Surf.new()
+	var visor := Surf.new()
+	var hw := _w({"Head": 1.0})
+	_ellipsoid(shell, Vector3(0, 1.6, -0.01), Vector3(0.165, 0.175, 0.17), hw, 16, 24)
+	_ellipsoid(visor, Vector3(0, 1.6, -0.075), Vector3(0.135, 0.11, 0.115), hw, 12, 22)
+	_loft(shell, [
+		_ring(Vector3(0, 1.43, 0.02), Vector3.UP, Vector3.RIGHT, 0.13, 0.12, _w({"UpperChest": 1.0})),
+		_ring(Vector3(0, 1.47, 0.015), Vector3.UP, Vector3.RIGHT, 0.125, 0.12, _w({"Neck": 0.5, "UpperChest": 0.5})),
+	], 20)
+	_suit_helmet = MeshInstance3D.new()
+	_suit_helmet.name = "SuitHelmet"
+	_suit_helmet.mesh = _commit([[shell, "suit_shell"], [visor, "suit_visor"]])
+	_suit_helmet.layers = MIRROR_ONLY_LAYER
+	_suit_helmet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	skeleton.add_child(_suit_helmet)
+	_suit_helmet.skeleton = NodePath("..")
+	_suit_helmet.skin = skeleton.create_skin_from_rest_transforms()

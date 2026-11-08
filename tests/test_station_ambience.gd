@@ -30,6 +30,21 @@ func _init() -> void:
 	station.toggle_isolate()                  # the real "restore airflow" step
 	await create_timer(1.8).timeout
 	_check("airflow spins back up when restored", amb.life_support_spin() > 0.99 and is_equal_approx(amb.life_support.pitch_scale, 1.0))
+	# Round 38: room identities; the Comms whine follows the real B-04 circuit.
+	_check("Round 38 room beds built (comms / airlock / storage), quiet", amb.comms != null and amb.airlock.volume_db <= -24.0 and amb.storage.volume_db <= -24.0)
+	_check("comms whine audible while B-04 is on", amb.comms.volume_db > -40.0)
+	var bp: Node = main.get_node("Equipment/BreakerPanel")
+	var ci: int = -1
+	for i in bp.BREAKERS.size():
+		if bp.BREAKERS[i]["zone"] == &"communications": ci = i
+	bp.on[ci] = false
+	await process_frame
+	await process_frame
+	_check("comms whine silent when B-04 is switched off", amb.comms.volume_db <= -79.0)
+	bp.on[ci] = true
+	await process_frame
+	await process_frame
+	_check("comms whine returns when B-04 is restored", amb.comms.volume_db > -40.0)
 	print("")
 	if _ok: print("ALL TESTS PASSED")
 	else: print("SOME TESTS FAILED")

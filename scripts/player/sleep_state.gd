@@ -206,8 +206,150 @@ func _ready() -> void:
 	_day_plan = get_node_or_null(day_plan_path)
 	_eyes_overlay = get_node_or_null(eyes_overlay_path)
 	_wristwatch_label = get_node_or_null(wristwatch_label_path)
+	# Round 34: the laptop's on-screen app bar drives the same actions.
+	var ls: Node = _laptop_view.get("_log_screen")
+	if ls != null and ls.has_signal(&"app_requested"):
+		ls.app_requested.connect(_on_laptop_app)
 
 	_update_prompt()
+
+
+# ======================================================================
+# Round 34 Priorities 2/3/5/6.
+# ======================================================================
+var laptop_hovered: bool = false
+var _prompt_tick: float = 0.0
+
+
+func _process(delta: float) -> void:
+	if _state == State.SITTING and not _lying:
+		var h: bool = _ray_laptop(false) != Vector2(-2, -2)
+		if h != laptop_hovered:
+			laptop_hovered = h
+			_update_prompt()
+	elif laptop_hovered:
+		laptop_hovered = false
+	# Round 35: hover feedback on the open laptop's screen (reticle).
+	if _state == State.LAPTOP:
+		var uv: Vector2 = _ray_laptop(false)
+		if uv.x >= 0.0:
+			_laptop_view._log_screen.hover_at(uv)
+	_prompt_tick += delta
+	if _prompt_tick >= 1.0 and _state == State.SITTING:
+		_prompt_tick = 0.0
+		_update_prompt()
+
+
+func _laptop_node() -> Node:
+	return _laptop_view.get("_laptop")
+
+
+## Casts the click ray (reticle = screen centre, or the visible mouse
+## cursor while editing). Returns the normalized SCREEN coordinates if it
+## hits the open screen, (-1,-1) if it hits the laptop elsewhere, and
+## (-2,-2) if it misses the laptop.
+func _ray_laptop(use_cursor: bool, cursor_pos: Vector2 = Vector2(-1, -1)) -> Vector2:
+	var cam: Camera3D = _interaction_controller as Camera3D
+	var lap: Node = _laptop_node()
+	if cam == null or lap == null or lap.get("body_click") == null:
+		return Vector2(-2, -2)
+	var from: Vector3
+	var dir: Vector3
+	if use_cursor and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		var mp: Vector2 = cursor_pos if cursor_pos.x >= 0.0 else get_viewport().get_mouse_position()
+		from = cam.project_ray_origin(mp)
+		dir = cam.project_ray_normal(mp)
+	else:
+		from = cam.global_position
+		dir = -cam.global_transform.basis.z
+	var q := PhysicsRayQueryParameters3D.create(from, from + dir * 1.5, 16)
+	var hit: Dictionary = cam.get_world_3d().direct_space_state.intersect_ray(q)
+	if hit.is_empty():
+		return Vector2(-2, -2)
+	if hit["collider"] == lap.screen_click:
+		var uv: Vector2 = lap.screen_uv(hit["position"], cam.global_transform.basis.x)
+		return uv if uv.x >= 0.0 else Vector2(-1, -1)
+	if hit["collider"] == lap.body_click:
+		return Vector2(-1, -1)
+	return Vector2(-2, -2)
+
+
+## A real left click while on the bunk.
+func handle_click(use_cursor: bool = false, cursor_pos: Vector2 = Vector2(-1, -1)) -> bool:
+	match _state:
+		State.SITTING:
+			if not _lying and _ray_laptop(false) != Vector2(-2, -2):
+				# Round 39: clicking the laptop picks it up, opens it AND
+				# zooms in on its desktop (a proper close-up of the screen).
+				open_laptop(true)
+				return true
+		State.LAPTOP, State.EDITING:
+			var uv: Vector2 = _ray_laptop(_state == State.EDITING or use_cursor, cursor_pos)
+			if uv.x >= 0.0:
+				var was_viewing: bool = _state == State.LAPTOP
+				_laptop_view._log_screen.click_at(uv)
+				# Round 39: a click on the open screen that didn't press
+				# anything (an app focuses / Close closes) zooms in on it.
+				if was_viewing and _state == State.LAPTOP:
+					begin_editing()
+				return true
+	return false
+
+
+func _on_laptop_app(app: StringName) -> void:
+	match app:
+		&"log", &"focus":
+			# Round 38: zoom in on the chosen app (the whole computer).
+			begin_editing()
+		&"back":
+			end_editing()
+		&"save":
+			_laptop_view.save_entry()
+		&"close":
+			if _state == State.EDITING:
+				end_editing()
+			close_laptop()
+
+
+func _task_message(text: String) -> void:
+	var ml: Label = _prompt_label.get_parent().get_node_or_null("TaskMessageLabel") if _prompt_label != null else null
+	if ml != null:
+		preload("res://scripts/ui/hud_message.gd").show(ml, get_instance_id(), text, 3.0)
+
+
+## Round 34 Priority 2: a NEW DAY / NEW GAME starts here -- lying in the
+## bunk, eyes closed, then the eyes open (the existing wake: lying, the
+## wristwatch glance, E sits up and gets up). Never used for loading a
+## mid-day save (that restores the saved position).
+func start_day_in_bed() -> void:
+	_kill_tween()
+	_kill_zoom_tween()
+	_kill_eyes_tween()
+	_state = State.SLEEPING
+	_lying = true
+	_pre_sleep_eye_position = Vector3(sit_position.x - 1.0, 1.6, sit_position.z + 0.7)
+	_free_body.set_active(false)
+	_free_body.sync_to_eye_position(_pre_sleep_eye_position)
+	_interaction_controller.interactions_enabled = false
+	_global_free_move.mirror_enabled = false
+	_look_controller.input_enabled = false
+	if _player_body.has_method("set_seat_style"):
+		_player_body.set_seat_style(true)
+	_player_body.set_lying(true, 0.05)
+	_player.global_position = _lying_eye_position()
+	_look_pivot.rotation.y = deg_to_rad(sit_look_yaw_degrees)
+	_look_pivot._target_yaw = _look_pivot.rotation.y
+	_pitch_pivot.rotation.x = deg_to_rad(lie_look_pitch_degrees)
+	_look_pivot._target_pitch = deg_to_rad(lie_look_pitch_degrees)
+	_update_prompt()
+	_eyes_tween = create_tween()
+	if _eyes_overlay != null:
+		_eyes_overlay.color.a = 1.0
+		_eyes_tween.tween_interval(eyes_closed_hold_duration)
+		_eyes_tween.tween_property(_eyes_overlay, "color:a", 0.0, eyes_open_duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	else:
+		_eyes_tween.tween_interval(eyes_closed_hold_duration + eyes_open_duration)
+	_eyes_tween.tween_callback(_on_wake)
 
 
 func is_sitting() -> bool:
@@ -463,6 +605,10 @@ func _begin_get_up() -> void:
 func begin_sleep() -> void:
 	if _state != State.SITTING:
 		return
+	# Round 34 Priority 3: sleep only once the day's shift has ended.
+	if _day_plan != null and _day_plan.has_method("can_sleep") and not _day_plan.can_sleep():
+		_task_message(_day_plan.sleep_refusal())
+		return
 	_state = State.SLEEPING
 	_interaction_controller.interactions_enabled = false
 	_free_body.set_active(false)
@@ -502,9 +648,16 @@ func is_sleeping() -> bool:
 	return _state == State.SLEEPING
 
 
+## Round 34: emitted when the player is awake in the bunk after a sleep
+## that advanced the day (SaveGame autosaves here).
+signal woke_into_new_day
+var _day_advanced: bool = false
+
+
 func _on_eyes_fully_closed() -> void:
 	if _day_plan != null:
 		_day_plan.reset_for_new_day()
+		_day_advanced = true
 
 
 ## Eyes open, still sitting on the bed -- unchanged from before sleep
@@ -517,6 +670,9 @@ func _on_wake() -> void:
 	_look_controller.input_enabled = true
 	_show_wristwatch_glance()
 	_update_prompt()
+	if _day_advanced:
+		_day_advanced = false
+		woke_into_new_day.emit()
 
 
 func _show_wristwatch_glance() -> void:
@@ -540,7 +696,7 @@ func _kill_eyes_tween() -> void:
 
 
 ## The dedicated "use laptop" action. Only valid from SITTING.
-func open_laptop() -> void:
+func open_laptop(zoom_in: bool = false) -> void:
 	if _state != State.SITTING or _lying:
 		return
 	_state = State.LAPTOP
@@ -578,6 +734,8 @@ func open_laptop() -> void:
 	if _state == State.LAPTOP or _state == State.EDITING:
 		_aim_at_laptop_screen(0.3)
 		_look_controller.focus_target_point = _laptop_view.get_screen_global_position()
+		if zoom_in and _state == State.LAPTOP:
+			begin_editing()
 
 
 ## The dedicated "close laptop" action. Only valid from LAPTOP (not
@@ -649,6 +807,9 @@ func begin_editing() -> void:
 	# free-look resumes immediately in ordinary LAPTOP viewing -- it
 	# never required looking around DURING the close-up edit itself.)
 	_look_controller.input_enabled = false
+	# Round 34: a visible cursor while editing -- the [Back]/[Save] buttons
+	# and the text are clicked with it.
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_start_editor_zoom(true)
 	_update_prompt()
 
@@ -663,6 +824,8 @@ func end_editing() -> void:
 	_laptop_view.end_editing()
 	_look_controller.escape_enabled = true
 	_look_controller.input_enabled = true
+	if DisplayServer.get_name() != "headless":
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_state = State.LAPTOP
 	_start_editor_zoom(false)
 	# Re-arm ordinary LAPTOP-viewing idle focus-assist (see
@@ -675,6 +838,30 @@ func end_editing() -> void:
 	_look_controller.focus_assist_enabled = true
 	_look_controller._focus_idle_time = 0.0
 	_update_prompt()
+
+
+## Round 39: the zoom distance that makes the laptop SCREEN fill about
+## `editor_screen_fill` of the view on its tighter axis -- from the real
+## camera FOV / keep-aspect and the viewport's aspect -- so the zoomed
+## desktop is a proper close-up on any window shape (a fixed distance
+## over- or under-filled non-16:9 windows). editor_view_distance remains
+## the upper bound.
+@export var editor_screen_fill: float = 0.88
+const LAPTOP_SCREEN_W := 0.24
+const LAPTOP_SCREEN_H := 0.14
+
+
+func _editor_distance() -> float:
+	var cam: Camera3D = _interaction_controller as Camera3D
+	if cam == null:
+		return editor_view_distance
+	var vp: Vector2 = cam.get_viewport().get_visible_rect().size
+	var aspect: float = vp.x / maxf(vp.y, 1.0)
+	var t: float = tan(deg_to_rad(cam.fov) * 0.5)
+	var tv: float = t if cam.keep_aspect == Camera3D.KEEP_HEIGHT else t / aspect
+	var th: float = tv * aspect
+	var d: float = maxf(LAPTOP_SCREEN_H * 0.5 / tv, LAPTOP_SCREEN_W * 0.5 / th) / editor_screen_fill
+	return clampf(d, 0.08, maxf(editor_view_distance, 0.3))
 
 
 func _lap_anchor_global_position() -> Vector3:
@@ -715,7 +902,7 @@ func _start_editor_zoom(zooming_in: bool) -> void:
 		# laptop_view.gd's get_screen_outward_normal() doc comment for
 		# why "aim at the center point" alone left it looking tilted.
 		var normal: Vector3 = _laptop_view.get_screen_outward_normal(eye_world)
-		var desired_world: Vector3 = screen_pos + normal * editor_view_distance
+		var desired_world: Vector3 = screen_pos + normal * _editor_distance()
 		local_target = _player.global_transform.basis.inverse() * (desired_world - _player.global_position)
 		aim_dir = -normal
 
@@ -848,10 +1035,18 @@ func _update_prompt() -> void:
 			# just no longer also pokes the label directly here.
 			pass
 		State.SITTING:
-			_prompt_label.text = "E: Get Up    G: Sleep" if _lying else "E: Get Up    F: Laptop    G: Sleep"
+			var sleep_hint := "G: Sleep"
+			if _day_plan != null and _day_plan.has_method("can_sleep") and not _day_plan.can_sleep():
+				sleep_hint = "Sleep after shift (%d%%)" % int(round(_day_plan.shift_progress() * 100.0))
+			if _lying:
+				_prompt_label.text = "E: Get Up    %s" % sleep_hint
+			elif laptop_hovered:
+				_prompt_label.text = "Click: Open Laptop    E: Get Up    %s" % sleep_hint
+			else:
+				_prompt_label.text = "E: Get Up    F: Laptop    %s" % sleep_hint
 			_prompt_label.visible = true
 		State.LAPTOP:
-			_prompt_label.text = "T: Edit Log Entry    F: Close Laptop"
+			_prompt_label.text = "Click the laptop's apps    E: Get Up"
 			_prompt_label.visible = true
 		State.EDITING:
 			_prompt_label.text = "" # the laptop screen itself shows the Esc/Ctrl+S hint
@@ -872,6 +1067,10 @@ func _update_prompt() -> void:
 ## forwarded into the laptop screen's own SubViewport as ordinary typing
 ## instead of being interpreted as a shortcut.
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		if _state in [State.SITTING, State.LAPTOP, State.EDITING] and handle_click(false, event.position):
+			get_viewport().set_input_as_handled()
+		return
 	if not (event is InputEventKey and event.pressed):
 		return
 
@@ -917,6 +1116,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		close_laptop()
 		get_viewport().set_input_as_handled()
 	elif event.keycode == KEY_T and _state == State.LAPTOP:
+		_laptop_view._log_screen.set_pending_app(&"log")
 		begin_editing()
 		get_viewport().set_input_as_handled()
 	elif event.keycode == KEY_G and _state == State.SITTING:

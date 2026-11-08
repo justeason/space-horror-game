@@ -24,6 +24,7 @@ func _init() -> void:
 	_check("day 1: port secured, no shipment", port.state == S.SECURED and port.shipment_id == "" and dp.next_cargo_day == 3)
 	dp.reset_for_new_day()
 	_check("day 2: still no shipment (scheduled for day 3)", not port.is_busy())
+	dp.mark_done(&"l02")   # day 2's filter restored (Round 33: unrestored work would carry over)
 	var needs: Dictionary = dp.cargo_needs()
 	_check("needs = real shortfall (filters 2, 16GA 0, 22GA 1): %s" % str(needs), needs[&"filter_cartridge"] == 2 and needs[&"wire_control_16ga"] == 0 and needs[&"wire_signal_22ga"] == 1)
 	var shelf_f0: int = cab2.stock_count(&"filter_cartridge")
@@ -44,6 +45,13 @@ func _init() -> void:
 	screen.show_section(screen.Section.OVERVIEW)
 	screen.run_action()
 	dp.mark_done(&"l07")
+	var brk: Node = main.get_node("Equipment/BreakerPanel")
+	for i in 4:   # Round 35: reset the day's tripped breaker (higher priority)
+		if not brk.on[i]:
+			brk.on_part(StringName("b%d" % i))
+	await process_frame
+	for o in dp.open_orders():
+		o["status"] = "done" if o["type"] != "breaker" else o["status"]
 	screen.show_section(screen.Section.WORK_ORDERS)
 	for k in 3:
 		screen.run_action()
@@ -51,7 +59,7 @@ func _init() -> void:
 	var watch: Node = main.get_node("Player/Wristwatch")
 	watch._refresh_text()
 	var face: Label3D = main.get_node("Player/LookPivot/PitchPivot/Camera3D/FirstPersonWatchRig/ArmGroup/WatchAssembly/WatchFaceText")
-	_check("wristwatch: order closed + shipment waiting -> 'CARGO READY / AIRLOCK' (got '%s')" % face.text.replace("\n", " / "), dp.get_outstanding_task_room() == &"" and face.text == "CARGO READY\nAIRLOCK")
+	_check("wristwatch: order closed + shipment waiting -> the cargo duty's next step 'CARGO ID / AIRLOCK' (got '%s')" % face.text.replace("\n", " / "), dp.get_outstanding_task_room() == &"" and face.text.begins_with("CARGO ID\nAIRLOCK · "))
 
 	# ---- Receiving procedure. ----
 	port.interact()

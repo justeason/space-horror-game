@@ -190,6 +190,8 @@ func get_interact_prompt() -> String:
 func accepts_item(item: Node) -> bool:
 	if not (_open and _gate_open) or item == null or not ("item_id" in item):
 		return false
+	if item.has_method("is_carrier"):
+		return item.can_unload_into(self)
 	if not _slot_types.has(item.item_id):
 		return false
 	if item.has_method("is_installed") and item.is_installed():
@@ -215,10 +217,56 @@ func stow(item: Node3D) -> bool:
 		_was_stowed[item] = false
 		var dpl: Node = get_node_or_null(day_plan_path)
 		if dpl != null and dpl.has_method("log_event"):
-			dpl.log_event("Restocked: %s" % stock_item_name)
+			dpl.log_event("Restocked: %s" % stock_item_name, &"restocked")
 	item.return_to_rest()
 	_gate_item(item)
 	return true
+
+
+## Round 33: called by the carry system at the grasp of one of this
+## cabinet's stowed parts -- the retrieval step, recorded deterministically.
+func on_item_taken(_item: Node) -> void:
+	if retrieval_fact == &"":
+		return
+	var dp: Node = get_node_or_null(day_plan_path)
+	if dp != null and dp.has_method("record_fact") and not dp.has_fact(retrieval_fact):
+		dp.record_fact(retrieval_fact)
+
+
+## Round 33 save/load: index of the slot `item` currently occupies, or -1.
+func slot_index_of(item: Node) -> int:
+	if not is_item_stowed(item):
+		return -1
+	for i in _slots.size():
+		if _slots[i].origin.distance_to(_rest_positions[item]) < _STOWED_TOLERANCE:
+			return i
+	return -1
+
+
+## Round 33 save/load: put `item` into exactly slot `idx` (no logging, no
+## retrieval facts) while restoring a saved game.
+func persist_place(item: Node3D, idx: int) -> bool:
+	if idx < 0 or idx >= _slots.size():
+		return false
+	if item.has_method("set_rest_global"):
+		item.set_rest_global(_slots[idx], _home_parent)
+	_rest_positions[item] = _slots[idx].origin
+	if not _items.has(item):
+		_items.append(item)
+	item.return_to_rest()
+	_was_stowed[item] = true
+	_gate_item(item)
+	_last_fact_stock = stock_count()
+	return true
+
+
+## Round 33 save/load: re-baseline after a restore so the restored stock is
+## not mistaken for a retrieval.
+func persist_refresh() -> void:
+	_items = _items.filter(func(it): return is_instance_valid(it))
+	_apply_item_gating()
+	_last_fact_stock = stock_count()
+	_refresh_stock_label()
 
 
 func capacity(id: StringName = &"") -> int:

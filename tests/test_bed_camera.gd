@@ -88,6 +88,7 @@ func _init() -> void:
 	await create_timer(0.3).timeout
 
 	# ---- Sleep / wake timing unchanged (eyes 0.35 + 0.9 + 0.35s). ----
+	get_root().find_child("DayPlan", true, false).end_shift_now()   # Round 34: sleep only after the shift
 	ss.begin_sleep()
 	# Round 31: lie down first (1.1s), then the unchanged eyes sequence.
 	await create_timer(1.2).timeout

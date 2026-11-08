@@ -126,6 +126,40 @@ TESTS=(
   test_electrical_spare_types
   test_cargo_delivery
   test_sustainability_20days
+  test_day_hint
+  test_save_load
+  test_save_reload
+  test_shift_routine
+  test_inspection_tasks
+  test_cargo_carrier
+  test_environment_readout
+  test_save_load_20days
+  test_load_via_workstation_input
+  test_loose_parts_walkable
+  test_laptop_clicks
+  test_shift_day_system
+  test_menus_settings
+  test_r35_equipment
+  test_r35_scheduling_ui
+  test_r35_save
+  test_vent_clips
+  test_data_module_return
+  test_filter_variants
+  test_r36_lighting_seal
+  test_thermal_probe
+  test_station_ai
+  test_r37_ui_scale
+  test_r37_calibration_gauges
+  test_r37_emergency
+  test_r37_workstation
+  test_r37_speakers
+  test_r37_laptop_personal
+  test_r38_cameras_exterior
+  test_r38_tools
+  test_r38_laptop_station
+  test_r39_hull_seal
+  test_r39_airlock_eva
+  test_r39_routine_layout
 )
 
 if [ "$#" -gt 0 ]; then
@@ -134,6 +168,11 @@ fi
 
 overall_status=0
 summary=()
+TEST_TIMEOUT_S="${TEST_TIMEOUT_S:-600}"
+# Round 36: tests use their own settings file, never the player's
+# user://game_settings.cfg (it used to be rewritten by every save/load test).
+export SMH_SETTINGS_PATH="${SMH_SETTINGS_PATH:-user://test_game_settings.cfg}"
+ERROR_IDLE_S="${ERROR_IDLE_S:-20}"
 
 for name in "${TESTS[@]}"; do
   script="tests/${name}.gd"
@@ -146,10 +185,47 @@ for name in "${TESTS[@]}"; do
     continue
   fi
 
-  output="$(godot --headless --path . --script "$script" 2>&1)"
+  # Round 33: bounded run. A test that hangs (e.g. a SCRIPT ERROR aborted
+  # its _init so it never calls quit()) is killed and reported instead of
+  # stalling the whole suite. TEST_TIMEOUT_S bounds a test's total time;
+  # ERROR_IDLE_S kills a test that printed a SCRIPT ERROR and then produced
+  # no further output for that long. Normal long tests (the 20-day run)
+  # keep printing and stay well under the limit.
+  tmp_out="$(mktemp -t godot_test_out)"
+  godot --headless --path . --script "$script" > "$tmp_out" 2>&1 &
+  pid=$!
+  ticks=0
+  idle_ticks=0
+  last_size=0
+  note=""
+  while kill -0 "$pid" 2>/dev/null; do
+    sleep 0.25
+    ticks=$((ticks + 1))
+    size=$(wc -c < "$tmp_out")
+    if [ "$size" = "$last_size" ]; then idle_ticks=$((idle_ticks + 1)); else idle_ticks=0; fi
+    last_size=$size
+    if grep -q "SCRIPT ERROR" "$tmp_out" && [ "$idle_ticks" -ge $((ERROR_IDLE_S * 4)) ]; then
+      kill "$pid" 2>/dev/null; note="HUNG after SCRIPT ERROR (no output for ${ERROR_IDLE_S}s)"; break
+    fi
+    if [ "$ticks" -ge $((TEST_TIMEOUT_S * 4)) ]; then
+      kill "$pid" 2>/dev/null; note="TIMEOUT after ${TEST_TIMEOUT_S}s"; break
+    fi
+  done
+  wait "$pid" 2>/dev/null
+  output="$(cat "$tmp_out")"
+  rm -f "$tmp_out"
   echo "$output"
 
-  if echo "$output" | grep -q "NEW REGRESSIONS FOUND"; then
+  if [ -n "$note" ]; then
+    echo "RUNNER: ${name} killed -- ${note}"
+    summary+=("TIMEOUT     $name ($note)")
+    overall_status=1
+  elif echo "$output" | grep -q "SCRIPT ERROR"; then
+    # Round 33: a test that "passes" while the engine reports script errors
+    # is not a pass (a startup error once hid in every test this way).
+    summary+=("ERRORS      $name ($(echo "$output" | grep -c "SCRIPT ERROR") SCRIPT ERROR line(s))")
+    overall_status=1
+  elif echo "$output" | grep -q "NEW REGRESSIONS FOUND"; then
     summary+=("REGRESSION  $name")
     overall_status=1
   elif echo "$output" | grep -q "SOME TESTS FAILED"; then

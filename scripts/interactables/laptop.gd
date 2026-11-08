@@ -78,6 +78,70 @@ func _ready() -> void:
 	_screen.material = _screen_material
 	_hinge.rotation.x = deg_to_rad(open_angle_degrees) if is_open else 0.0
 	_apply_screen_state()
+	_build_click_bodies()
+
+
+# ======================================================================
+# Round 34 Priorities 5/6: the laptop is CLICKABLE. Two pickable-only
+# (layer 16) bodies: the whole laptop (click to open it while sitting on
+# the bunk) and the screen itself (click its on-screen buttons / text).
+# ======================================================================
+const CLICK_LAYER := 16
+var body_click: StaticBody3D
+var screen_click: StaticBody3D
+
+
+func _build_click_bodies() -> void:
+	body_click = StaticBody3D.new()
+	body_click.name = "LaptopClick"
+	body_click.collision_layer = CLICK_LAYER
+	body_click.collision_mask = 0
+	var cs := CollisionShape3D.new()
+	var bs := BoxShape3D.new()
+	bs.size = Vector3(0.34, 0.05, 0.24)
+	cs.shape = bs
+	cs.position = Vector3(0, 0.02, 0)
+	body_click.add_child(cs)
+	add_child(body_click)
+	screen_click = StaticBody3D.new()
+	screen_click.name = "ScreenClick"
+	screen_click.collision_layer = CLICK_LAYER
+	screen_click.collision_mask = 0
+	var cs2 := CollisionShape3D.new()
+	var bs2 := BoxShape3D.new()
+	bs2.size = Vector3(_screen.size.x, 0.006, _screen.size.z)
+	cs2.shape = bs2
+	screen_click.add_child(cs2)
+	_screen.add_child(screen_click)
+
+
+## Converts a world point on the screen into normalized screen coordinates
+## (0,0 = top-left as the viewer sees it, 1,1 = bottom-right), or (-1,-1)
+## if outside. Derived from geometry, not from the CSG UV convention (the
+## screen mesh is authored rotated/flipped): ScreenGlow's local X spans
+## the screen's HEIGHT (top = the edge AWAY from the hinge) and local Z
+## spans its WIDTH, with "right" taken from the viewer's camera.
+func screen_uv(global_point: Vector3, viewer_right: Vector3) -> Vector2:
+	var lp: Vector3 = _screen.to_local(global_point)
+	var hinge_local: Vector3 = _screen.to_local(_hinge.global_position)
+	var down_x: float = signf(hinge_local.x) if absf(hinge_local.x) > 0.0001 else 1.0
+	var right_local: Vector3 = (_screen.global_basis.inverse() * viewer_right)
+	var right_z: float = signf(right_local.z) if absf(right_local.z) > 0.0001 else 1.0
+	var u: float = 0.5 + (lp.z * right_z) / _screen.size.z
+	var v: float = 0.5 + (lp.x * down_x) / _screen.size.x
+	if u < 0.0 or u > 1.0 or v < 0.0 or v > 1.0:
+		return Vector2(-1, -1)
+	return Vector2(u, v)
+
+
+## The inverse (for tests/tools): normalized screen coordinates -> world.
+func screen_point(uv: Vector2, viewer_right: Vector3) -> Vector3:
+	var hinge_local: Vector3 = _screen.to_local(_hinge.global_position)
+	var down_x: float = signf(hinge_local.x) if absf(hinge_local.x) > 0.0001 else 1.0
+	var right_local: Vector3 = (_screen.global_basis.inverse() * viewer_right)
+	var right_z: float = signf(right_local.z) if absf(right_local.z) > 0.0001 else 1.0
+	var lp := Vector3((uv.y - 0.5) * _screen.size.x * down_x, 0.0, (uv.x - 0.5) * _screen.size.z * right_z)
+	return _screen.to_global(lp)
 
 
 ## Wires a live texture (e.g. scripts/ui/session_log_screen.gd's

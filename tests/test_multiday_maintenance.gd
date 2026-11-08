@@ -148,11 +148,8 @@ func _filter_service(screen: Node, station: Node, cab2: Node, carry: Node, trash
 	await create_timer(1.6).timeout
 	_check("%s: a clean cartridge taken from the shelf (stock %d -> %d)" % [tag, s0, cab2.stock_count()], carry.is_holding(pick) and cab2.stock_count() == s0 - 1)
 	_check("%s: retrieval recorded" % tag, dp.has_fact(&"retrieved:filter"))
-	station.toggle_isolate(); station.toggle_latch(1); station.toggle_latch(2)
-	station.remove_old_cartridge()
-	for i in 3: station.rotate_cartridge(1)
-	station.attempt_insert()
-	station.toggle_latch(1); station.toggle_latch(2); station.toggle_isolate()
+	# Round 36: any service variant (loose/seized latch, cocked cartridge).
+	preload("res://tests/filter_service_solver.gd").solve(station)
 	_check("%s: restored (l02) with the new cartridge installed" % tag, dp.is_task_done(&"l02") and station._installed_cartridge == pick and pick.is_installed())
 	await process_frame
 	var used: Node = station._used_cartridge

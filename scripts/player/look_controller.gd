@@ -55,6 +55,7 @@ var input_enabled: bool = true
 ## tree-order coincidence, so a future scene reorder can never silently
 ## reintroduce one.
 var escape_enabled: bool = true
+const _GS = preload("res://scripts/station/game_settings.gd")
 
 ## "Soft focus assist" for laptop use (M7 Part B3). While enabled, the
 ## view eases toward focus_target_point once the mouse has been still
@@ -88,6 +89,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		if not escape_enabled:
 			return
+		# Round 34: with a pause menu in the scene, Esc opens it (it frees
+		# the cursor itself) instead of only releasing the mouse here.
+		if get_tree().get_first_node_in_group(&"pause_menu") != null:
+			return
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		get_viewport().set_input_as_handled()
 		return
@@ -99,10 +104,13 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		_focus_idle_time = 0.0
-		_target_yaw -= event.relative.x * mouse_sensitivity
+		# Round 34: player settings (sensitivity multiplier, invert Y).
+		var sens: float = mouse_sensitivity * _GS.mouse_sensitivity_scale()
+		_target_yaw -= event.relative.x * sens
 
 		var limit := deg_to_rad(pitch_limit_degrees)
-		_target_pitch = clampf(_target_pitch - event.relative.y * mouse_sensitivity, -limit, limit)
+		var dy: float = -event.relative.y if _GS.invert_y() else event.relative.y
+		_target_pitch = clampf(_target_pitch - dy * sens, -limit, limit)
 
 
 func _process(delta: float) -> void:

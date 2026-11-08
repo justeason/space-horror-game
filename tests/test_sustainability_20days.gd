@@ -89,11 +89,8 @@ func _init() -> void:
 				_check("%s: filter order only when a clean cartridge is on the shelf" % tag, cart != null)
 				if cart != null:
 					_take(cart)
-					station.toggle_isolate(); station.toggle_latch(1); station.toggle_latch(2)
-					station.remove_old_cartridge()
-					for i in 3: station.rotate_cartridge(1)
-					station.attempt_insert()
-					station.toggle_latch(1); station.toggle_latch(2); station.toggle_isolate()
+					# Round 36: any service variant (loose/seized latch, cocked cartridge).
+					preload("res://tests/filter_service_solver.gd").solve(station)
 					consumed[&"filter_cartridge"] = consumed.get(&"filter_cartridge", 0) + 1
 					await process_frame
 					var used = station._used_cartridge
@@ -121,6 +118,16 @@ func _init() -> void:
 				dp.mark_done(&"l07")
 			W.COOLANT_INSPECTION:
 				dp.mark_done(&"l08")
+			W.INSPECTION_ROUND, W.COMMS_CHECK:
+				# Round 33 routine days: click the physical inspection points
+				# the order asks for (status tags, the Storage audit placard).
+				if wd == W.COMMS_CHECK:
+					dp.mark_done(&"m02")
+				var lamps: Node = main.find_child("EquipmentStatusLamps", true, false)
+				for point in lamps.tags():
+					if dp.WORKDAY_STEPS[wd].any(func(st): return st[3] == StringName("reading:%s" % point.inspect_id)):
+						point.interact()
+				_check("%s: every required reading logged" % tag, dp.is_equipment_restored())
 		if wd != W.NONE:
 			screen.show_section(screen.Section.WORK_ORDERS)
 			for k in 3:
@@ -135,7 +142,8 @@ func _init() -> void:
 		_check("%s: every part has exactly one owner" % tag, _single_owner_audit(cab1, cab2, crate, port))
 
 	print("services performed: ", services, "  deliveries: ", dp.cargo_history.size(), "  delivered: ", delivered, "  consumed: ", consumed, "  blocked days: ", blocked_days, "  electrical faults seen: ", fault_labels.keys())
-	_check("all four service types recurred over 20 days", services.size() == 4 and services.values().all(func(n): return n >= 2))
+	_check("all four service types recurred over 20 days", [W.FILTER_SERVICE, W.CALIBRATION, W.ELECTRICAL_SERVICE, W.COOLANT_INSPECTION].all(func(w): return services.get(w, 0) >= 2))
+	_check("routine inspection days happened on quiet days (round %d, comms %d)" % [services.get(W.INSPECTION_ROUND, 0), services.get(W.COMMS_CHECK, 0)], services.get(W.INSPECTION_ROUND, 0) + services.get(W.COMMS_CHECK, 0) >= 1)
 	_check("several cargo shipments arrived and were received", dp.cargo_history.size() >= 4 and port.received_shipments.size() == dp.cargo_history.size())
 	_check("work kept going on resupplied stock (filters used %d, initial %d)" % [consumed.get(&"filter_cartridge", 0), initial.get(&"filter_cartridge", 0)], consumed.get(&"filter_cartridge", 0) > initial.get(&"filter_cartridge", 0) - 2)
 	_check("different electrical faults occurred (%d configurations)" % fault_labels.size(), fault_labels.size() >= 2)

@@ -147,6 +147,13 @@ func cancel_reach() -> void:
 
 
 func _claim(item: Node3D) -> void:
+	# Round 33: tell the container the part is leaving it at the exact
+	# moment of the grasp (deterministic retrieval facts, not inferred from
+	# per-frame stock differences).
+	if is_inside_tree():
+		for c in get_tree().get_nodes_in_group(&"storage_cabinet"):
+			if c.has_method("on_item_taken") and c.is_item_stowed(item):
+				c.on_item_taken(item)
 	_carried_item = item
 	_carried_item_id = item.item_id
 	# A part in the hand is always a visible, collidable object (it may have
@@ -157,8 +164,10 @@ func _claim(item: Node3D) -> void:
 	if col != null and "disabled" in col:
 		col.disabled = false
 	_suspend_physics(item)
+	if item.has_method("_claimed_by_hand"):
+		item._claimed_by_hand()
 	item.reparent(_carry_anchor, true)
-	item.position = held_local_position
+	item.position = held_local_position + (item.held_offset() if item.has_method("held_offset") else Vector3.ZERO)
 	item.rotation_degrees = held_local_rotation_degrees
 	if _sfx != null:
 		_sfx.play_kind(&"click")
@@ -245,6 +254,8 @@ func _process(delta: float) -> void:
 		elif not _touches_player(it):
 			_await_clear.erase(it)
 			_release_physics(it)
+			if it is CollisionObject3D:
+				(it as CollisionObject3D).collision_layer = 1
 	if _pending_item != null:
 		_pending_t += delta
 		if not _still_available(_pending_item):
@@ -323,6 +334,15 @@ func _attempt_drop_at_feet() -> void:
 	# Round 30: facing the OPEN cabinet this part belongs to, Space puts it
 	# back on its own shelf slot (restocks it) instead of dropping it.
 	var cab: Node = stow_target()
+	if cab != null and item.has_method("is_carrier") and not cab.has_method("carrier_docked"):
+		# Round 33: unloading the parts carrier into an open container --
+		# each part goes in through that container's own stow(); the
+		# carrier stays in the hand.
+		var moved: int = item.unload_into(cab)
+		if _sfx != null:
+			_sfx.play_kind(&"click")
+		_show_message("Unloaded %d part%s. %d left in the carrier." % [moved, "" if moved == 1 else "s", item.part_count()])
+		return
 	if cab != null:
 		_carried_item = null
 		_carried_item_id = &""
@@ -333,7 +353,10 @@ func _attempt_drop_at_feet() -> void:
 			item.return_to_rest()
 		if _sfx != null:
 			_sfx.play_kind(&"click")
-		_show_message("Stowed: %s." % (item.get_display_name() if item.has_method("get_display_name") else "Item"))
+		# Round 36: a receptacle part (data port, probe dock) reports its own
+		# outcome ("Module docked", "Survey uploaded"); don't overwrite it.
+		if not cab.has_method("stow_hint"):
+			_show_message("Stowed: %s." % (item.get_display_name() if item.has_method("get_display_name") else "Item"))
 		return
 	# Round 32 Priority 1 ROOT CAUSE FIX ("the filter slides sideways, then
 	# falls"): Rounds 30-31 moved the part from the hand to a solver-chosen
@@ -672,14 +695,22 @@ func _on_landed(item: Node3D, rest: Transform3D) -> void:
 	if not is_instance_valid(item) or _carried_item == item:
 		return
 	item.global_transform = rest
-	# Never let a resting part push the player: if it settled touching the
-	# capsule, it becomes solid only once the capsule has moved clear.
-	if _touches_player(item):
-		_await_clear[item] = true
-		if item is CollisionObject3D:
-			(item as CollisionObject3D).collision_layer = PICKABLE_ONLY_LAYER
-	else:
-		_release_physics(item)
+	# Round 34 Priority 7 ROOT-CAUSE FIX: a resting part went back to layer 1,
+	# which the player capsule collides with (mask 1|4), so a 9 cm filter
+	# lying on the floor was an impassable wall (the capsule has no step-up).
+	# Small loose maintenance parts now rest on the PICKABLE-ONLY layer: the
+	# interaction ray (1|16) still hits them, the drop proxy still lands on
+	# floors/furniture (mask 1|4), but the player walks over/through them.
+	# The parts carrier is a substantial object and stays solid (layer 1,
+	# solid only once the capsule is clear of it).
+	_release_physics(item)
+	if item is CollisionObject3D:
+		if item.has_method("is_carrier"):
+			if _touches_player(item):
+				_await_clear[item] = true
+				(item as CollisionObject3D).collision_layer = PICKABLE_ONLY_LAYER
+		else:
+			(item as CollisionObject3D).collision_layer = LOOSE_PART_LAYER
 	if _sfx != null:
 		_sfx.play_kind(&"click")
 
@@ -688,6 +719,8 @@ var _await_clear: Dictionary = {}
 ## Pickable by the interaction ray (mask 1 | 16) but invisible to the
 ## player capsule (mask 1 | 4): used while a part rests touching the player.
 const PICKABLE_ONLY_LAYER: int = 16
+## Round 34: small loose parts at rest (never block the player capsule).
+const LOOSE_PART_LAYER: int = 16
 
 
 func _touches_player(item: Node3D) -> bool:
@@ -736,6 +769,13 @@ func stow_target() -> Node:
 	var hovered: Object = _interaction_controller.get_hovered()
 	if hovered != null and hovered.has_method("accepts_item") and hovered.accepts_item(_carried_item):
 		return hovered as Node
+	# Round 33: looking at a part that sits in an open container (e.g. a
+	# reserve filter inside the crate) means "put it in THIS container".
+	if hovered is Node and is_inside_tree():
+		for c in get_tree().get_nodes_in_group(&"storage_cabinet") + get_tree().get_nodes_in_group(&"supply_reserve"):
+			var owns: bool = (c.has_method("is_item_stowed") and c.is_item_stowed(hovered)) or (c.has_method("is_in_reserve") and c.is_in_reserve(hovered))
+			if owns and c.accepts_item(_carried_item):
+				return c
 	return null
 
 

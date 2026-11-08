@@ -84,13 +84,19 @@ func _init() -> void:
 ## animation actually advanced): headless runs fit a varying number of
 ## render frames into a physics tick, so a raw per-tick distance (or a
 ## wall-clock rate) was flaky for the same motion.
+## Round 35 ROOT CAUSE of the intermittent failure (one in several loaded
+## full-suite runs, e.g. "idle -> walking 0.141 m/tick"): under load Godot
+## runs CATCH-UP physics ticks -- two 60 Hz ticks inside one render frame
+## whose delta is < 2/60 s. The body moved two ticks while the old probe
+## only guaranteed ONE tick of time (max(dt, 1/60)), reading the motion up
+## to ~1.7x too fast. The probe now COUNTS the ticks in the frame.
 class DeltaProbe extends Node:
 	var d: float = 0.0
-	var ticked: bool = false
+	var ticks: int = 0
 	func _process(delta: float) -> void:
 		d = delta
 	func _physics_process(_delta: float) -> void:
-		ticked = true
+		ticks += 1
 
 var _probe: DeltaProbe
 
@@ -109,9 +115,9 @@ func _max_jump(ticks: int, _scale: float = 0.1) -> float:
 		# Whole-body translation is physics-driven (one 60 Hz tick at a
 		# time): a tick landing in a very short render frame must not read
 		# as a 27 m/s snap.
-		if _probe.ticked:
-			dt = maxf(dt, 1.0 / 60.0)
-			_probe.ticked = false
+		if _probe.ticks > 0:
+			dt = maxf(dt, _probe.ticks / 60.0)
+			_probe.ticks = 0
 		t += dt
 		var now: Dictionary = _bones()
 		for k in now:

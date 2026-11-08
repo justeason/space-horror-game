@@ -28,6 +28,10 @@ enum PortState { SECURED, ARRIVED, ID_CHECKED, OPEN, UNLOADING, EMPTY, RECEIVED 
 @export var day_plan_path: NodePath
 @export var wall_path: NodePath
 
+const _CARRIER := preload("res://scripts/interactables/cargo_carrier.gd")
+## Round 33: where the parts carrier docks (port-local, on the floor).
+const CARRIER_DOCK := Vector3(-0.31, Y0 + 0.012, 0.0)
+var carrier: Node3D = null
 const _FILTER_SCENE := preload("res://scenes/interactables/filter_cartridge.tscn")
 const _WIRE_SCENE := preload("res://scenes/interactables/wire_component.tscn")
 const PART_NAMES = preload("res://scripts/station/part_names.gd")
@@ -74,6 +78,17 @@ func _ready() -> void:
 	_build()
 	if _day_plan != null and _day_plan.has_method("register_cargo_port"):
 		_day_plan.register_cargo_port(self)
+	# Round 33: the parts carrier starts docked in the compartment.
+	carrier = StaticBody3D.new()
+	carrier.set_script(_CARRIER)
+	carrier.name = "CargoCarrier"
+	var cs: Node = get_node_or_null(carry_system_path)
+	var ml: Node = get_node_or_null(message_label_path)
+	carrier.carry_system_path = cs.get_path() if cs != null else NodePath()
+	carrier.message_label_path = ml.get_path() if ml != null else NodePath()
+	add_child(carrier)
+	carrier.position = CARRIER_DOCK
+	carrier.dock(self, dock_global())
 	_refresh()
 
 
@@ -198,8 +213,13 @@ func receive_shipment(id: String, wanted: Dictionary) -> bool:
 			part.carry_system_path = cs.get_path()
 		if ml != null:
 			part.message_label_path = ml.get_path()
-		part.position = sd[1]
-		add_child(part)
+		var ci: int = carrier.free_cradle(t) if carrier_docked() else -1
+		if ci != -1:
+			# Round 33: packed into the docked parts carrier.
+			carrier.put(part, ci)
+		else:
+			part.position = sd[1]
+			add_child(part)
 		_parts.append(part)
 		_slot_of[part] = part.global_position
 		manifest[t] = manifest.get(t, 0) + 1
@@ -210,6 +230,59 @@ func receive_shipment(id: String, wanted: Dictionary) -> bool:
 	_gate(false)
 	_refresh()
 	return true
+
+
+## Round 33 save/load helpers.
+func slot_index_of(p: Node) -> int:
+	if not in_port(p):
+		return -1
+	for i in SLOTS.size():
+		if to_global(SLOTS[i][1]).distance_to(_slot_of[p]) < 0.03:
+			return i
+	return -1
+
+
+func persist_clear() -> void:
+	_parts = []
+	_slot_of = {}
+
+
+## Save/load: a part restored into the docked carrier is also in the port.
+func persist_track(p: Node3D) -> void:
+	if not _parts.has(p):
+		_parts.append(p)
+	_slot_of[p] = p.global_position
+
+
+func persist_place(p: Node3D, idx: int) -> bool:
+	if idx < 0 or idx >= SLOTS.size():
+		return false
+	var g: Vector3 = to_global(SLOTS[idx][1])
+	if p.has_method("set_rest_global"):
+		p.set_rest_global(Transform3D(global_basis, g), self)
+	p.return_to_rest()
+	_parts.append(p)
+	_slot_of[p] = g
+	return true
+
+
+## True while the hatch is animating (an unsafe moment to save).
+func is_animating() -> bool:
+	return _tween != null and _tween.is_valid() and _tween.is_running()
+
+
+## Snap the hatch/strap/latches/lamp/gating to `state` (no animation, no
+## sounds) after a restore.
+func persist_refresh() -> void:
+	if _tween != null and _tween.is_valid():
+		_tween.kill()
+	var open: bool = state in [PortState.OPEN, PortState.UNLOADING, PortState.EMPTY, PortState.RECEIVED]
+	_hatch.position.y = (Y1 - Y0 + 0.06) if open else 0.0
+	for l in _latches:
+		l.rotation_degrees.x = 90.0 if open else 0.0
+	_strap.position.y = 0.2 if state in [PortState.UNLOADING, PortState.EMPTY, PortState.RECEIVED] else 0.0
+	_gate(state in [PortState.UNLOADING, PortState.EMPTY, PortState.RECEIVED])
+	_refresh()
 
 
 func parts_in_port(item_id: StringName = &"") -> int:
@@ -237,6 +310,21 @@ func is_busy() -> bool:
 # ---------------------------------------------------------------- procedure
 func interact() -> void:
 	_update_empty()   # an emptied compartment is confirmable immediately
+	# Round 35 interlock: the airlock hatch in INSPECTION mode blocks cargo
+	# operations (and vice versa, see hatch_seal.gd).
+	var hs: Node = get_tree().get_first_node_in_group(&"hatch_seal") if is_inside_tree() else null
+	# Round 38: no cargo operation while the airlock is in EVA use.
+	var eva: Node = get_tree().get_first_node_in_group(&"eva_system") if is_inside_tree() else null
+	if eva != null and eva.is_eva_active():
+		_say("Airlock in EVA use — cargo operations locked out.")
+		return
+	if hs != null and hs.inspection_mode and state != PortState.SECURED:
+		_say("Airlock hatch is in inspection mode — secure it first.")
+		for n in get_tree().get_nodes_in_group(&"station_ai"):
+			n.event(&"interlock_seal")
+		return
+	if hs != null and hs.inspection_mode and state == PortState.SECURED:
+		return
 	match state:
 		PortState.ARRIVED:
 			state = PortState.ID_CHECKED
@@ -259,7 +347,7 @@ func interact() -> void:
 				if _day_plan.has_method("record_fact"):
 					_day_plan.record_fact(&"received:cargo")
 				if _day_plan.has_method("log_event"):
-					_day_plan.log_event("Received cargo %s (%s)" % [shipment_id, _manifest_text(", ")])
+					_day_plan.log_event("Received cargo %s (%s)" % [shipment_id, _manifest_text(", ")], &"cargo_parts", _manifest_total())
 			shipment_received.emit(shipment_id)
 		PortState.RECEIVED:
 			_close_hatch()
@@ -326,6 +414,42 @@ func _gate(open: bool) -> void:
 			var c: Node = p.get_node_or_null("Collision")
 			if c != null:
 				c.disabled = not open
+	if carrier != null:
+		carrier.regate()
+
+
+# ------------------------------------------------------- Round 33: carrier
+func carrier_docked() -> bool:
+	return carrier != null and is_instance_valid(carrier) and carrier.is_docked()
+
+
+func carrier_can_leave() -> bool:
+	return state in [PortState.UNLOADING, PortState.EMPTY, PortState.RECEIVED]
+
+
+func carrier_parts_clickable() -> bool:
+	return state in [PortState.UNLOADING, PortState.EMPTY, PortState.RECEIVED]
+
+
+func dock_global() -> Transform3D:
+	return Transform3D(global_basis, to_global(CARRIER_DOCK))
+
+
+## The empty (or not) carrier can be docked back while the hatch is open.
+func accepts_item(item: Node) -> bool:
+	return item != null and item.has_method("is_carrier") and item == carrier and not carrier_docked() and carrier_can_leave()
+
+
+func stow(item: Node3D) -> bool:
+	if not accepts_item(item):
+		return false
+	carrier.dock(self, dock_global())
+	for p in carrier.parts():
+		if not _parts.has(p):
+			_parts.append(p)
+		_slot_of[p] = p.global_position
+	_say("Parts carrier docked in the cargo port.")
+	return true
 
 
 # ---------------------------------------------------------------- feedback
@@ -335,6 +459,13 @@ func _manifest_text(sep: String) -> String:
 		if manifest.get(t, 0) > 0:
 			bits.append("%d %s" % [manifest[t], PART_NAMES.short(t)])
 	return sep.join(bits) if not bits.is_empty() else "empty"
+
+
+func _manifest_total() -> int:
+	var n := 0
+	for t in manifest:
+		n += int(manifest[t])
+	return n
 
 
 func status_word() -> String:
@@ -372,10 +503,4 @@ func _click(kind: StringName) -> void:
 
 func _say(t: String) -> void:
 	if _msg != null:
-		_msg.text = t
-		_msg.visible = true
-		_msg.set_meta(&"msg_owner", get_instance_id())
-		var id := get_instance_id()
-		get_tree().create_timer(4.0).timeout.connect(func():
-			if is_instance_valid(_msg) and _msg.get_meta(&"msg_owner", 0) == id and _msg.text == t:
-				_msg.visible = false)
+		preload("res://scripts/ui/hud_message.gd").show(_msg, get_instance_id(), t, 4.0)

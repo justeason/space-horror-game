@@ -38,6 +38,8 @@ func open_station(station: Node) -> void:
 	_diorama.set_active(true)
 	_last_stage = -1
 	_diorama.sync_full_state(_station.stage(), {1: _station.latch_open(1), 2: _station.latch_open(2)}, _station.cartridge_angle_deg())
+	if _station.has_method("variant") and _diorama.has_method("sync_variant"):
+		_diorama.sync_variant(_station.variant(), _station.old_cartridge_angle_deg(), _station.seized_pulls_left())
 	_refresh()
 
 
@@ -72,6 +74,14 @@ func _on_latch_clicked(index: int) -> void:
 	var result: Dictionary = _station.toggle_latch(index)
 	if not result.get("ok", false):
 		return
+	if result.get("seized", false):
+		# Round 36: a seized latch shifts a little with each pull.
+		_diorama.animate_latch_wiggle(index)
+		if _sfx != null:
+			_sfx.play_kind(&"ratchet")
+		_diorama.sync_variant(_station.variant(), _station.old_cartridge_angle_deg(), _station.seized_pulls_left())
+		_refresh()
+		return
 	_diorama.animate_latch(index, _station.latch_open(index))
 	if _sfx != null:
 		_sfx.play_kind(&"click")
@@ -84,6 +94,13 @@ func _on_old_cartridge_clicked() -> void:
 	var result: Dictionary = _station.remove_old_cartridge()
 	if not result.get("ok", false):
 		return
+	if result.get("turned", false):
+		# Round 36 (COCKED variant): turned one step back toward the keyway.
+		_diorama.set_old_cartridge_angle(_station.old_cartridge_angle_deg())
+		if _sfx != null:
+			_sfx.play_kind(&"ratchet")
+		_refresh()
+		return
 	if not result.get("removed", false):
 		# Round 20 Priority 4: the player hasn't retrieved the real
 		# replacement cartridge from Storage yet -- harmless, recoverable,
@@ -92,6 +109,8 @@ func _on_old_cartridge_clicked() -> void:
 		# the actual message via consume_missing_part_flash().
 		if _sfx != null:
 			_sfx.play_kind(&"fail")
+		for n in get_tree().get_nodes_in_group(&"station_ai"):
+			n.event(&"filter_missing")   # Round 36: wrong / missing part
 		_refresh()
 		return
 	_diorama.animate_remove_old_cartridge()
@@ -158,10 +177,12 @@ func _refresh() -> void:
 			_controls_label.text = "Click the airflow valve to shut it off."
 		Stage.OPEN_LATCHES:
 			_stage_label.text = "STAGE 2 / 6 — RELEASE RETAINING LATCHES"
-			_controls_label.text = "Click both latches to release the housing cover."
+			_controls_label.text = "Click both latches to release the housing cover." if not _station.latch_open(2) else "Latch L2 is already released — click latch L1 to release it."
 		Stage.REMOVE_OLD:
 			_stage_label.text = "STAGE 3 / 6 — REMOVE OLD CARTRIDGE"
 			_controls_label.text = "Retrieve a replacement cartridge from Storage, then click the old cartridge to pull it from the housing."
+			if _station.has_method("old_cartridge_aligned") and not _station.old_cartridge_aligned():
+				_controls_label.text = "The old cartridge is cocked off its keyway: click it to turn it back until its tab meets the amber mark, then pull it."
 		Stage.ALIGN_INSERT:
 			_stage_label.text = "STAGE 4 / 6 — ALIGN AND INSERT SPARE CARTRIDGE"
 			var base_text: String = "Click the cartridge to rotate it. [Enter] to insert once its tab lines up with the housing's keyway mark."
@@ -176,8 +197,13 @@ func _refresh() -> void:
 			_stage_label.text = "FILTER SERVICE COMPLETE"
 			_controls_label.text = "[Enter] Close"
 
+	var vflash: String = _station.consume_variant_flash() if _station.has_method("consume_variant_flash") else ""
 	if stage == Stage.COMPLETE:
 		_status_label.text = "Seal nominal — airflow restored."
+	elif vflash != "":
+		_status_label.text = vflash
+	elif stage == Stage.ISOLATE and _station.has_method("variant_observation"):
+		_status_label.text = "Found: " + _station.variant_observation()
 	elif _station.consume_failed_insert_flash():
 		_status_label.text = "Keyway misaligned — rotate the cartridge to match the housing's mark, then try again."
 	elif _station.consume_missing_part_flash():

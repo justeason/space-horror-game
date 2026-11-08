@@ -14,12 +14,22 @@ var _streams: Dictionary = {}
 
 
 func _ready() -> void:
-	bus = "Master"
+	bus = "SFX"   # Round 34: real audio buses (Settings sliders)
 	_streams[&"click"] = _build_click()
 	_streams[&"clunk"] = _build_clunk()
 	_streams[&"success"] = _build_success()
 	_streams[&"fail"] = _build_fail()
 	_streams[&"ratchet"] = _build_ratchet()
+	# Round 35: equipment feedback (restrained, mechanical; no stingers).
+	_streams[&"breaker"] = _tone(0.12, func(t, i): return (sin(t * TAU * 180.0) * 0.6 + (fmod(float(i) * 12.9898, 1.0) - 0.5) * 0.8) * pow(1.0 - t, 8.0))
+	_streams[&"relay"] = _tone(0.09, func(t, _i): return sin(t * TAU * 2400.0) * (pow(1.0 - t * 2.0, 6.0) if t < 0.5 else pow(1.0 - (t - 0.5) * 2.0, 6.0) * 0.7))
+	_streams[&"hiss"] = _tone(1.1, func(t, i): return (fmod(sin(float(i) * 78.233) * 43758.5453, 1.0) - 0.5) * 0.35 * (1.0 - t) * minf(t * 8.0, 1.0))
+	_streams[&"latch"] = _tone(0.07, func(t, _i): return sin(t * TAU * 650.0) * pow(1.0 - t, 5.0) * 0.8)
+	_streams[&"insert"] = _tone(0.22, func(t, i): return ((fmod(sin(float(i) * 12.9898) * 43758.5453, 1.0) - 0.5) * 0.2 * (1.0 - t) + (sin(t * TAU * 900.0) * pow(maxf(1.0 - (t - 0.8) * 5.0, 0.0), 4.0) * 0.7 if t > 0.8 else 0.0)))
+	_streams[&"warn"] = _tone(0.5, func(t, _i): return sin(t * TAU * (660.0 if t < 0.5 else 520.0)) * 0.35 * (1.0 if fmod(t, 0.5) < 0.4 else 0.0))
+	_streams[&"power_down"] = _tone(0.6, func(t, _i): return sin(t * TAU * (220.0 - 150.0 * t) * 1.0) * 0.4 * (1.0 - t))
+	_streams[&"power_up"] = _tone(0.6, func(t, _i): return sin(t * TAU * (90.0 + 200.0 * t)) * 0.4 * minf(t * 4.0, 1.0) * (1.0 - t * 0.5))
+	_streams[&"scrub"] = _tone(0.18, func(t, i): return (fmod(sin(float(i) * 3.7) * 9301.0, 1.0) - 0.5) * 0.4 * sin(t * PI))
 
 
 ## `kind` is one of &"click"/&"clunk"/&"success"/&"fail"/&"ratchet".

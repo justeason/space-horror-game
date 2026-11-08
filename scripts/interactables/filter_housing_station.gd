@@ -71,6 +71,38 @@ const _REQUIRED_ITEM_ID: StringName = &"filter_cartridge"
 var _stage: Stage = Stage.ISOLATE
 var _latch_open := {1: false, 2: false}
 var _cartridge_angle_deg: float = _START_ANGLE_DEG
+
+# ======================================================================
+# Round 36 Priority 3: SERVICE VARIANTS. The housing is fixed equipment;
+# what varies between service events is the real mechanical CONDITION it
+# is found in, each with its own correction inside the same procedure:
+#   0 STANDARD     both latches engaged, cartridge seated on its keyway.
+#   1 LOOSE_LATCH  latch L2 found already released (vibration) -- only L1
+#                  needs releasing; L2 must still be re-engaged at the end.
+#   2 SEIZED_LATCH latch L1 is stiff with residue: it takes several firm
+#                  pulls (each one works it looser) before it releases.
+#   3 COCKED       the old cartridge has turned off its keyway: it must be
+#                  rotated back to the keyway mark before it will pull out.
+# Plus, per variant, the replacement cartridge comes out of its sleeve at
+# a different (legal) rotation, and the old cartridge shows a different
+# contamination pattern. Chosen ONCE when DayPlan generates the service
+# event (register_service_variant), deterministic by day seed, never the
+# same as the previous service, saved -- never re-rolled on reopen/reload.
+# ======================================================================
+enum Variant { STANDARD, LOOSE_LATCH, SEIZED_LATCH, COCKED }
+const VARIANT_NAMES := ["standard", "loose_latch", "seized_latch", "cocked_cartridge"]
+const _VARIANT_NEW_START := [0.0, 270.0, 90.0, 180.0]
+const _VARIANT_OLD_ANGLE := [135.0, 135.0, 135.0, 45.0]   # COCKED: 90 deg off
+const _SEIZED_PULLS := 3
+## Contamination of the old cartridge (diorama tint): dust / heavy dust /
+## oily residue / soot.
+const VARIANT_CONTAMINATION := ["light dust", "heavy dust", "oily residue", "soot streaks"]
+var _variant: int = Variant.STANDARD
+var _last_variant: int = Variant.STANDARD
+var _variant_day: int = -1
+var _old_angle_deg: float = 135.0
+var _seize_left: int = 0
+var _variant_flash: String = ""
 var _active_difficulty: int = -1
 var _failed_insert_flash: bool = false
 var _missing_part_flash: bool = false
@@ -100,6 +132,8 @@ func _ready() -> void:
 	var dp: Node = get_node_or_null(day_plan_path)
 	if dp != null and dp.has_method("register_service_rearm"):
 		dp.register_service_rearm(dp.Workday.FILTER_SERVICE, _rearm_for_service, _clean_cartridge_available)
+		if dp.has_method("register_service_variant"):
+			dp.register_service_variant(dp.Workday.FILTER_SERVICE, select_variant)
 	_sync_world_diorama()
 
 
@@ -181,6 +215,15 @@ func toggle_isolate() -> Dictionary:
 func toggle_latch(index: int) -> Dictionary:
 	if _stage != Stage.OPEN_LATCHES and _stage != Stage.CLOSE_LATCHES:
 		return {"ok": false}
+	if _stage == Stage.OPEN_LATCHES and _latch_open[index] and _variant == Variant.LOOSE_LATCH and index == 2:
+		# Already released when found -- nothing to do (and re-latching it
+		# now would only undo the work). Report it instead of toggling.
+		_variant_flash = "Latch L2 was found already released."
+		return {"ok": true, "already_open": true, "latch_open": _latch_open.duplicate()}
+	if _stage == Stage.OPEN_LATCHES and not _latch_open[index] and index == 1 and _seize_left > 0:
+		_seize_left -= 1
+		_variant_flash = ("Latch L1 is seized — keep working it (%d more pull%s)." % [_seize_left, "" if _seize_left == 1 else "s"]) if _seize_left > 0 else "Latch L1 is free — pull once more to release it."
+		return {"ok": true, "seized": true, "pulls_left": _seize_left, "latch_open": _latch_open.duplicate()}
 	_latch_open[index] = not _latch_open[index]
 	var both_open: bool = _latch_open[1] and _latch_open[2]
 	var both_closed: bool = not _latch_open[1] and not _latch_open[2]
@@ -203,11 +246,19 @@ func toggle_latch(index: int) -> Dictionary:
 func remove_old_cartridge() -> Dictionary:
 	if _stage != Stage.REMOVE_OLD:
 		return {"ok": false}
+	if not old_cartridge_aligned():
+		# COCKED: each pull attempt turns the old cartridge one 45 deg step
+		# back toward its keyway; it only slides out once its tab is on
+		# the mark (forcing it would tear the seal).
+		_old_angle_deg = fmod(_old_angle_deg + _ROTATE_STEP_DEG, 360.0)
+		_variant_flash = "Cartridge turned back onto its keyway — it will now pull free." if old_cartridge_aligned() else "Old cartridge is cocked off its keyway — turn it until its tab meets the mark."
+		_sync_world_diorama()
+		return {"ok": true, "removed": false, "turned": true, "old_angle": _old_angle_deg}
 	if not _has_required_part():
 		_missing_part_flash = true
 		return {"ok": true, "removed": false}
 	_stage = Stage.ALIGN_INSERT
-	_cartridge_angle_deg = _START_ANGLE_DEG
+	_cartridge_angle_deg = _VARIANT_NEW_START[_variant]
 	_sync_world_diorama()
 	if (not is_instance_valid(_used_cartridge) or _used_cartridge.is_queued_for_deletion()) and _used_parent != null:
 		# The previous used cartridge was disposed of: the cartridge coming
@@ -267,7 +318,7 @@ func attempt_insert() -> Dictionary:
 				_installed_cartridge = item
 				_service_count += 1
 				if _day_plan != null and _day_plan.has_method("log_event"):
-					_day_plan.log_event("Installed clean filter cartridge")
+					_day_plan.log_event("Installed clean filter cartridge", &"consumed")
 		_stage = Stage.CLOSE_LATCHES
 		_sync_world_diorama()
 		return {"ok": true, "seated": true, "stage": _stage}
@@ -305,6 +356,8 @@ func _sync_world_diorama() -> void:
 	if _world_diorama == null:
 		return
 	_world_diorama.sync_full_state(_stage, _latch_open, _cartridge_angle_deg)
+	if _world_diorama.has_method("sync_variant"):
+		_world_diorama.sync_variant(_variant, _old_angle_deg, _seize_left)
 
 
 func _rearm_for_service(_seed: int) -> void:
@@ -314,6 +367,71 @@ func _rearm_for_service(_seed: int) -> void:
 	_failed_insert_flash = false
 	_missing_part_flash = false
 	_sync_world_diorama()
+
+
+## Round 36: called by DayPlan when a NEW filter service event is generated.
+## Deterministic (day seed); differs from the previous service's variant.
+func select_variant(seed: int) -> void:
+	if _stage != Stage.ISOLATE and _stage != Stage.COMPLETE:
+		return   # a procedure in progress is never re-rolled
+	var v: int = posmod(seed, Variant.size())
+	if v == _last_variant:
+		v = (v + 1 + posmod(seed >> 4, Variant.size() - 1)) % Variant.size()
+	# Round 38: the harder mechanical conditions (seized latch, cocked
+	# cartridge) only once the technician has life-support experience.
+	if _day_plan != null and _day_plan.has_method("proficiency_level") and _day_plan.proficiency_level("life_support") < 1 and v >= Variant.SEIZED_LATCH:
+		v = Variant.LOOSE_LATCH if _last_variant != Variant.LOOSE_LATCH else Variant.STANDARD
+	apply_variant(v)
+	_variant_day = _day_plan.day_number if _day_plan != null else -1
+
+
+## Puts the housing into variant `v`'s starting condition (stage ISOLATE).
+func apply_variant(v: int) -> void:
+	_variant = clampi(v, 0, Variant.size() - 1)
+	_last_variant = _variant
+	_stage = Stage.ISOLATE
+	_latch_open = {1: false, 2: _variant == Variant.LOOSE_LATCH}
+	_seize_left = _SEIZED_PULLS if _variant == Variant.SEIZED_LATCH else 0
+	_old_angle_deg = _VARIANT_OLD_ANGLE[_variant]
+	_cartridge_angle_deg = _START_ANGLE_DEG
+	_variant_flash = ""
+	_sync_world_diorama()
+
+
+func variant() -> int:
+	return _variant
+
+
+func variant_name() -> String:
+	return VARIANT_NAMES[_variant]
+
+
+func old_cartridge_angle_deg() -> float:
+	return _old_angle_deg
+
+
+func old_cartridge_aligned() -> bool:
+	return absf(wrapf(_old_angle_deg - _TARGET_ANGLE_DEG, -180.0, 180.0)) < 1.0
+
+
+func seized_pulls_left() -> int:
+	return _seize_left
+
+
+## What the technician can SEE when looking at the housing in this
+## variant (shown in the focused view, used by the station assistant).
+func variant_observation() -> String:
+	match _variant:
+		Variant.LOOSE_LATCH: return "Latch L2 is hanging open (found released)."
+		Variant.SEIZED_LATCH: return "Latch L1 is crusted with residue — expect it to be stiff."
+		Variant.COCKED: return "The old cartridge's tab sits off the keyway mark — it has turned in its seat."
+	return "Cartridge seated, both latches engaged."
+
+
+func consume_variant_flash() -> String:
+	var v: String = _variant_flash
+	_variant_flash = ""
+	return v
 
 
 ## Feasibility for DayPlan: a clean cartridge on a shelf or in the reserve.

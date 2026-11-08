@@ -165,6 +165,8 @@ func _on_sit_settled() -> void:
 	_in_use = true
 	_transitioning = false
 	_screen.show_section(SECTION_HOME)
+	if DisplayServer.get_name() != "headless":
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
 ## The dedicated "get up" action (Esc while seated). Mirrors
@@ -179,6 +181,8 @@ func end_use() -> void:
 		return
 	_transitioning = true
 	_in_use = false
+	if DisplayServer.get_name() != "headless":
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_interaction_controller.interactions_enabled = true
 	_look_controller.escape_enabled = true
 	_look_controller.input_enabled = true
@@ -200,6 +204,36 @@ func _on_stand_settled() -> void:
 	_global_free_move.mirror_enabled = true
 	_free_body.set_active(true)
 	_transitioning = false
+
+
+## Round 37: while seated the system cursor is visible and every mouse
+## event is projected onto the monitor (camera ray -> screen face) and
+## pushed into the screen's SubViewport -- real clicks on the workstation
+## UI (same principle as the laptop). Nothing reaches the world behind it.
+func _input(event: InputEvent) -> void:
+	if not _in_use or not (event is InputEventMouse):
+		return
+	var px: Variant = screen_pixel_at(event.position)
+	get_viewport().set_input_as_handled()
+	if px == null:
+		return
+	var ev: InputEventMouse = event.duplicate()
+	ev.position = px
+	ev.global_position = px
+	_screen.push_input(ev)
+
+
+## SubViewport pixel under a window position, or null when off-screen.
+func screen_pixel_at(window_pos: Vector2) -> Variant:
+	var cam: Camera3D = _interaction_controller as Camera3D
+	if cam == null or _console == null:
+		return null
+	var from: Vector3 = cam.project_ray_origin(window_pos)
+	var dir: Vector3 = cam.project_ray_normal(window_pos)
+	var uv: Vector2 = _console.screen_uv_on_ray(from, dir)
+	if uv.x < 0.0:
+		return null
+	return Vector2(uv.x * _screen.size.x, uv.y * _screen.size.y)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -226,17 +260,45 @@ func _unhandled_input(event: InputEvent) -> void:
 			_screen.show_section(SECTION_SAVE_LOAD)
 		KEY_6:
 			_screen.show_section(SECTION_SETTINGS)
+		KEY_7:
+			_screen.show_records()
 		KEY_R:
 			_screen.run_action()
+		KEY_L, KEY_N:
+			# Round 33: Save/Load section only (load / new game).
+			if _screen.current_section() != SECTION_SAVE_LOAD:
+				return
+			_screen.save_load_key(event.keycode)
 		KEY_LEFT:
 			if _screen.current_section() == SECTION_OVERVIEW:
 				_screen.select_prev_room()
+			elif _screen.current_section() == SECTION_SETTINGS:
+				_screen.adjust_setting(-1)
 		KEY_RIGHT:
 			if _screen.current_section() == SECTION_OVERVIEW:
 				_screen.select_next_room()
+			elif _screen.current_section() == SECTION_SETTINGS:
+				_screen.adjust_setting(1)
+		# Round 35: row selection (Work Orders / Settings) and details.
+		KEY_UP, KEY_DOWN:
+			var d: int = -1 if event.keycode == KEY_UP else 1
+			if _screen.current_section() == SECTION_WORK_ORDERS:
+				_screen.select_work_order(d)
+			elif _screen.current_section() == SECTION_SETTINGS:
+				_screen.select_setting(d)
+			else:
+				return
+		KEY_ENTER, KEY_KP_ENTER:
+			if _screen.current_section() == SECTION_WORK_ORDERS:
+				_screen.toggle_work_order_details()
+			else:
+				return
 		_:
 			return
-	get_viewport().set_input_as_handled()
+	# Round 34: a key may have started leaving this scene (load/new game).
+	var vp: Viewport = get_viewport()
+	if vp != null:
+		vp.set_input_as_handled()
 
 
 func _kill_tween() -> void:

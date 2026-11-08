@@ -111,8 +111,14 @@ func _walk(tag: String, key: int, seconds: float) -> void:
 	while Time.get_ticks_msec() - t0 < seconds * 1000.0:
 		await physics_frame
 		await process_frame
+		# Round 35 ROOT CAUSE of the intermittent "foot slides 0.68 m/s":
+		# dt was WALL-CLOCK milliseconds between samples -- under load
+		# samples bunch (1-2 ms apart) while the feet moved a full physics
+		# tick, inflating the speed. The motion advances per 60 Hz physics
+		# tick, so time = ticks counted since the previous sample / 60.
 		var now := Time.get_ticks_msec()
-		var dt: float = maxf((now - prev_t) / 1000.0, 0.001)
+		var dt: float = maxf(_tick_probe.ticks, 1) / 60.0
+		_tick_probe.ticks = 0
 		prev_t = now
 		var g: float = body.gait_position()
 		var feet := {}
@@ -163,3 +169,18 @@ func _check(label: String, cond: bool) -> void:
 	else:
 		print("FAIL: ", label)
 		_ok = false
+
+
+class TickProbe extends Node:
+	var ticks: int = 0
+	func _physics_process(_d: float) -> void:
+		ticks += 1
+
+
+var _tick_probe_node: TickProbe = null
+var _tick_probe: TickProbe:
+	get:
+		if _tick_probe_node == null:
+			_tick_probe_node = TickProbe.new()
+			get_root().add_child(_tick_probe_node)
+		return _tick_probe_node

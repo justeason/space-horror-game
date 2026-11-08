@@ -81,6 +81,7 @@ func _init() -> void:
 	_check("sitting on the bed", sleep_state.is_sitting())
 
 	# 10. Sleep -> eyes-closing transition -> minimal reset -> wake.
+	get_root().find_child("DayPlan", true, false).end_shift_now()   # Round 34: sleep only after the shift
 	sleep_state.begin_sleep()
 	await create_timer(3.2).timeout   # Round 31: lie down (1.1s) + the unchanged eyes sequence
 	_check("awake again after the night", sleep_state.is_sitting() and not sleep_state.is_sleeping())

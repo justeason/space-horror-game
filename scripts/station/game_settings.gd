@@ -43,7 +43,15 @@ extends Object
 ## disappear mid-task -- see that script's `_active_difficulty`.
 enum Difficulty { EASY, NORMAL, HARD }
 
-const _SETTINGS_PATH := "user://game_settings.cfg"
+const _DEFAULT_SETTINGS_PATH := "user://game_settings.cfg"
+## Round 36: tests/run_tests.sh points this at a scratch file (environment
+## variable SMH_SETTINGS_PATH) so the regression suite never writes the
+## player's real settings. Unset in normal play.
+static var _SETTINGS_PATH: String = OS.get_environment("SMH_SETTINGS_PATH") if OS.get_environment("SMH_SETTINGS_PATH") != "" else _DEFAULT_SETTINGS_PATH
+
+
+static func settings_path() -> String:
+	return _SETTINGS_PATH
 const _SECTION := "gameplay"
 const _KEY := "difficulty"
 
@@ -72,6 +80,14 @@ static func cycle_difficulty() -> void:
 	_save()
 
 
+## Round 33: restored from a save game (persists like cycle_difficulty()).
+static func set_difficulty(value: int) -> void:
+	_ensure_loaded()
+	if value >= Difficulty.EASY and value <= Difficulty.HARD:
+		_difficulty = value as Difficulty
+		_save()
+
+
 static func _ensure_loaded() -> void:
 	if _loaded:
 		return
@@ -86,5 +102,113 @@ static func _ensure_loaded() -> void:
 
 static func _save() -> void:
 	var cfg := ConfigFile.new()
+	# Round 36 fix: keep the other sections (player settings). This used to
+	# write a fresh file holding only the difficulty, silently discarding
+	# every saved player setting the next time difficulty changed.
+	cfg.load(_SETTINGS_PATH)
 	cfg.set_value(_SECTION, _KEY, _difficulty)
 	cfg.save(_SETTINGS_PATH)
+
+
+# ======================================================================
+# Round 34 Priority 9: PLAYER SETTINGS -- persisted in the same
+# user://game_settings.cfg, independent of any game save. Every value is
+# APPLIED for real: audio bus volumes, window mode/size, mouse look
+# sensitivity/inversion (look_controller.gd reads them), and the locale.
+# ======================================================================
+const AUDIO_BUSES := ["Master", "Ambient", "SFX", "UI", "Voice"]
+const WINDOW_SIZES := [Vector2i(1152, 648), Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080)]
+const LANGUAGES := ["en", "zh_CN"]
+const DEFAULTS := {
+	"vol_Master": 1.0, "vol_Ambient": 1.0, "vol_SFX": 1.0, "vol_UI": 1.0, "vol_Voice": 1.0,
+	"fullscreen": false, "window_size": 0, "mouse_sensitivity": 1.0, "invert_y": false, "language": "en",
+	"reduce_effects": false,
+	# Round 36: the station operations assistant (see station_ai.gd).
+	"ai_guidance": true, "ai_voice": true, "ai_captions": true,
+	# Round 37: interface scale on top of the automatic resolution scaling,
+	# and steady (non-flashing) warning lights.
+	"ui_scale": 1.0, "steady_warnings": false,
+}
+const UI_SCALES := [0.8, 0.9, 1.0, 1.15, 1.3, 1.5]
+static var _values: Dictionary = {}
+static var _values_loaded: bool = false
+
+
+static func _ensure_values() -> void:
+	if _values_loaded:
+		return
+	_values_loaded = true
+	_values = DEFAULTS.duplicate()
+	var cfg := ConfigFile.new()
+	if cfg.load(_SETTINGS_PATH) != OK:
+		return
+	for k in DEFAULTS:
+		var v: Variant = cfg.get_value("player", k, DEFAULTS[k])
+		if typeof(v) == typeof(DEFAULTS[k]) or (DEFAULTS[k] is float and v is int):
+			_values[k] = v
+
+
+static func get_value(key: String) -> Variant:
+	_ensure_values()
+	return _values.get(key, DEFAULTS.get(key))
+
+
+static func set_value(key: String, value: Variant) -> void:
+	_ensure_values()
+	_values[key] = value
+	var cfg := ConfigFile.new()
+	cfg.load(_SETTINGS_PATH)   # keep other sections (difficulty)
+	cfg.set_value("player", key, value)
+	cfg.save(_SETTINGS_PATH)
+	apply_one(key)
+
+
+static func apply_all() -> void:
+	_ensure_values()
+	for k in DEFAULTS:
+		apply_one(k)
+
+
+static func apply_one(key: String) -> void:
+	if key.begins_with("vol_"):
+		_ensure_buses()
+		var idx: int = AudioServer.get_bus_index(key.substr(4))
+		if idx != -1:
+			var lin: float = clampf(float(get_value(key)), 0.0, 1.0)
+			AudioServer.set_bus_volume_db(idx, linear_to_db(maxf(lin, 0.0001)))
+			AudioServer.set_bus_mute(idx, lin <= 0.001)
+	elif key == "fullscreen" or key == "window_size":
+		if DisplayServer.get_name() == "headless":
+			return
+		if bool(get_value("fullscreen")):
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+		else:
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+			DisplayServer.window_set_size(WINDOW_SIZES[clampi(int(get_value("window_size")), 0, WINDOW_SIZES.size() - 1)])
+	elif key == "ui_scale":
+		# Round 37: the project stretches the 2D UI with the window
+		# (canvas_items, 1152x648 base); this multiplies that factor.
+		var tree: SceneTree = Engine.get_main_loop() as SceneTree
+		if tree != null and tree.root != null:
+			tree.root.content_scale_factor = clampf(float(get_value("ui_scale")), 0.6, 2.0)
+	elif key == "language":
+		preload("res://scripts/ui/localization.gd").setup()
+		TranslationServer.set_locale(String(get_value("language")))
+
+
+## Buses come from res://default_bus_layout.tres; created here as a fallback.
+static func _ensure_buses() -> void:
+	for b in AUDIO_BUSES:
+		if AudioServer.get_bus_index(b) == -1:
+			AudioServer.add_bus()
+			var i: int = AudioServer.bus_count - 1
+			AudioServer.set_bus_name(i, b)
+			AudioServer.set_bus_send(i, "Master")
+
+
+static func mouse_sensitivity_scale() -> float:
+	return clampf(float(get_value("mouse_sensitivity")), 0.2, 3.0)
+
+
+static func invert_y() -> bool:
+	return bool(get_value("invert_y"))

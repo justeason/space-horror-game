@@ -30,6 +30,11 @@ var vent: AudioStreamPlayer3D
 var engineering: AudioStreamPlayer3D
 var engineering_fault: AudioStreamPlayer3D
 var life_support: AudioStreamPlayer3D
+## Round 38: room identities (quiet; driven by real state where one exists).
+var comms: AudioStreamPlayer3D        # electronic whine; silent when B-04 is off
+var airlock: AudioStreamPlayer3D      # low coolant-pump throb
+var storage: AudioStreamPlayer3D      # faint cold hum
+var _breaker: Node = null
 
 @onready var _day_plan: Node = get_node_or_null(day_plan_path)
 @onready var _panel: Node = get_node_or_null(electrical_panel_path)
@@ -41,6 +46,10 @@ func _ready() -> void:
 	engineering = _make("EngineeringHum", engineering_position, _build_hum(50.0, 0.5, 0.12, 2.0), -24.0, 6.0)
 	engineering_fault = _make("EngineeringFaultCrackle", engineering_position, _build_crackle(2.0), -60.0, 6.0)
 	life_support = _make("LifeSupportAirflow", life_support_position, _build_hum(90.0, 0.15, 0.6, 2.0), -26.0, 6.0)
+	comms = _make("CommsWhine", Vector3(2.4, 2.0, 7.1), _build_hum(180.0, 0.4, 0.05, 2.0), -33.0, 4.0)
+	airlock = _make("AirlockPumpThrob", Vector3(-4.8, 1.0, 0.0), _build_hum(45.0, 0.6, 0.1, 2.0), -29.0, 4.0)
+	storage = _make("StorageHum", Vector3(-6.5, 1.6, 8.0), _build_hum(70.0, 0.3, 0.2, 2.0), -34.0, 4.0)
+	_breaker = get_node_or_null("../Equipment/BreakerPanel")
 	_apply_state()
 
 
@@ -52,7 +61,7 @@ func _process(delta: float) -> void:
 ## holds them at shutdown and Godot reports leaked AudioStreamWAV/Playback
 ## instances).
 func _exit_tree() -> void:
-	for p in [vent, engineering, engineering_fault, life_support]:
+	for p in [vent, engineering, engineering_fault, life_support, comms, airlock, storage]:
 		if p != null:
 			p.stop()
 			p.stream = null
@@ -94,6 +103,15 @@ func _apply_state(delta: float = 0.0) -> void:
 	engineering_fault.volume_db = lerpf(-80.0, -26.0, _fault_k) if _fault_k > 0.0 else -80.0
 	life_support.volume_db = lerpf(-34.0, -26.0, _ls_k)
 	life_support.pitch_scale = lerpf(0.85, 1.0, _ls_k)
+	if comms != null:
+		comms.volume_db = -33.0 if comms_powered() else -80.0
+
+
+## Comms equipment whine follows the real B-04 communications circuit.
+func comms_powered() -> bool:
+	if _breaker == null or not _breaker.has_method("zone_powered"):
+		return true
+	return _breaker.zone_powered(&"communications")
 
 
 func life_support_spin() -> float:
@@ -102,6 +120,7 @@ func life_support_spin() -> float:
 
 func _make(n: String, pos: Vector3, stream: AudioStreamWAV, db: float, unit_size: float) -> AudioStreamPlayer3D:
 	var p := AudioStreamPlayer3D.new()
+	p.bus = &"Ambient"   # Round 34: real audio buses (Settings sliders)
 	p.name = n
 	p.stream = stream
 	p.volume_db = db

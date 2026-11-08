@@ -66,7 +66,7 @@ func interact() -> void:
 	var item: Node3D = _carry_system.take_carried_item_if_matches(carried_id)
 	var dpl: Node = get_node_or_null(day_plan_path)
 	if item != null and dpl != null and dpl.has_method("log_event"):
-		dpl.log_event("Disposed: %s" % (item.get_display_name() if item.has_method("get_display_name") else "part"))
+		dpl.log_event("Disposed: %s" % (item.get_display_name() if item.has_method("get_display_name") else "part"), &"discarded")
 	if item == null:
 		return
 	if item.has_method("dispose"):

@@ -100,7 +100,9 @@ func _init() -> void:
 	# higher (the open hinge tilts it toward the face) and is also the
 	# thing actually worth looking at. See sleep_state.gd's open_laptop().
 	_check("laptop: focus target is the screen's position", look_controller.focus_target_point.distance_to(laptop_view.get_screen_global_position()) < 0.02)
-	_check("prompt: shows edit/close prompt", prompt.text.find("Edit Log") != -1 and prompt.text.find("Close Laptop") != -1)
+	# Round 34: the laptop is clicked (its app bar has Personal Log / Close
+	# Laptop); the HUD prompt says so.
+	_check("prompt: says the laptop's apps are clickable", prompt.text.find("Click the laptop's apps") != -1)
 
 	var screen_pos: Vector3 = laptop_view.get_screen_global_position()
 	var ordinary_dist: float = camera.global_position.distance_to(screen_pos)

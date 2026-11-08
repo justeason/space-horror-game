@@ -88,6 +88,7 @@ const ROOMS := [
 ]
 
 var _current_section: Section = Section.HOME
+var shell: Control = null   # Round 37: workstation_shell.gd
 ## Round 28: last workday verify/close result shown under Work Orders.
 var _workday_status: String = ""
 ## Defaults to Control Room (index 1): that's physically where the
@@ -97,16 +98,51 @@ var _selected_room_index: int = 1
 
 func _ready() -> void:
 	render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	show_section(Section.HOME)
+	if _day_plan.has_signal(&"day_started"):
+		_day_plan.day_started.connect(func(_d): show_section(_current_section))
+	if _day_plan.has_signal(&"task_completed"):
+		_day_plan.task_completed.connect(func(_t): if _current_section == Section.HOME: _refresh_home())
+	# Round 33: deferred -- the Home briefing reads the stations' live
+	# condition(), and they are not ready yet during this _ready.
+	_current_section = Section.HOME
+	# Round 37: the visible interface is the three-section, map-first,
+	# clickable shell; the old sections stay as the keyboard/text model.
+	shell = preload("res://scripts/ui/workstation_shell.gd").new()
+	shell.name = "Shell"
+	add_child(shell)
+	shell.setup(self, _day_plan)
+	$Control.visible = false
+	show_section.call_deferred(Section.HOME)
+
+
+## Round 33: the Home screen always says which day it is, and flags a NEW
+## SHIFT until the morning check-in (C01) is run.
+func _refresh_home() -> void:
+	# Round 35: short lines, clear status -- details live in Work Orders.
+	var welcome: Label = $Control/VBox/Content/Home/Welcome
+	var lines: Array[String] = []
+	if _day_plan.has_method("today_title"):
+		if _day_plan.is_new_shift():
+			lines.append("NEW SHIFT — TODAY IS DAY %d" % _day_plan.day_number)
+		else:
+			lines.append("TODAY: DAY %d" % _day_plan.day_number)
+		lines.append("Scheduled: %s" % _day_plan.today_title())
+		for b in briefing_lines():
+			lines.append(b)
+	else:
+		lines.append("WORKSTATION READY")
+	welcome.text = "\n".join(lines)
 
 
 func show_section(section: Section) -> void:
 	_current_section = section
 	for key in _section_roots:
 		_section_roots[key].visible = (key == section)
-	_title_label.text = SECTION_NAMES[section]
+	_title_label.text = ("DAY %d · %s" % [_day_plan.day_number, SECTION_NAMES[section]]) if "day_number" in _day_plan else SECTION_NAMES[section]
 	_hint_label.text = "[0] Home     [Esc] Exit" if section != Section.HOME else "[1] Overview  [2] Work Orders  [3] Diagnostics  [4] Surveillance  [5] Save/Load  [6] Settings     [Esc] Exit"
 	match section:
+		Section.HOME:
+			_refresh_home()
 		Section.OVERVIEW:
 			_refresh_overview()
 		Section.WORK_ORDERS:
@@ -117,6 +153,21 @@ func show_section(section: Section) -> void:
 			_refresh_surveillance()
 		Section.SETTINGS:
 			_refresh_settings()
+		Section.SAVE_LOAD:
+			_refresh_save_load()
+	# Round 37: old section -> visible shell page (keys 0-6 keep working).
+	if shell != null:
+		match section:
+			Section.SAVE_LOAD, Section.SETTINGS:
+				shell.show_page(shell.Page.SYSTEM)
+			Section.DIAGNOSTICS:
+				shell.ops_panel = "diag"
+				shell.show_page(shell.Page.OPS)
+			Section.SURVEILLANCE:
+				shell.show_page(shell.Page.CAMERAS)
+			_:
+				shell.ops_panel = ""
+				shell.show_page(shell.Page.OPS)
 
 
 func current_section() -> Section:
@@ -128,11 +179,21 @@ func current_section() -> Section:
 func select_next_room() -> void:
 	_selected_room_index = (_selected_room_index + 1) % ROOMS.size()
 	_refresh_map()
+	if shell != null:
+		shell.select_room(ROOMS[_selected_room_index]["id"])
+
+
+## Round 37: [7] Records.
+func show_records() -> void:
+	if shell != null:
+		shell.show_page(shell.Page.RECORDS)
 
 
 func select_prev_room() -> void:
 	_selected_room_index = (_selected_room_index - 1 + ROOMS.size()) % ROOMS.size()
 	_refresh_map()
+	if shell != null:
+		shell.select_room(ROOMS[_selected_room_index]["id"])
 
 
 ## "[R] Run" action, context-sensitive per section -- Overview runs
@@ -149,7 +210,9 @@ func run_action() -> void:
 		Section.SURVEILLANCE:
 			_cycle_camera()
 		Section.SETTINGS:
-			_cycle_difficulty()
+			adjust_setting(1)
+		Section.SAVE_LOAD:
+			_do_save()
 
 
 func _run_c01() -> void:
@@ -172,14 +235,57 @@ func _run_c01() -> void:
 ## station diagram from real DayPlan/panel state -- not a redesign of
 ## this section.
 func _refresh_overview() -> void:
+	# Round 33: kept short so the station map stays fully visible; the full
+	# morning briefing is on the Home screen.
+	var priority: String = ""
+	for l in briefing_lines():
+		if l.begins_with("Priority:"):
+			priority = "\n" + l
 	if not _day_plan.is_task_done(&"c01"):
-		_overview_status.text = "[R] Run Morning Station Inspection"
+		_overview_status.text = "[R] Run Morning Station Inspection" + priority
 	else:
 		var assignment_line := ""
 		if _day_plan.assignment_task_id == &"e06":
 			assignment_line = "\nAssignment: E06 Tighten Loose Connection — Engineering."
-		_overview_status.text = "Station nominal." + assignment_line
+		_overview_status.text = "Morning inspection complete." + assignment_line + priority
 	_refresh_map()
+
+
+## Round 33 Priority 3: the MORNING BRIEFING -- concise, from real state:
+## the day, each maintained system's live condition, today's order and its
+## next step, maintenance coming due, cargo, and supply shortages.
+func briefing_lines() -> Array[String]:
+	var out: Array[String] = []
+	var attention: Array[String] = []
+	for e in [["FilterHousingStation", "FILTER"], ["EngineeringCabinet1", "WIRING"], ["SensorCalibrationStation", "SENSORS"], ["ValveRoutingStation", "COOLANT"]]:
+		var n: Node = _station(e[0])
+		if n != null and n.is_node_ready() and n.has_method("condition"):
+			var c: String = String(n.condition())
+			if c != "nominal" and c != "restored":
+				attention.append("%s %s" % [e[1], c.replace("_", " ")])
+	var root: Node = _day_plan.get_parent()
+	var br: Node = root.find_child("BreakerPanel", true, false) if root != null else null
+	if br != null and not br.tripped_ids().is_empty():
+		attention.append("BREAKER %s" % ", ".join(br.tripped_ids()))
+	out.append("Systems: %s" % ("all nominal" if attention.is_empty() else " · ".join(attention)))
+	var rows: Array = _day_plan.order_rows() if _day_plan.has_method("order_rows") else []
+	var open_n: int = rows.filter(func(r): return not r.get("done", false)).size()
+	out.append("Duties: %d open · Shift %s" % [open_n, "ended" if _day_plan.shift_ended else "%d%%" % int(round(_day_plan.shift_progress() * 100.0))])
+	var g: Dictionary = _day_plan.guidance() if _day_plan.has_method("guidance") else {}
+	if not g.is_empty():
+		out.append("Priority: %s (%s)" % [g["label"], _day_plan.ROOM_SHORT.get(StringName(g["room"]), String(g["room"]).capitalize())])
+	if _day_plan.cargo_duty == "open" and _day_plan.cargo_port() != null:
+		out.append("Cargo: %s at the airlock" % _day_plan.cargo_port().shipment_id)
+	elif _day_plan.cargo_port() != null:
+		out.append("Cargo: next shipment day %d" % _day_plan.next_cargo_day)
+	if _day_plan.get("carried_over_from") != null and _day_plan.carried_over_from > 0:
+		out.append("Carried over from day %d" % _day_plan.carried_over_from)
+	return out
+
+
+func _station(n: String) -> Node:
+	var root: Node = _day_plan.get_parent()
+	return root.find_child(n, true, false) if root != null else null
 
 
 ## Station topology map (augments Overview, per this milestone's Phase
@@ -290,28 +396,90 @@ func _room_info_text(room_id: StringName, room_name: String) -> String:
 	return room_name
 
 
+var _wo_sel: int = 0
+var _wo_details: bool = false
+
+
+## Round 35 Priority 3: ONE SHORT LINE PER ASSIGNMENT. Each row shows what
+## needs attention, the NEXT physical action, where, and a small status;
+## ↑/↓ select, Enter toggles an optional detail panel for the selected
+## row. Rows advance by themselves as the equipment changes.
+func work_order_rows() -> Array:
+	var rows: Array = []
+	if _day_plan.workday == 0 and (_day_plan.assignment_task_id != &"" or _day_plan.fault_target != &""):
+		# Day-1 orientation chain (Slice A/B) -- one row.
+		var repaired: bool = _electrical_panel != null and _electrical_panel.is_repaired()
+		var tag := "WIRING" if _day_plan.fault_target != &"" else "FITTING"
+		var act := "Verify at workstation [R]"
+		var room := &"control_room"
+		if _day_plan.assignment_task_id == &"e06" and not _day_plan.is_task_done(&"e06"):
+			act = "Tighten loose connection"
+			room = &"engineering"
+		elif _day_plan.fault_target != &"" and not repaired:
+			act = "Repair the power fault"
+			room = &"engineering"
+		var done: bool = _day_plan.is_task_done(&"c05")
+		rows.append({"id": "SLICE", "tag": tag, "action": "Complete" if done else act, "room": &"" if done else room, "progress": "", "done": done, "priority": 2})
+	if _day_plan.has_method("order_rows"):
+		rows.append_array(_day_plan.order_rows())
+	if _day_plan.shift_ended and not _day_plan.shift_history.is_empty() and int(_day_plan.shift_history[-1]["day"]) == _day_plan.day_number:
+		rows.append({"id": "REPORT", "tag": "REPORT", "action": "Day %d shift report" % _day_plan.day_number, "room": &"", "progress": "", "done": true, "priority": 0})
+	return rows
+
+
+func select_work_order(delta: int) -> void:
+	var n: int = work_order_rows().size()
+	if n > 0:
+		_wo_sel = (_wo_sel + delta + n) % n
+	_refresh_work_orders()
+
+
+func toggle_work_order_details() -> void:
+	_wo_details = not _wo_details
+	_refresh_work_orders()
+
+
+func work_order_detail_lines(row: Dictionary) -> Array:
+	match String(row["id"]):
+		"MAIN":
+			return Array(_day_plan.workday_lines())
+		"REPORT":
+			return Array(_day_plan.shift_history[-1]["report"])
+		"CARGO":
+			var c: Dictionary = _day_plan.cargo_step()
+			return ["Cargo %s — %s" % [_day_plan.cargo_port().shipment_id, _day_plan.cargo_port()._manifest_text(" · ")], "Next: %s" % c.get("label", "")]
+		"SLICE":
+			var repaired: bool = _electrical_panel != null and _electrical_panel.is_repaired()
+			return Array(_day_plan.get_work_order_lines(repaired, _fault_color_name()))
+	var eq: Node = _day_plan.order_equipment(StringName(row.get("type", ""))) if row.has("type") else null
+	return eq.order_detail() if eq != null else []
+
+
 func _refresh_work_orders() -> void:
-	var repaired: bool = _electrical_panel != null and _electrical_panel.is_repaired()
-	var lines: Array[String] = _day_plan.get_work_order_lines(repaired, _fault_color_name())
-	if lines.size() > 1 or lines[0] != "No open work orders.":
-		lines = lines.duplicate()
-		lines.append("")
-		if _day_plan.has_method("is_workday_active") and _day_plan.is_workday_active():
-			lines.append("[R] Verify / Close Work Order")
-			if _workday_status != "":
-				lines.append(_workday_status)
-		else:
-			lines.append("[R] Verify Repaired System (C05)")
-	# Round 31: supply warnings (real stock) + today's maintenance log.
-	var warn: Array = _day_plan.supply_warnings() if _day_plan.has_method("supply_warnings") else []
-	var log: Array = _day_plan.day_log() if _day_plan.has_method("day_log") else []
-	if not warn.is_empty() or not log.is_empty():
-		lines = lines.duplicate()
-		lines.append("")
-		for w in warn:
-			lines.append(w)
-		if not log.is_empty():
-			lines.append("LOG — DAY %d: %s" % [_day_plan.day_number, "; ".join(log.slice(maxi(0, log.size() - 4)))])
+	var rows: Array = work_order_rows()
+	_wo_sel = clampi(_wo_sel, 0, maxi(rows.size() - 1, 0))
+	var lines: Array[String] = []
+	if rows.is_empty():
+		lines.append("No open work orders.")
+	for i in rows.size():
+		lines.append(("> " if i == _wo_sel else "  ") + _day_plan.format_row(rows[i]))
+	lines.append("")
+	if _day_plan.has_method("shift_report_lines"):
+		lines.append("SHIFT ENDED — rest in your bunk" if _day_plan.shift_ended else ("SHIFT WORK DONE — wrap up" if _day_plan.is_wrapping_up() else "SHIFT %d%% done" % int(round(_day_plan.shift_progress() * 100.0))))
+	if _workday_status != "":
+		lines.append(_workday_status)
+	if _wo_details and not rows.is_empty():
+		lines.append("— %s —" % rows[_wo_sel]["tag"])
+		for d in work_order_detail_lines(rows[_wo_sel]).slice(0, 9):
+			lines.append(String(d))
+	else:
+		var stock := ""
+		for w in _day_plan.supply_warnings():
+			if w.begins_with("STOCK") or w.begins_with("BLOCKED") or w.begins_with("SUPPLY"):
+				stock = w if stock == "" else stock
+		if stock != "":
+			lines.append(stock.replace("STOCK (shelf+reserve): ", "STOCK "))
+	lines.append("[Up/Dn] select   [Enter] details   [R] check")
 	_work_orders_list.text = "\n".join(lines)
 
 
@@ -422,8 +590,65 @@ func _cycle_camera() -> void:
 ## exactly one authoritative difficulty value; every task (currently
 ## E05's hints/screws and C02's diagnostic verbosity) reads the same
 ## place, never a second copy here.
+## Round 35 Priority 1: the SAME player settings as the main/pause menus
+## (GameSettings -> user://game_settings.cfg), plus the gameplay difficulty.
+## ↑/↓ select a row, ←/→ (or [R]) change it; applied immediately.
+const _GSX = preload("res://scripts/station/game_settings.gd")
+var settings_sel: int = 0
+
+
+func settings_rows() -> Array:
+	var rows: Array = [["difficulty", "Game difficulty", repair_difficulty_name().to_upper()]]
+	for b in _GSX.AUDIO_BUSES:
+		rows.append(["vol_%s" % b, tr("SET_VOL_%s" % b), "%d %%" % roundi(float(_GSX.get_value("vol_%s" % b)) * 100.0)])
+	rows.append(["fullscreen", tr("SET_FULLSCREEN"), "ON" if bool(_GSX.get_value("fullscreen")) else "OFF"])
+	var sz: Vector2i = _GSX.WINDOW_SIZES[clampi(int(_GSX.get_value("window_size")), 0, _GSX.WINDOW_SIZES.size() - 1)]
+	rows.append(["window_size", tr("SET_WINDOW_SIZE"), "%d × %d" % [sz.x, sz.y]])
+	rows.append(["mouse_sensitivity", tr("SET_SENS"), "%.1f×" % float(_GSX.get_value("mouse_sensitivity"))])
+	rows.append(["invert_y", tr("SET_INVERT"), "ON" if bool(_GSX.get_value("invert_y")) else "OFF"])
+	rows.append(["reduce_effects", tr("SET_REDUCE_FX"), "ON" if bool(_GSX.get_value("reduce_effects")) else "OFF"])
+	for k in ["ai_guidance", "ai_voice", "ai_captions"]:
+		rows.append([k, tr("SET_" + k.to_upper()), "ON" if bool(_GSX.get_value(k)) else "OFF"])
+	rows.append(["language", tr("SET_LANGUAGE"), preload("res://scripts/ui/localization.gd").LANGUAGE_NAMES.get(String(_GSX.get_value("language")), "English")])
+	return rows
+
+
+func select_setting(delta: int) -> void:
+	var n: int = settings_rows().size()
+	settings_sel = (settings_sel + delta + n) % n
+	_refresh_settings()
+
+
+func adjust_setting(dir: int) -> void:
+	var key: String = settings_rows()[settings_sel][0]
+	match key:
+		"difficulty":
+			_cycle_difficulty()
+			return
+		"fullscreen", "invert_y", "reduce_effects", "ai_guidance", "ai_voice", "ai_captions":
+			_GSX.set_value(key, not bool(_GSX.get_value(key)))
+		"window_size":
+			_GSX.set_value(key, (int(_GSX.get_value(key)) + dir + _GSX.WINDOW_SIZES.size()) % _GSX.WINDOW_SIZES.size())
+		"mouse_sensitivity":
+			_GSX.set_value(key, clampf(snappedf(float(_GSX.get_value(key)) + 0.1 * dir, 0.1), 0.2, 3.0))
+		"language":
+			var i: int = _GSX.LANGUAGES.find(String(_GSX.get_value(key)))
+			_GSX.set_value(key, _GSX.LANGUAGES[(i + dir + _GSX.LANGUAGES.size()) % _GSX.LANGUAGES.size()])
+		_:
+			_GSX.set_value(key, clampf(snappedf(float(_GSX.get_value(key)) + 0.1 * dir, 0.05), 0.0, 1.0))
+	_refresh_settings()
+
+
 func _refresh_settings() -> void:
-	_difficulty_label.text = "GAME DIFFICULTY: %s" % repair_difficulty_name().to_upper()
+	var lines: Array[String] = []
+	var rows: Array = settings_rows()
+	settings_sel = clampi(settings_sel, 0, rows.size() - 1)
+	_difficulty_label.add_theme_font_size_override("font_size", 11)
+	for i in rows.size():
+		lines.append("%s%-22s %s" % ["> " if i == settings_sel else "  ", rows[i][1], rows[i][2]])
+	lines.append("")
+	lines.append("[Up/Dn] select   [Left/Right] change   (same as main menu)")
+	_difficulty_label.text = "\n".join(lines)
 
 
 func repair_difficulty_name() -> String:
@@ -439,3 +664,79 @@ func repair_difficulty_name() -> String:
 func _cycle_difficulty() -> void:
 	GameSettings.cycle_difficulty()
 	_refresh_settings()
+
+
+# ======================================================================
+# Round 33 Priority 1: SAVE / LOAD (one slot). [R] save, [L] load, [N] new
+# game (press twice to confirm). Starting a new game never deletes the save.
+# ======================================================================
+var _save_status: String = ""
+var _new_game_armed_ms: int = -1
+
+
+func _save_game_node() -> Node:
+	return get_tree().get_first_node_in_group(&"save_game") if is_inside_tree() else null
+
+
+func _refresh_save_load() -> void:
+	var notice: Label = $Control/VBox/Content/SaveLoad/Notice
+	var sg: Node = _save_game_node()
+	if sg == null:
+		notice.text = "Save / Load unavailable (no save system in this scene)."
+		return
+	var lines: Array[String] = []
+	lines.append("CURRENT SHIFT: DAY %d" % _day_plan.day_number)
+	var summary: String = sg.save_summary()
+	lines.append("SAVED GAME: %s" % (summary if summary != "" else "none"))
+	var why: String = sg.save_blocker()
+	lines.append("")
+	lines.append("[R] Save progress" + ("   (unavailable: %s)" % why if why != "" else ""))
+	lines.append("[L] Load saved game" + ("" if summary != "" else "   (no save)"))
+	lines.append("[N] New game (press twice) — keeps the save until you save again")
+	if _save_status != "":
+		lines.append("")
+		lines.append(_save_status)
+	if sg.last_message != "" and _save_status == "":
+		lines.append("")
+		lines.append(sg.last_message)
+	notice.text = "\n".join(lines)
+
+
+func _do_save() -> void:
+	var sg: Node = _save_game_node()
+	if sg == null:
+		return
+	_save_status = sg.save_game()["message"]
+	_refresh_save_load()
+
+
+func save_load_key(keycode: int) -> void:
+	var sg: Node = _save_game_node()
+	if sg == null:
+		return
+	match keycode:
+		KEY_L:
+			_save_status = sg.load_game()["message"]
+		KEY_N:
+			if _new_game_armed_ms >= 0 and Time.get_ticks_msec() - _new_game_armed_ms < 4000:
+				_new_game_armed_ms = -1
+				sg.new_game()
+				return
+			_new_game_armed_ms = Time.get_ticks_msec()
+			_save_status = "Press [N] again to start a NEW game (your save is not deleted)."
+	_refresh_save_load()
+
+
+## Round 34: the shift clock on Work Orders / Home ticks while visible.
+var _tick: float = 0.0
+
+
+func _process(delta: float) -> void:
+	_tick += delta
+	if _tick < 1.0:
+		return
+	_tick = 0.0
+	if _current_section == Section.WORK_ORDERS:
+		_refresh_work_orders()
+	elif _current_section == Section.HOME:
+		_refresh_home()

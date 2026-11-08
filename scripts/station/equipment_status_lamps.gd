@@ -27,6 +27,15 @@ const STYLES := {
 }
 
 var _lamps: Array = []   # [{target, bead_mat, label}]
+const _TAG := preload("res://scripts/interactables/inspection_tag.gd")
+const _INSPECT_IDS := {
+	"FilterHousingStation": [&"filter", "filter housing status"],
+	"EngineeringCabinet1": [&"power", "power panel status"],
+	"SensorCalibrationStation": [&"sensors", "sensor array status"],
+	"ValveRoutingStation": [&"coolant", "coolant manifold status"],
+}
+var _tags: Array = []
+@export var audit_cabinet_path: NodePath = ^"../Geometry/StorageCabinet1"
 var _t := 0.0
 ## Round 31 Priority 8D: a quiet confirmation tone when a system's REAL
 ## condition turns to restored, and when a work order actually closes.
@@ -40,6 +49,16 @@ var confirmations: int = 0
 
 
 func _ready() -> void:
+	# Round 33 ROOT-CAUSE FIX: placed two frames after ready -- during
+	# _ready the stations' own visuals are not yet at their final transforms
+	# (the filter/coolant lamps were computed at ~6 m, above the Life Support
+	# ceiling, invisible since Round 31).
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_build_lamps()
+
+
+func _build_lamps() -> void:
 	for p in equipment_paths:
 		var target: Node = get_node_or_null(p)
 		if target == null or not target.has_method("condition"):
@@ -61,6 +80,20 @@ func _ready() -> void:
 		add_child(label)
 		label.global_position = top + Vector3(0, 0.1, 0)
 		_lamps.append({"target": target, "mat": mat, "label": label})
+		# Round 33: the tag is a physical inspection point.
+		var tag := StaticBody3D.new()
+		tag.set_script(_TAG)
+		add_child(tag)
+		tag.global_position = top + Vector3(0, 0.09, 0)
+		var lamp_index: int = _lamps.size() - 1
+		var key: Array = _INSPECT_IDS.get(String(target.name), [&"", "status"])
+		tag.name = "InspectionTag_%s" % key[0]
+		tag.setup(key[0], key[1], Vector3(0.22, 0.12, 0.22), func(): return lamp_reading(lamp_index))
+		tag.day_plan = _dp
+		_tags.append(tag)
+		if _dp != null and _dp.has_method("register_reading_source"):
+			_dp.register_reading_source(key[0], func(): return lamp_reading(lamp_index))
+	_add_audit_tag()
 
 
 func _process(delta: float) -> void:
@@ -91,6 +124,45 @@ func _process(delta: float) -> void:
 	_prev_closed = closed
 
 
+## The reading the player actually sees on the tag (its live condition).
+func lamp_reading(index: int) -> String:
+	if index >= _lamps.size() or not is_instance_valid(_lamps[index]["target"]):
+		return "?"
+	return String(STYLES.get(_lamps[index]["target"].condition(), STYLES[&"nominal"])[1])
+
+
+func tags() -> Array:
+	return _tags
+
+
+## Round 33 SUPPLY AUDIT point: the electrical cabinet's stock placard. Only
+## readable with the door open (you count the parts on the shelf); the
+## reading is the physical count per type.
+func _add_audit_tag() -> void:
+	var cab: Node3D = get_node_or_null(audit_cabinet_path)
+	if cab == null or not cab.has_method("stock_count"):
+		return
+	var tag := StaticBody3D.new()
+	tag.set_script(_TAG)
+	tag.name = "InspectionTag_storage_audit"
+	cab.add_child(tag)
+	# On top of the cabinet, by its front edge (never in front of the open
+	# door, where it would intercept clicks on the parts inside).
+	var top_n: Node3D = cab.get_node_or_null("Top")
+	tag.global_position = (top_n.global_position if top_n != null else cab.global_position + Vector3(0, 0.5, 0)) + Vector3(0.2, 0.06, 0.0)
+	tag.setup(&"storage_audit", "electrical spares count", Vector3(0.2, 0.1, 0.5),
+		func():
+			var bits: Array = []
+			for t in cab.stock_types():
+				bits.append("%s %d/%d" % [preload("res://scripts/station/part_names.gd").short(t), cab.stock_count(t), cab.capacity(t)])
+			return " · ".join(bits),
+		func(): return "" if cab.is_open() else "Open the cabinet to count the parts.")
+	tag.day_plan = _dp
+	_tags.append(tag)
+	if _dp != null and _dp.has_method("register_reading_source"):
+		_dp.register_reading_source(&"storage_audit", tag.reader)
+
+
 func _confirm() -> void:
 	confirmations += 1
 	if _sfx != null and _sfx.has_method("play_kind"):
@@ -119,6 +191,13 @@ static func _top_of(n: Node3D) -> Vector3:
 		if v is Label3D or not (v as Node3D).is_visible_in_tree():
 			continue
 		var b: AABB = (v as VisualInstance3D).global_transform * (v as VisualInstance3D).get_aabb()
+		# Round 33 ROOT-CAUSE FIX: stations also own their focused-view
+		# DIORAMA sets, built far away (filter/coolant ~4 m up, above the
+		# Life Support ceiling) -- including them put the lamp, its tag and
+		# now the inspection point out of the player's sight. Only the
+		# station's own nearby geometry counts.
+		if b.get_center().distance_to(n.global_position) > 1.0:
+			continue
 		box = b if first else box.merge(b)
 		first = false
 	if first:

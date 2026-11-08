@@ -72,12 +72,27 @@ func _process(_delta: float) -> void:
 		_watch_rig.set_raised(should_raise, raise_duration)
 		if _player_body != null:
 			_player_body.set_watch_raise_pose(should_raise, raise_duration)
+		_move_task_message(should_raise)
 
 	if should_raise:
 		# Keep it live while held -- e.g. marking a task done elsewhere
 		# while the player happens to be holding the watch up should be
 		# reflected immediately, not only at the moment it was raised.
 		_refresh_text()
+
+
+## Round 34: the raised watch sits where HUD task messages appear (bottom
+## centre) -- while it is up, messages move to the top of the screen.
+func _move_task_message(raised: bool) -> void:
+	var ml: Control = get_node_or_null("../HUD/TaskMessageLabel") as Control
+	if ml == null:
+		return
+	if raised:
+		ml.anchor_top = 0.0; ml.anchor_bottom = 0.0
+		ml.offset_top = 58.0; ml.offset_bottom = 90.0
+	else:
+		ml.anchor_top = 1.0; ml.anchor_bottom = 1.0
+		ml.offset_top = -110.0; ml.offset_bottom = -78.0
 
 
 func is_raised() -> bool:
@@ -100,6 +115,30 @@ func is_raised() -> bool:
 func _refresh_text() -> void:
 	if _day_plan == null:
 		_watch_rig.set_watch_text("NO SIGNAL")
+		return
+	# Round 37: a pending timed EMERGENCY takes the watch face (the same
+	# status model as the top-screen banner and the workstation map).
+	var stn: Node = _day_plan.get_parent().get_node_or_null("StationStatus") if _day_plan.get_parent() != null else null
+	if stn != null:
+		var e: Dictionary = stn.emergency()
+		if not e.is_empty():
+			_watch_rig.set_watch_text("! %s
+%s %s" % [String(e["title"]).replace("POWER ", "PWR "), String(stn.ROOM_NAMES.get(StringName(e["room"]), "")).left(8), stn.clock(float(e["seconds"]))])
+			return
+	# Round 34 Priority 11: on workdays (and while a cargo duty is open) the
+	# watch shows the ONE next action, where, and the shift clock -- all
+	# event-driven from DayPlan.guidance(); it advances by itself.
+	# Round 39 Priority 7: after the shift, the watch points to the bunk.
+	if "shift_ended" in _day_plan and _day_plan.shift_ended:
+		_watch_rig.set_watch_text("SHIFT OVER\nBUNK · REST")
+		return
+	if _day_plan.has_method("guidance") and (_day_plan.workday != 0 or _day_plan.cargo_duty == "open"):
+		var g: Dictionary = _day_plan.guidance()
+		var clock: String = "REST" if _day_plan.shift_ended else ("WRAP UP" if _day_plan.is_wrapping_up() else "%d%%" % int(round(_day_plan.shift_progress() * 100.0)))
+		if g.is_empty():
+			_watch_rig.set_watch_text("ALL CLEAR\n%s" % clock)
+		else:
+			_watch_rig.set_watch_text("%s\n%s · %s" % [g["short"], String(g["room"]).replace("_", " ").to_upper().replace("CONTROL ROOM", "CTRL RM").replace("LIFE SUPPORT", "LIFE SUP"), clock])
 		return
 	var room: StringName = _day_plan.get_outstanding_task_room()
 	if room == &"":

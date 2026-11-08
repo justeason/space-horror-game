@@ -830,7 +830,7 @@ func install_replacement_wire() -> Dictionary:
 		return {"ok": false, "message": "You no longer have the %s. Fetch one from Storage." % required_part_name()}
 	item.mark_installed(_terminal, installed_wire_local_transform)
 	if _day_plan != null and _day_plan.has_method("log_event"):
-		_day_plan.log_event("Replaced %s (%s circuit)" % [required_part_name(), fault_color_name()])
+		_day_plan.log_event("Replaced %s (%s circuit)" % [required_part_name(), fault_color_name()], &"consumed")
 	_wire_replaced = true
 	_procedure = ProcedureStage.RECONNECT
 	_sync_world_diorama()

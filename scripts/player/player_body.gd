@@ -1506,6 +1506,11 @@ func _pose_lying_head() -> void:
 func _compose_standing(delta: float) -> void:
 	_rig.transform = Transform3D(Basis(), -_rig.EYE_POINT)
 	_update_rig_walk(delta)
+	if floating:
+		# Zero-g: knees and hips relax into a slight bend (no stance).
+		for side in ["Right", "Left"]:
+			_rig.set_local(side + "UpperLeg", Quaternion(Vector3.RIGHT, 0.22))
+			_rig.set_local(side + "LowerLeg", Quaternion(Vector3.RIGHT, -0.4))
 	if _pose_state != null:
 		_rig.pose_look(_pose_state.spine_pitch, _pose_state.neck_pitch, _pose_state.head_pitch)
 	# Round 32: bend at the waist to place a part on a LOW surface (bed);
@@ -1522,6 +1527,8 @@ func _compose_standing(delta: float) -> void:
 	_carry_blend = move_toward(_carry_blend, 1.0 if carrying else 0.0, delta * 4.0) if delta > 0.0 else (1.0 if carrying else 0.0)
 	if _watch_raise_progress > 0.0:
 		_pose_watch_arm()
+	elif _consume_t >= 0.0:
+		_pose_consume_arm(delta)
 	elif _carry_blend > 0.0:
 		_pose_carry_arm(delta)
 
@@ -2100,6 +2107,8 @@ func _update_rig_walk(delta: float) -> void:
 		if Vector2(vb.x, vb.z).length() > 0.2:
 			_gait_dir = _gait_dir.lerp(Vector2(vb.x, vb.z).normalized(), 1.0 - exp(-delta * 10.0)).normalized()
 	var target: float = clampf(_speed_est / 1.6, 0.0, 1.0) if _speed_est > 0.08 else 0.0
+	if floating:
+		target = 0.0          # Round 39: drifting in zero-g is not walking
 	_walk_amount = move_toward(_walk_amount, target, delta * 4.0) if delta > 0.0 else target
 	# Any continuity offset bleeds away while walking (<= 0.8 step/s), so
 	# heel strikes always re-lock onto the footstep sounds.
@@ -2186,3 +2195,157 @@ func _update_eye_anchor() -> void:
 		target = _cam_from.lerp(target, smoothstep(0.0, 1.0, _rig_xfade_t))
 	cam.position = target
 	_eye_anchor_active = target != Vector3.ZERO
+
+
+
+# ======================================================================
+# Round 39 Priority 5: a readable EAT / DRINK gesture. The right hand brings
+# a prop (red mug, water pouch or meal pouch) from the waist up to the
+# mouth, holds it there (a sip / two bites), and lowers it again; the prop
+# follows the real hand bone, so the mirror and cameras show it too.
+# ======================================================================
+const CONSUME_MOUTH_HEAD := Vector3(0.03, -0.04, -0.27)   # head-bone space: wrist in front of the mouth
+const CONSUME_REST := Vector3(0.2, -0.5, -0.32)
+var _consume_t: float = -1.0
+var _consume_dur: float = 2.4
+var _consume_kind: String = ""
+var _consume_prop: Node3D = null
+signal consume_finished(kind: String)
+
+
+func begin_consume(kind: String, duration: float = 2.4) -> bool:
+	if _rig == null or _pose != Pose.STANDING or _consume_t >= 0.0:
+		return false
+	_consume_kind = kind
+	_consume_dur = maxf(duration, 0.6)
+	_consume_t = 0.0
+	_consume_prop = _make_consume_prop(kind)
+	_rig.add_child(_consume_prop)
+	return true
+
+
+func is_consuming() -> bool:
+	return _consume_t >= 0.0
+
+
+func consume_progress() -> float:
+	return clampf(_consume_t / _consume_dur, 0.0, 1.0) if _consume_t >= 0.0 else 0.0
+
+
+## World position of the held prop (tests / tools).
+func consume_prop_position() -> Vector3:
+	return _consume_prop.global_position if _consume_prop != null else Vector3.INF
+
+
+func _pose_consume_arm(delta: float) -> void:
+	_consume_t += delta
+	var u: float = _consume_t / _consume_dur
+	# 0-0.28 raise, 0.28-0.78 at the mouth (bites/sips), 0.78-1 lower.
+	var k: float
+	if u < 0.28:
+		k = smoothstep(0.0, 0.28, u)
+	elif u < 0.78:
+		k = 1.0
+	else:
+		k = 1.0 - smoothstep(0.78, 1.0, u)
+	# The mouth follows the HEAD bone (looking down at the counter pitches
+	# the spine / neck / head forward -- a fixed body-space point ended up
+	# beside the temple). The wrist stops just below and in front of it so
+	# the held prop is at the lips.
+	var ofs: Vector3 = CONSUME_MOUTH_HEAD
+	if u >= 0.28 and u < 0.78:
+		# Bites: the hand dips away and back; sips: a slow tilt (prop rotation).
+		var bob: float = sin((u - 0.28) / 0.5 * TAU * (2.0 if _consume_kind == "meal" else 1.0))
+		ofs += Vector3(0.0, -0.04, -0.04) * maxf(bob, 0.0) * (1.0 if _consume_kind == "meal" else 0.3)
+	var mouth_rig: Vector3 = _rig.bone_pos("Head") + _rig.bone_basis("Head") * ofs
+	var hold_rig: Vector3 = (CONSUME_REST + _rig.EYE_POINT).lerp(mouth_rig, k)
+	var blend: float = clampf(minf(u / 0.12, (1.0 - u) / 0.12), 0.0, 1.0)
+	_rig.pose_arm_ik("Right", hold_rig, Vector3(0.9, -1.0, 0.2), blend, deg_to_rad(-80.0) * blend, 0.0)
+	_remember_arm()
+	if _consume_prop != null:
+		var hp: Vector3 = _rig.bone_pos("RightHand")
+		var hb: Basis = _rig.bone_basis("RightHand")
+		_consume_prop.position = hp + hb * Vector3(0.0, -0.07, 0.0)
+		var tilt: float = 0.0
+		if _consume_kind != "meal" and u >= 0.28 and u < 0.78:
+			tilt = smoothstep(0.28, 0.45, u) * (1.0 - smoothstep(0.65, 0.78, u)) * deg_to_rad(55.0)
+		_consume_prop.basis = Basis(Vector3.RIGHT, tilt)
+		_consume_prop.visible = u > 0.03 and u < 0.97
+	if _consume_t >= _consume_dur:
+		_consume_t = -1.0
+		if _consume_prop != null:
+			_consume_prop.queue_free()
+			_consume_prop = null
+		consume_finished.emit(_consume_kind)
+
+
+func _make_consume_prop(kind: String) -> Node3D:
+	var root := Node3D.new()
+	root.name = "ConsumeProp"
+	var add := func(mesh: Mesh, col: Color, pos: Vector3, rot: Vector3 = Vector3.ZERO) -> void:
+		var mi := MeshInstance3D.new()
+		mi.mesh = mesh
+		var m := StandardMaterial3D.new()
+		m.albedo_color = col
+		m.roughness = 0.5
+		mi.material_override = m
+		mi.position = pos
+		mi.rotation_degrees = rot
+		root.add_child(mi)
+	match kind:
+		"tea":
+			var c := CylinderMesh.new()
+			c.top_radius = 0.04
+			c.bottom_radius = 0.036
+			c.height = 0.09
+			add.call(c, Color(0.85, 0.3, 0.25), Vector3.ZERO)
+			var h := TorusMesh.new()
+			h.inner_radius = 0.012
+			h.outer_radius = 0.026
+			add.call(h, Color(0.85, 0.3, 0.25), Vector3(0.045, 0.0, 0.0), Vector3(90, 0, 0))
+			var t := CylinderMesh.new()
+			t.top_radius = 0.034
+			t.bottom_radius = 0.034
+			t.height = 0.004
+			add.call(t, Color(0.45, 0.25, 0.1), Vector3(0, 0.04, 0))
+		"water":
+			var b := BoxMesh.new()
+			b.size = Vector3(0.07, 0.11, 0.025)
+			add.call(b, Color(0.55, 0.75, 0.95), Vector3.ZERO)
+			var st := CylinderMesh.new()
+			st.top_radius = 0.004
+			st.bottom_radius = 0.004
+			st.height = 0.05
+			add.call(st, Color(0.95, 0.95, 0.95), Vector3(0.0, 0.075, 0.0))
+		_:
+			var b2 := BoxMesh.new()
+			b2.size = Vector3(0.09, 0.13, 0.03)
+			add.call(b2, Color(0.75, 0.55, 0.25), Vector3.ZERO)
+			var sp := CylinderMesh.new()
+			sp.top_radius = 0.008
+			sp.bottom_radius = 0.008
+			sp.height = 0.03
+			add.call(sp, Color(0.3, 0.3, 0.32), Vector3(0.0, 0.08, 0.0))
+	return root
+
+
+
+# ======================================================================
+# Round 39 Priority 6C/6D: EVA presentation of the body.
+# ======================================================================
+## Zero-g: no walk cycle; the legs hang slightly bent (set by eva_system.gd).
+var floating: bool = false
+var eva_suit: bool = false
+
+
+func set_floating(on: bool) -> void:
+	floating = on
+
+
+## The technician visibly wears the EVA suit (white suit, life-support
+## pack, helmet with a gold visor) -- seen in the mirror, on cameras and
+## from outside; the helmet is mirror/camera-only like the head.
+func set_eva_suit(on: bool) -> void:
+	eva_suit = on
+	if _rig != null and _rig.has_method("set_eva_suit"):
+		_rig.set_eva_suit(on)

@@ -13,7 +13,7 @@ const DURATION_SEC := 0.12
 
 func _ready() -> void:
 	stream = _build_footstep_stream()
-	bus = "Master"
+	bus = "SFX"   # Round 34: real audio buses (Settings sliders)
 
 
 ## Call once per footstep. Slight pitch/volume variance avoids a

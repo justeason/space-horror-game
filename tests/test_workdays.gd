@@ -53,28 +53,22 @@ func _init() -> void:
 	await process_frame
 	_check("taking the cartridge from its cabinet records retrieval", dp.has_fact(&"retrieved:filter") and carry.carried_item_id() == &"filter_cartridge")
 
-	station.toggle_isolate(); station.toggle_latch(1); station.toggle_latch(2)
-	station.remove_old_cartridge()
-	for i in 3: station.rotate_cartridge(1)
-	station.attempt_insert()
-	station.toggle_latch(1); station.toggle_latch(2); station.toggle_isolate()
+	# Round 36: any service variant (loose/seized latch, cocked cartridge).
+	preload("res://tests/filter_service_solver.gd").solve(station)
 	_check("filter serviced: equipment restored", dp.is_task_done(&"l02") and dp.is_equipment_restored())
-	_check("...but not yet verified, cleanup pending, order open", not dp.is_maintenance_verified() and not dp.is_cleanup_complete() and not dp.is_work_order_closed())
-	_check("guidance: verify at the Control Room next", dp.get_outstanding_task_room() == &"control_room")
-
+	# Round 34: the system self-test VERIFIES automatically on restore; the
+	# order stays open only for the mandatory cleanup -- no confirmation clicks.
+	_check("restored -> verified automatically, cleanup pending, order open", dp.is_maintenance_verified() and not dp.is_cleanup_complete() and not dp.is_work_order_closed())
+	_check("guidance: dispose of the used cartridge (Storage)", dp.get_outstanding_task_room() == &"storage")
 	screen.show_section(screen.Section.WORK_ORDERS)
 	screen.run_action()
-	_check("workstation [R] verifies the restored equipment", dp.is_maintenance_verified() and not dp.is_work_order_closed())
-	screen.run_action()
-	_check("order stays OPEN while the used cartridge awaits disposal", not dp.is_work_order_closed() and screen._workday_status.find("disposal") != -1)
-	_check("guidance: dispose of the used cartridge (Storage)", dp.get_outstanding_task_room() == &"storage")
+	_check("[R] cannot close while the used cartridge awaits disposal", not dp.is_work_order_closed() and screen._workday_status.find("disposal") != -1)
 
 	used.interact()
 	await create_timer(0.7).timeout  # Round 31: the hand owns the part only at the grasp
 	trash.interact()
 	_check("disposing the real used cartridge records cleanup", dp.has_fact(&"disposed:used_filter") and dp.is_cleanup_complete())
-	screen.run_action()
-	_check("workstation [R] now CLOSES the order", dp.is_work_order_closed())
+	_check("...and the order CLOSES AUTOMATICALLY (no workstation click)", dp.is_work_order_closed())
 	_check("no outstanding room once closed", dp.get_outstanding_task_room() == &"")
 	_check("work order status reads CLOSED", "\n".join(dp.workday_lines()).find("CLOSED") != -1)
 
@@ -92,9 +86,7 @@ func _init() -> void:
 	screen.run_action()
 	_check("verify refuses before the equipment is restored", not dp.is_maintenance_verified() and screen._workday_status.find("not yet restored") != -1)
 	dp.mark_done(&"l07")
-	screen.run_action()
-	screen.run_action()
-	_check("calibration verified then closed (no cleanup step)", dp.is_maintenance_verified() and dp.is_work_order_closed())
+	_check("calibration verified and closed automatically on restore (no cleanup step, no click)", dp.is_maintenance_verified() and dp.is_work_order_closed())
 
 	# ---- Day 4: Electrical; day 5: Coolant inspection (Round 32); day 6:
 	# the first-time rotation is exhausted, only due re-services remain. ----

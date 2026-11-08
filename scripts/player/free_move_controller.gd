@@ -24,6 +24,35 @@ extends CharacterBody3D
 ## deliberate feel; see the movement-tuning report for the exact
 ## before/after values across speed, look sensitivity, and smoothing.
 @export var move_speed: float = 1.8
+## Round 39: set every frame by DayPlan (underfed / overtired: < 1.0).
+var speed_scale: float = 1.0
+## Round 39 Priority 6C: EVA free-floating. No gravity, no floor: W/S push
+## along the LOOK direction (pitch included), A/D strafe, Space / C rise /
+## sink -- gentle suit thrusters with a slow auto-stabilising drag, so the
+## technician drifts and has to plan a stop. The tether (eva_system.gd)
+## limits how far they can go.
+var zero_g: bool = false
+const ZG_ACCEL := 0.9
+const ZG_MAX := 1.1
+const ZG_DRAG := 0.55
+
+
+func _zero_g_step(delta: float, input_dir: Vector2) -> void:
+	var cam_basis: Basis = look_pivot.get_node("PitchPivot").global_transform.basis if look_pivot != null and look_pivot.has_node("PitchPivot") else global_transform.basis
+	var fwd: Vector3 = -cam_basis.z
+	var right: Vector3 = cam_basis.x
+	var thrust: Vector3 = fwd * -input_dir.y + right * input_dir.x
+	if Input.is_key_pressed(KEY_SPACE):
+		thrust += Vector3.UP
+	if Input.is_key_pressed(KEY_C):
+		thrust += Vector3.DOWN
+	if thrust.length_squared() > 0.0001:
+		velocity += thrust.normalized() * ZG_ACCEL * delta
+	else:
+		velocity = velocity.move_toward(Vector3.ZERO, ZG_DRAG * delta)
+	if velocity.length() > ZG_MAX:
+		velocity = velocity.normalized() * ZG_MAX
+	move_and_slide()
 @export var acceleration: float = 14.0
 @export var gravity: float = 12.0
 @export var eye_height: float = 1.6
@@ -100,7 +129,10 @@ func _physics_process(delta: float) -> void:
 	if wish_dir.length_squared() > 0.0001:
 		wish_dir = wish_dir.normalized()
 
-	var target_velocity: Vector3 = wish_dir * move_speed
+	if zero_g:
+		_zero_g_step(delta, input_dir)
+		return
+	var target_velocity: Vector3 = wish_dir * move_speed * speed_scale
 	velocity.x = move_toward(velocity.x, target_velocity.x, acceleration * delta)
 	velocity.z = move_toward(velocity.z, target_velocity.z, acceleration * delta)
 

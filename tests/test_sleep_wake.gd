@@ -29,6 +29,7 @@ func _init() -> void:
 	_check("precondition: c01 done before sleep", dp.is_task_done(&"c01"))
 
 	_check("eyes overlay starts transparent", eyes.color.a < 0.01)
+	get_root().find_child("DayPlan", true, false).end_shift_now()   # Round 34: sleep only after the shift
 	sleep_state.begin_sleep()
 	await create_timer(0.1).timeout
 	_check("sleeping state entered", sleep_state.is_sleeping())

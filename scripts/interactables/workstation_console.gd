@@ -99,3 +99,31 @@ func get_screen_outward_normal(reference_point: Vector3) -> Vector3:
 	if normal.dot(to_reference) < 0.0:
 		normal = -normal
 	return normal
+
+
+## Round 37: normalized screen coordinates (0,0 top-left .. 1,1) where a
+## ray meets the monitor's front face, or (-1,-1). Derived from geometry:
+## the Screen mesh is a 0.576 x 0.36 box facing local +Z.
+func screen_uv_on_ray(from: Vector3, dir: Vector3) -> Vector2:
+	var inv: Transform3D = _screen.global_transform.affine_inverse()
+	var lf: Vector3 = inv * from
+	var ld: Vector3 = inv.basis * dir
+	var size: Vector3 = (_screen.mesh as BoxMesh).size
+	var face_z: float = size.z * 0.5
+	if absf(ld.z) < 1e-6:
+		return Vector2(-1, -1)
+	var t: float = (face_z - lf.z) / ld.z
+	if t <= 0.0:
+		return Vector2(-1, -1)
+	var p: Vector3 = lf + ld * t
+	var u: float = p.x / size.x + 0.5
+	var v: float = 0.5 - p.y / size.y
+	if u < 0.0 or u > 1.0 or v < 0.0 or v > 1.0:
+		return Vector2(-1, -1)
+	return Vector2(u, v)
+
+
+## Inverse (tests / tools): screen uv -> world point on the face.
+func screen_point(uv: Vector2) -> Vector3:
+	var size: Vector3 = (_screen.mesh as BoxMesh).size
+	return _screen.global_transform * Vector3((uv.x - 0.5) * size.x, (0.5 - uv.y) * size.y, size.z * 0.5)
