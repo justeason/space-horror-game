@@ -107,16 +107,19 @@ func _tether_visual_and_switch() -> void:
 	var net: Node = main.get_node("CameraNetwork")
 	var mid: Vector3 = seg.global_position
 	_check("the exterior hatch camera EXT-02 sees the cable", net.sees("EXT-02", mid, 0.6))
-	# Staged re-clip to A2 (move within reach first).
+	# Staged re-clip to A2 (move within reach first). Round 41: the dual-
+	# tether rule makes the release a separate, deliberate step (R / click
+	# the old ring) instead of automatic (owner request, Priority 2).
 	fb.sync_to_eye_position(Vector3(-3.6, 1.7, -0.75))
 	await create_timer(0.3).timeout
 	_check("re-clip starts (staged, not instant)", eva.clip_to(1) and eva.is_switching() and eva.anchor_index == 0)
 	await create_timer(0.25).timeout
 	_check("...new cable reaching out, old still holding", (eva._cables[1]["root"] as Node3D).visible and eva.anchor_index == 0 and eva._clipped_rings() == [0])
-	await create_timer(0.45).timeout
-	_check("...clicked on: BOTH tethers held (two-tether rule)", eva._clipped_rings().size() == 2)
-	await create_timer(0.9).timeout
-	_check("...old released: clipped to A2 only, ONE cable (to A2)", not eva.is_switching() and eva.anchor_index == 1 and eva._clipped_rings() == [1] and not (eva._cables[1]["root"] as Node3D).visible and (eva._cables[0]["hook_b"] as Node3D).global_position.distance_to(eva.ANCHORS[1][0]) < 0.02)
+	await create_timer(0.75).timeout
+	_check("...clicked on: BOTH tethers held (two-tether rule)", eva._clipped_rings().size() == 2 and eva.tether_state() == "SECURED_BOTH")
+	_check("...old released by R (the older tether)", eva.release_older())
+	await create_timer(1.0).timeout
+	_check("...old released: clipped to A2 only, ONE cable (to A2)", not eva.is_switching() and eva.anchor_index == 1 and eva._clipped_rings() == [1] and not (eva._cables[0]["root"] as Node3D).visible and (eva._cables[1]["hook_b"] as Node3D).global_position.distance_to(eva.ANCHORS[1][0]) < 0.02)
 	_check("re-clip events logged in order (start, clip, unclip)", _order(["clip_start_1", "clip_1", "unclip_0"]))
 	_check("ring A2 lit green (active)", (eva._ring_mats[1] as StandardMaterial3D).albedo_color.g > 0.9 and (eva._ring_mats[0] as StandardMaterial3D).albedo_color.r > 0.9)
 	_check("out-of-reach ring refused", not eva.clip_to(2) or eva._harness_point().distance_to(eva.ANCHORS[2][0]) <= eva.CLIP_REACH)
@@ -125,11 +128,12 @@ func _tether_visual_and_switch() -> void:
 func _controls_and_hud() -> void:
 	var cam: Camera3D = main.get_node("Player/LookPivot/PitchPivot/Camera3D")
 	fb.velocity = Vector3.ZERO
-	_key(KEY_SPACE, true)
+	# Round 41: W (not Space) pushes toward the crosshair.
+	_key(KEY_W, true)
 	await create_timer(0.6).timeout
-	_key(KEY_SPACE, false)
+	_key(KEY_W, false)
 	var fwd: Vector3 = -cam.global_transform.basis.z
-	_check("SPACE pushes toward the crosshair (v·forward %.2f)" % (fb.velocity.normalized().dot(fwd)), fb.velocity.length() > 0.2 and fb.velocity.normalized().dot(fwd) > 0.9)
+	_check("W pushes toward the crosshair (v·forward %.2f)" % (fb.velocity.normalized().dot(fwd)), fb.velocity.length() > 0.2 and fb.velocity.normalized().dot(fwd) > 0.9)
 	var v0: float = fb.velocity.length()
 	await create_timer(0.5).timeout
 	_check("released: you coast (%.2f -> %.2f m/s, no sudden stop)" % [v0, fb.velocity.length()], fb.velocity.length() > v0 * 0.6)
@@ -141,7 +145,7 @@ func _controls_and_hud() -> void:
 	await create_timer(0.4).timeout
 	_key(KEY_C, false)
 	_check("C no longer moves you (it is the wristwatch key)", fb.velocity.length() < 0.05)
-	_check("HUD: zone chip, tether ring + range bar, O2", eva._zone_chip.text in ["OUTSIDE", "RETURN"] and eva._teth_label.text == "A2" and eva._teth_bar.value > 0.0 and eva._o2_bar.value > 0.5)
+	_check("HUD: zone chip, tether ring + range bar, O2", eva._zone_chip.text in ["OUTSIDE", "RETURN"] and eva._teth_b_label.text == "B A2" and eva._teth_bar.value > 0.0 and eva._o2_bar.value > 0.5)
 	_check("first-EVA control hint was shown (key caps)", eva._hint_shown and eva._hint.get_child_count() == 4)
 
 

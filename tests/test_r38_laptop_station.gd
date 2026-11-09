@@ -79,7 +79,8 @@ func _laptop() -> void:
 	g.piece = [Vector2i(0, 0)]
 	g.piece_pos = Vector2i(0, 0)
 	g.action("drop")
-	_check("a full row is shipped (score %d)" % g.score, g.score == 100 and g.grid[g.ROWS - 1].all(func(v): return int(v) == -1))
+	# Round 41: score = 100 x level for the row + the hard-drop bonus (2/row fallen).
+	_check("a full row is shipped (score %d)" % g.score, g.score == 100 + 2 * (g.ROWS - 1) and g.grid[g.ROWS - 1].all(func(v): return int(v) == -1))
 	_check("best score kept (%d)" % scr.game_best, scr.game_best >= 100)
 	g.action("exit")
 	_check("Exit returns to the desktop", scr.current_view() == &"home")
@@ -106,7 +107,7 @@ func _cameras_tab() -> void:
 	await create_timer(1.6).timeout
 	await _click(screen, shell.tab_buttons[1])
 	_check("CAMERAS tab by click", shell.page == shell.Page.CAMERAS)
-	_check("Round 39: the 6 curated cameras listed as buttons", shell.cam_buttons.size() == 6)
+	_check("Round 41: the 8 curated cameras listed as buttons", shell.cam_buttons.size() == 8)
 	await _click(screen, shell.cam_buttons["EXT-03"])
 	_check("click EXT-03: selected, its LIVE feed shown", shell.selected_cam == "EXT-03" and shell._feed.texture == net.feed("EXT-03") and shell._cam_info.text.find("OBSERVATION") != -1)
 	_check("only the shown camera renders", net.is_rendering("EXT-03") and not net.is_rendering("EXT-02"))

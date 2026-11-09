@@ -13,8 +13,8 @@ func _init() -> void:
 	for i in 8: await process_frame
 	net = main.get_node("CameraNetwork")
 	var ids: Array = net.ids()
-	_check("Round 39: a CURATED network of 6 feeds (%s)" % ", ".join(ids), ids.size() == 6 and ids == net.CURATED)
-	_check("interior + exterior cameras (4 + 2)", ids.filter(func(i): return i.begins_with("INT")).size() == 4 and ids.filter(func(i): return i.begins_with("EXT")).size() == 2)
+	_check("Round 41: a CURATED network of 8 feeds (%s)" % ", ".join(ids), ids.size() == 8 and ids == net.CURATED)
+	_check("interior + exterior cameras (4 + 4: Round 41 adds EXT-01 overview + EXT-05 solar)", ids.filter(func(i): return i.begins_with("INT")).size() == 4 and ids.filter(func(i): return i.begins_with("EXT")).size() == 4)
 	_check("every camera has a physical housing at its mount", ids.all(func(i): return net.camera(i).get_node_or_null("Housing") != null))
 	_check("cameras never render their own housings", ids.all(func(i): return (net.camera(i).cull_mask & (1 << 15)) == 0))
 	_check("feeds are live viewports of the real world (not textures)", ids.all(func(i): return net.feed(i) is ViewportTexture))

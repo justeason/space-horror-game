@@ -24,17 +24,19 @@ const EXTERIOR := 1 << 11         # visual layer 12 (sunlit exterior)
 ## original scene cameras, exterior?, intentional blind spot note.
 const CAMERAS := [
 	["INT-01", "CONTROL ROOM", &"control_room", "CameraControlRoom", null, false, "under the camera, the console's west side"],
-	["INT-02", "MAIN CORRIDOR", &"main_junction", "CameraCorridor", null, false, "the Control Room doorway behind the camera"],
+	["INT-02", "CORRIDOR → CONTROL", &"main_junction", "CameraCorridor", null, false, "the Control Room corners beside the doorway"],
 	["INT-03", "JUNCTION", &"main_junction", "CameraCorridorEnd", null, false, "the Comms tunnel mouth"],
 	["INT-04", "ENGINEERING", &"engineering", "CamEngineering", [Vector3(-2.78, 2.95, 6.72), Vector3(-4.6, 0.9, 3.7)], false, "the breaker-panel alcove right below the camera"],
 	["INT-05", "LIFE SUPPORT", &"life_support", "CamLifeSupport", [Vector3(-1.48, 2.95, 11.82), Vector3(-4.1, 0.9, 10.0)], false, "the doorway behind the camera"],
 	["INT-06", "STORAGE", &"storage", "CamStorage", [Vector3(-5.55, 2.95, 7.05), Vector3(-7.2, 0.7, 8.9)], false, "the near cabinet face"],
 	["INT-07", "AIRLOCK CHAMBER", &"airlock", "CamAirlock", [Vector3(-4.47, 2.42, -0.62), Vector3(-4.95, 0.7, -2.5)], false, "right under the camera, by the inner hatch"],
 	["INT-08", "COMMS", &"communications", "CamComms", [Vector3(3.22, 2.95, 8.12), Vector3(1.4, 1.0, 6.3)], false, "the alcove behind the camera"],
-	["EXT-01", "HULL OVERVIEW", &"", "CamExtHull", [Vector3(7.5, 6.5, -9.5), Vector3(-1.5, 0.8, 3.5)], true, "the north face of every module"],
+	["EXT-01", "HULL OVERVIEW", &"", "CamExtHull", [Vector3(9.0, 10.5, -19.0), Vector3(-3.0, 0.5, -2.5)], true, "the south faces of the modules"],
 	["EXT-02", "AIRLOCK HATCH", &"airlock", "CamExtAirlock", [Vector3(-3.45, 3.05, -3.75), Vector3(-4.8, 0.9, -2.75)], true, "directly beneath the camera mount"],
 	["EXT-03", "OBSERVATION", &"control_room", "CamExtObservation", [Vector3(-1.62, 3.25, 2.92), Vector3(-3.6, 1.0, 0.2)], true, "the walkway behind the antenna mast"],
 	["EXT-04", "ANTENNA A1", &"airlock", "CamExtAntenna", [Vector3(-4.12, 2.55, 2.45), Vector3(-2.85, 0.75, 0.75)], true, "the far side of the feed box"],
+	# Round 41: the solar truss / left wing, from the airlock roof.
+	["EXT-05", "SOLAR TRUSS", &"airlock", "CamExtSolar", [Vector3(-4.6, 3.75, -3.3), Vector3(-15.0, 1.0, -5.4)], true, "the right wing and the truss's north face"],
 ]
 
 ## Round 39 Priority 6A: a CURATED set of six useful feeds (the rest of the
@@ -42,7 +44,9 @@ const CAMERAS := [
 ## less rendering): the main corridor, Engineering, Life Support, the
 ## airlock CHAMBER (inside it, looking at the outer hatch), the hatch from
 ## outside, and the courtyard also seen through the observation port.
-const CURATED := ["INT-02", "INT-04", "INT-05", "INT-07", "EXT-02", "EXT-03"]
+## Round 41: + EXT-01 (the whole vehicle with both solar wings) and
+## EXT-05 (the solar truss route). Still only the displayed feed renders.
+const CURATED := ["INT-02", "INT-04", "INT-05", "INT-07", "EXT-01", "EXT-02", "EXT-03", "EXT-05"]
 
 var cams: Dictionary = {}        # id -> {vp: SubViewport, label, room, exterior, blind, pos}
 var _demand: Dictionary = {}     # requester -> camera id

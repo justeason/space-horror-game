@@ -376,7 +376,15 @@ const ORDER_TYPES := {
 	&"antenna": {"tag": "ANTENNA", "category": "D", "weight": 3, "priority": 2, "title": "Restore comms link (EVA)", "intro_day": 8},
 	# Round 39: grimed exterior camera lens -> EVA wipe (chain).
 	&"lens": {"tag": "EXT CAM", "category": "D", "weight": 2, "priority": 1, "title": "Clean exterior camera lens (EVA)", "intro_day": 9},
+	# Round 41: solar array EVA work, introduced one at a time (a routine
+	# outer-panel inspection first, then the electrical and structural jobs).
+	&"solar_clean": {"tag": "SOLAR PNL", "category": "D", "weight": 3, "priority": 1, "title": "Solar outer panel inspection (EVA)", "intro_day": 10},
+	&"solar_coupler": {"tag": "SOLAR CPL", "category": "D", "weight": 3, "priority": 2, "title": "Service solar power coupler (EVA)", "intro_day": 11},
+	&"solar_hinge": {"tag": "SOLAR HNG", "category": "D", "weight": 3, "priority": 2, "title": "Solar hinge latch inspection (EVA)", "intro_day": 13},
 }
+## Round 41: LONG exterior jobs -- never more than one open at a time
+## (no day with several long EVA chains).
+const LONG_EVA := [&"antenna", &"solar_clean", &"solar_coupler", &"solar_hinge"]
 
 # ======================================================================
 # Round 38 Priority 14: TECHNICIAN PROFICIENCY -- counts of REAL completed
@@ -387,7 +395,7 @@ const ORDER_TYPES := {
 # repair-speed bonuses: the work stays physical.
 # ======================================================================
 const FAMILIES := ["electrical", "life_support", "mechanical", "communications", "eva"]
-const ORDER_FAMILY := {&"breaker": ["electrical"], &"power": ["electrical"], &"thermal": ["electrical"], &"vent": ["life_support"], &"seal": ["mechanical"], &"data": ["communications"], &"antenna": ["communications", "eva"], &"lens": ["eva"]}
+const ORDER_FAMILY := {&"breaker": ["electrical"], &"power": ["electrical"], &"thermal": ["electrical"], &"vent": ["life_support"], &"seal": ["mechanical"], &"data": ["communications"], &"antenna": ["communications", "eva"], &"lens": ["eva"], &"solar_clean": ["eva"], &"solar_coupler": ["electrical", "eva"], &"solar_hinge": ["mechanical", "eva"]}
 const WORKDAY_FAMILY := {Workday.FILTER_SERVICE: ["life_support"], Workday.CALIBRATION: ["life_support"], Workday.ELECTRICAL_SERVICE: ["electrical"], Workday.COOLANT_INSPECTION: ["mechanical"], Workday.INSPECTION_ROUND: ["mechanical"], Workday.COMMS_CHECK: ["communications"]}
 var proficiency: Dictionary = {"electrical": 0, "life_support": 0, "mechanical": 0, "communications": 0, "eva": 0}
 var _credited: Dictionary = {}
@@ -493,6 +501,8 @@ func _schedule_orders() -> void:
 ## cargo transfer uses the airlock.
 func _order_compatible(t: StringName) -> bool:
 	if t == &"seal" and cargo_duty == "open":
+		return false
+	if t in LONG_EVA and LONG_EVA.any(func(x): return has_open_order(x)):
 		return false
 	return true
 

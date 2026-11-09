@@ -97,6 +97,11 @@ func duties() -> Array:
 		for i in br.BREAKERS.size():
 			if not br.on[i]:
 				out.append({"room": &"engineering", "tag": "BREAKER", "action": "Reset breaker %s" % br.BREAKERS[i]["id"], "severity": Sev.WARNING, "id": "COND-%s" % br.BREAKERS[i]["id"]})
+	var sa: Node = _eq("SolarArrays")
+	if sa != null and not (_dp.has_open_order(&"solar_coupler") or _dp.has_open_order(&"solar_hinge") or _dp.has_open_order(&"solar_clean")):
+		var cd: Dictionary = sa.condition_duty()
+		if not cd.is_empty():
+			out.append(cd)
 	var pw: Node = _eq("PowerDistribution")
 	if pw != null and not has_power_order and pw.is_overloaded():
 		out.append({"room": &"engineering", "tag": "LOADS", "action": "Reduce Bus A load", "severity": Sev.EMERGENCY, "id": "COND-overload"})

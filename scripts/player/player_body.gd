@@ -1507,10 +1507,7 @@ func _compose_standing(delta: float) -> void:
 	_rig.transform = Transform3D(Basis(), -_rig.EYE_POINT)
 	_update_rig_walk(delta)
 	if floating:
-		# Zero-g: knees and hips relax into a slight bend (no stance).
-		for side in ["Right", "Left"]:
-			_rig.set_local(side + "UpperLeg", Quaternion(Vector3.RIGHT, 0.22))
-			_rig.set_local(side + "LowerLeg", Quaternion(Vector3.RIGHT, -0.4))
+		_pose_eva_legs(delta)
 	if _pose_state != null:
 		_rig.pose_look(_pose_state.spine_pitch, _pose_state.neck_pitch, _pose_state.head_pitch)
 	# Round 32: bend at the waist to place a part on a LOW surface (bed);
@@ -1527,6 +1524,8 @@ func _compose_standing(delta: float) -> void:
 	_carry_blend = move_toward(_carry_blend, 1.0 if carrying else 0.0, delta * 4.0) if delta > 0.0 else (1.0 if carrying else 0.0)
 	if _watch_raise_progress > 0.0:
 		_pose_watch_arm()
+	elif floating or not _eva_reach.is_empty():
+		_pose_eva_arms(delta)
 	elif _consume_t >= 0.0:
 		_pose_consume_arm(delta)
 	elif _carry_blend > 0.0:
@@ -2349,3 +2348,88 @@ func set_eva_suit(on: bool) -> void:
 	eva_suit = on
 	if _rig != null and _rig.has_method("set_eva_suit"):
 		_rig.set_eva_suit(on)
+
+
+# ======================================================================
+# Round 41 Priority 9: EVA ANIMATION SET on the existing rig (authored
+# poses blended per frame -- no new skeleton, no physics limbs).
+#   idle   -- arms float a little out from the sides, knees soft, a slow
+#             breathing drift;
+#   thrust -- body extends (legs straighten), arms trail back;
+#   coast  -- relaxed between idle and thrust;
+#   brake  -- knees come up, arms forward (hands in view: stabilising);
+#   work   -- foot-restraint stance (knees bent), both hands forward to
+#             the work point (eva_system worksite);
+#   reach  -- one arm IK'd to a world point (the tether hand carries the
+#             carabiner to a ring / back to it to release; the left hand
+#             grabs the outer-hatch frame on the way back in).
+# Weights ease at 3/s, so no pose snaps; arm IK keeps limb lengths fixed.
+# ======================================================================
+var _eva_pose: String = "none"
+var _eva_reach: Dictionary = {}
+var _eva_w: Dictionary = {"idle": 0.0, "thrust": 0.0, "coast": 0.0, "brake": 0.0, "work": 0.0}
+var _eva_reach_w: Dictionary = {"Left": 0.0, "Right": 0.0}
+var _eva_t: float = 0.0
+
+
+func set_eva_pose(pose: String, reach: Dictionary) -> void:
+	_eva_pose = pose
+	_eva_reach = reach
+
+
+func eva_pose_weights() -> Dictionary:
+	return _eva_w.duplicate()
+
+
+func _pose_eva_legs(delta: float) -> void:
+	_eva_t += delta
+	for k in _eva_w:
+		var goal: float = 1.0 if _eva_pose == k else 0.0
+		_eva_w[k] = move_toward(float(_eva_w[k]), goal, delta * 3.0) if delta > 0.0 else goal
+	var w: Dictionary = _eva_w
+	var drift: float = sin(_eva_t * 1.4) * 0.04
+	var hip: float = 0.22 + 0.3 * w["brake"] + 0.45 * w["work"] - 0.16 * w["thrust"] - 0.06 * w["coast"]
+	var knee: float = -0.4 - 0.5 * w["brake"] - 0.6 * w["work"] + 0.28 * w["thrust"] + 0.1 * w["coast"]
+	for side in ["Right", "Left"]:
+		var sgn: float = 1.0 if side == "Right" else -1.0
+		_rig.set_local(side + "UpperLeg", Quaternion(Vector3.RIGHT, hip + drift * sgn) * Quaternion(Vector3.FORWARD, sgn * 0.05))
+		_rig.set_local(side + "LowerLeg", Quaternion(Vector3.RIGHT, knee - absf(drift)))
+
+
+func _pose_eva_arms(delta: float) -> void:
+	var w: Dictionary = _eva_w
+	var drift: float = sin(_eva_t * 1.4 + 0.6) * 0.025
+	var reach_side: String = String(_eva_reach.get("side", ""))
+	for side in ["Right", "Left"]:
+		var goal: float = 1.0 if (reach_side == side or reach_side == "Both") else 0.0
+		var rw: float = float(_eva_reach.get("blend", 0.0)) * goal
+		_eva_reach_w[side] = move_toward(float(_eva_reach_w[side]), rw, delta * 6.0) if delta > 0.0 else rw
+	for side in ["Right", "Left"]:
+		var sgn: float = 1.0 if side == "Right" else -1.0
+		# Authored float poses (rig space, eye at EYE_POINT).
+		var idle := Vector3(sgn * 0.33, 0.98 + drift, -0.16)
+		var thrust := Vector3(sgn * 0.27, 0.92, 0.1)
+		var brake := Vector3(sgn * 0.2, 1.2, -0.4)
+		var work := Vector3(sgn * 0.17, 1.15, -0.42)
+		var base: Vector3 = idle
+		base = base.lerp(thrust, float(w["thrust"]) + float(w["coast"]) * 0.4)
+		base = base.lerp(brake, float(w["brake"]))
+		base = base.lerp(work, float(w["work"]))
+		var tgt: Vector3 = base
+		var rw: float = float(_eva_reach_w[side])
+		if rw > 0.001 and _eva_reach.has("target"):
+			var world: Vector3 = _eva_reach["target"]
+			if reach_side == "Both":
+				world += global_basis.orthonormalized().x * sgn * 0.12
+			var local: Vector3 = _rig.global_transform.affine_inverse() * world
+			var sh: Vector3 = _rig.bone_pos(side + "UpperArm")
+			var to: Vector3 = local - sh
+			if to.length() > 0.62:
+				local = sh + to.normalized() * 0.62    # a straight-arm reach, never stretched
+			tgt = base.lerp(local, rw)
+		var float_w: float = 1.0 if floating else 0.0
+		var blend: float = maxf(float_w, float(_eva_reach_w[side]))
+		if blend <= 0.0:
+			continue
+		_rig.pose_arm_ik(side, tgt, Vector3(sgn * 0.9, -1.0, 0.25), blend, 0.0, 0.0)
+	_remember_arm()

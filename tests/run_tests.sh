@@ -161,6 +161,11 @@ TESTS=(
   test_r39_airlock_eva
   test_r39_routine_layout
   test_r40_walkway_clear
+  test_r41_eva_dual_tether
+  test_r41_solar
+  test_r41_story_events
+  test_r41_cargo_drop
+  test_r41_cameras_suit
   test_r40_eva_clarity
 )
 

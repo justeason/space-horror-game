@@ -1,4 +1,4 @@
-[gd_scene load_steps=35 format=3]
+[gd_scene load_steps=40 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="1_player"]
 [ext_resource type="Script" path="res://scripts/navigation/movement_node.gd" id="2_node"]
@@ -63,6 +63,11 @@
 [ext_resource type="Script" path="res://scripts/interactables/tool_rack.gd" id="70_toolrack"]
 [ext_resource type="Script" path="res://scripts/station/quarters_life.gd" id="71_quarters"]
 [ext_resource type="Script" path="res://scripts/station/environment_model.gd" id="48_env"]
+[ext_resource type="Script" path="res://scripts/exterior/solar_arrays.gd" id="80_solar"]
+[ext_resource type="Script" path="res://scripts/exterior/solar_coupler_task.gd" id="81_coupler"]
+[ext_resource type="Script" path="res://scripts/exterior/solar_hinge_task.gd" id="82_hinge"]
+[ext_resource type="Script" path="res://scripts/exterior/solar_clean_task.gd" id="83_clean"]
+[ext_resource type="Script" path="res://scripts/story/story_events.gd" id="84_story"]
 
 [sub_resource type="Environment" id="Environment_main"]
 background_mode = 1
@@ -2080,7 +2085,8 @@ transform = Transform3D(-0.70710677, 0.28760624, -0.6459742, 0, 0.9135455, 0.406
 camera_id = &"cam_corridor"
 
 [node name="Camera3D" parent="Surveillance/CameraCorridor" index="0"]
-transform = Transform3D(-1.0, 0.0, 0.0, 0.0, 0.913545, 0.406737, 0.0, 0.406737, -0.913545, 0, 2.4, 2.9)
+transform = Transform3D(0.998777, -0.0142348, 0.047351, 0, 0.957662, 0.287894, -0.0494444, -0.287542, 0.956491, 0.3, 2.47, 5.25)
+fov = 64.0
 
 [node name="CameraCorridorEnd" parent="Surveillance" instance=ExtResource("5_cam")]
 camera_id = &"cam_corridor_end"
@@ -2770,6 +2776,9 @@ script = ExtResource("73_airlock")
 [node name="StationSeal" type="Node3D" parent="."]
 script = ExtResource("72_seal")
 
+[node name="StoryEvents" type="Node" parent="."]
+script = ExtResource("84_story")
+
 [node name="StationDecor" type="Node3D" parent="."]
 script = ExtResource("68_decor")
 
@@ -2815,6 +2824,18 @@ script = ExtResource("70_toolrack")
 
 [node name="ExtCameraLens" type="Node3D" parent="Equipment"]
 script = ExtResource("74_lens")
+
+[node name="SolarArrays" type="Node3D" parent="Equipment"]
+script = ExtResource("80_solar")
+
+[node name="SolarCoupler" type="Node3D" parent="Equipment"]
+script = ExtResource("81_coupler")
+
+[node name="SolarHinge" type="Node3D" parent="Equipment"]
+script = ExtResource("82_hinge")
+
+[node name="SolarClean" type="Node3D" parent="Equipment"]
+script = ExtResource("83_clean")
 
 [node name="QuartersLife" type="Node3D" parent="Equipment"]
 script = ExtResource("71_quarters")

@@ -26,39 +26,56 @@ extends CharacterBody3D
 @export var move_speed: float = 1.8
 ## Round 39: set every frame by DayPlan (underfed / overtired: < 1.0).
 var speed_scale: float = 1.0
-## Round 39/40: EVA free-floating. Round 40 control scheme (one clear
-## idea instead of "WASD + Space/C"): hold SPACE (or W) and the suit's
-## jets PUSH you toward the crosshair -- look where you want to go, push,
-## let go and coast. S = brake (stabilise to a stop). A / D = gentle
-## sideways drift. No gravity, no floor; a slow auto-stabilising drag
-## keeps drift readable. The tether (eva_system.gd) limits range.
+## Round 39/40/41: EVA free-floating. Round 41 control scheme (playtest
+## feedback: "too complicated"): AIM AND PUSH.
+##   W  -- the suit's jets push gently along the CAMERA's aim (look where
+##         you want to go); release W and you coast;
+##   S  -- brake: velocity eases smoothly to zero;
+##   A / D / SPACE -- nothing in zero-g (no lateral thrusters, Space is the
+##         carry key and is ignored outside).
+## A mild auto-stabilisation drag (the suit's attitude control) makes a
+## coast end gently instead of drifting forever, without feeling like
+## swimming. Every feel value is an exported knob, nowhere else.
+## No thrust while stabilised at a worksite (`work_locked`), while a
+## focused equipment panel has control, or while the tree is paused
+## (physics does not run then). The tether constraint lives in
+## eva_system.gd (never a position reset).
 var zero_g: bool = false
-const ZG_ACCEL := 1.0
-const ZG_MAX := 1.2
-const ZG_DRAG := 0.18      # coasting
-const ZG_BRAKE := 1.6      # holding S
+@export var zg_accel: float = 0.9        # m/s^2 while W is held
+@export var zg_max: float = 1.1          # m/s cap (a modest float)
+@export var zg_drag: float = 0.12        # m/s^2 coasting stabilisation
+@export var zg_brake: float = 1.4        # m/s^2 while S is held
+@export var zg_turn_rate: float = 2.2    # how fast thrust re-aims the motion (1/s)
 var thrusting: bool = false
 var braking: bool = false
+var work_locked: bool = false            # stabilised at an EVA worksite
+var thrust_blocked: bool = false         # set by eva_system (focused panel etc.)
 
 
-func _zero_g_step(delta: float, input_dir: Vector2) -> void:
+func _zero_g_step(delta: float, _input_dir: Vector2) -> void:
 	var cam_basis: Basis = look_pivot.get_node("PitchPivot").global_transform.basis if look_pivot != null and look_pivot.has_node("PitchPivot") else global_transform.basis
-	var fwd: Vector3 = -cam_basis.z
-	var right: Vector3 = cam_basis.x
-	thrusting = Input.is_key_pressed(KEY_SPACE) or Input.is_key_pressed(KEY_W)
-	braking = Input.is_key_pressed(KEY_S)
-	var thrust: Vector3 = Vector3.ZERO
-	if thrusting:
-		thrust += fwd
-	thrust += right * input_dir.x * 0.5
+	var fwd: Vector3 = -cam_basis.z.normalized()
+	var allow: bool = not work_locked and not thrust_blocked
+	thrusting = allow and Input.is_key_pressed(KEY_W)
+	braking = allow and Input.is_key_pressed(KEY_S) and not thrusting
+	if work_locked:
+		velocity = Vector3.ZERO
+		return
 	if braking:
-		velocity = velocity.move_toward(Vector3.ZERO, ZG_BRAKE * delta)
-	elif thrust.length_squared() > 0.0001:
-		velocity += thrust.normalized() * ZG_ACCEL * delta * minf(thrust.length(), 1.0)
+		velocity = velocity.move_toward(Vector3.ZERO, zg_brake * delta)
+	elif thrusting:
+		# Push along the aim; the part of the current motion that is NOT
+		# along the aim bleeds off gently (no abrupt reversal, but a turn
+		# of the head does steer the drift over a second or two).
+		var along: float = velocity.dot(fwd)
+		var side: Vector3 = velocity - fwd * along
+		side = side.move_toward(Vector3.ZERO, zg_turn_rate * delta * maxf(side.length(), 0.2))
+		along = minf(along + zg_accel * delta, zg_max)
+		velocity = fwd * along + side
 	else:
-		velocity = velocity.move_toward(Vector3.ZERO, ZG_DRAG * delta)
-	if velocity.length() > ZG_MAX:
-		velocity = velocity.normalized() * ZG_MAX
+		velocity = velocity.move_toward(Vector3.ZERO, zg_drag * delta)
+	if velocity.length() > zg_max:
+		velocity = velocity.normalized() * zg_max
 	move_and_slide()
 @export var acceleration: float = 14.0
 @export var gravity: float = 12.0

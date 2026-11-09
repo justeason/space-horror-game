@@ -30,11 +30,11 @@ const FILES := {
 	"Documents": [
 		{"name": "rotation_contract_summary.txt", "date": "2026-08-20", "type": "txt", "text": "ROTATION SUMMARY\nRole: Station maintenance technician\nShift: one compressed work period per station day,\n  over when the day's work is done\nMeals: eat and drink every day (galley)\nRest: mandatory between shifts\nContact: Crew Scheduling"},
 		{"name": "payslip_october.txt", "date": "2026-10-31", "type": "txt", "text": "PAYSLIP - OCTOBER\nBase rotation allowance ....... paid\nHazard supplement ............ paid\nLaundry deduction ............ 0.00\n\nThank you for your service."},
-		{"name": "handbook_eva_excerpt.txt", "date": "2026-08-22", "type": "txt", "text": "EVA - QUICK REFERENCE\n1. Suit up at the airlock locker (4.3 psi, pure O2).\n2. Cargo transfers and seal inspections must be finished.\n3. Step into the chamber, press OUT: inner hatch seals,\n   chamber vents 14.7 -> 0 psi, outer hatch opens.\n4. Tether clips to ring A1. Click a ring to move it.\n   Hold SPACE: push toward the crosshair. S: brake.\n5. Back in the chamber, press IN."},
+		{"name": "handbook_eva_excerpt.txt", "date": "2026-08-22", "type": "txt", "text": "EVA - QUICK REFERENCE\n1. Suit up at the airlock locker (4.3 psi, pure O2).\n2. Cargo transfers and seal inspections must be finished.\n3. Step into the chamber, press OUT: inner hatch seals,\n   chamber vents 14.7 -> 0 psi, outer hatch opens.\n4. Tether A is clipped to hatch ring A1.\n   W: thrust toward your aim. S: brake.\n5. Two tethers: click the next ring (free tether clips),\n   then R releases the older one. Never release the last.\n6. At a work site grab the handhold to stabilise.\n7. Back in the chamber, press IN."},
 	],
 	"Entertainment": [
 		{"name": "Cargo Drop", "date": "2026-09-12", "type": "app", "app": "game"},
-		{"name": "readme_cargo_drop.txt", "date": "2026-09-12", "type": "txt", "text": "CARGO DROP\nStack falling crates in the cargo bay.\nA full row is shipped.\nArrows / buttons move and turn, Space drops."},
+		{"name": "readme_cargo_drop.txt", "date": "2026-09-12", "type": "txt", "text": "CARGO DROP\nPack falling cargo loads into the bay.\nA full row is shipped. New, awkward loads\nappear as the level rises.\nArrows move, Up turns, Down soft-drops,\nSpace drops, P pauses."},
 	],
 }
 

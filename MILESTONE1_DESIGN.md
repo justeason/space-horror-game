@@ -9821,3 +9821,229 @@ When the shift ends, a warm glow comes on over the bunk: a wordless "go to bed" 
 - **Tether physics.** The tether is a kinematic curve, not rope physics.
 - **Walkway audit.** It checks volumes along navigation edges, not every possible player path.
 - **Existing items.** The operator stool remains walk-through furniture, and the 5 known navigation-sweep edges remain.
+
+---
+
+# Round 41 — Dual-tether EVA, solar arrays and power, solar maintenance, suit, surveillance horror, Cargo Drop
+
+## A. EVA movement (Priority 1) — `free_move_controller.gd`
+- Playtest: "too complicated". Zero-g controls are now AIM AND PUSH:
+  **W** thrusts along the camera's aim (pitch included), release = coast,
+  **S** brakes smoothly to zero. **A / D / Space / C do nothing** in
+  zero-g (Space stays the carry key and is ignored outside).
+- Feel knobs are exported (one place): `zg_accel` 0.9 m/s², `zg_max`
+  1.1 m/s, `zg_drag` 0.12 m/s² (gentle suit stabilisation while coasting),
+  `zg_brake` 1.4 m/s², `zg_turn_rate` 2.2/s (thrusting along a new aim
+  bleeds off the old sideways drift over ~1 s — no abrupt reversal).
+- No thrust while stabilised at a worksite (`work_locked`), while a
+  focused equipment panel has control (`thrust_blocked`), or while paused
+  (physics does not run). Interior WASD walking is untouched.
+- Visor strip (compact): zone chip · tether A chip · tether B chip ·
+  range bar (tightest tether) · jet chip (▲ JET / ■ BRAKE / ● HOLD) ·
+  speed bar · a motion-direction dot relative to the view · O2 · psi.
+  First-EVA key-cap hint (H re-shows): W thrust, S brake, CLICK RING clip
+  the free tether, R release the older tether. AI: "W thrusts toward your
+  aim. S brakes." then (first thrust) "Aim at your destination. Your
+  tethers limit how far you travel."
+
+## B. Dual tethers (Priority 2) — `eva_system.gd`
+- Two independent tethers, A (left hip D-ring) and B (right hip D-ring),
+  each `{ring, state, t, seq}` with its own tube cable, swivel and
+  carabiner (D body + spring gate that visibly opens / snaps).
+- Per-tether states `stowed → connecting → secured → releasing → stowed`;
+  pair state names `SECURED_A / SECURED_B / SECURED_BOTH / CONNECTING_x /
+  RELEASING_x` (`tether_state()`).
+- Rules: stepping out secures A on hatch ring A1 (clipped in the chamber
+  before the outer hatch opened). Clicking a ring in reach sends the FREE
+  tether (connect 0.55 s reach — the hand carries the hook — + 0.3 s seat
+  with latch click). A tether can be released (click its ring, or **R**
+  = release the older one) only while the OTHER one is SECURED; releasing
+  the last one is refused with a visor warning + sound. One transition at
+  a time (double clicks / duplicate hooks impossible). A connect
+  interrupted by drifting > reach + 0.7 m aborts: hook reels back, the
+  other tether never changed; retry works. Re-entering the chamber stows
+  both.
+- Constraint: each SECURED tether is an inelastic 5.5 m cable from its
+  own D-ring; outward velocity past the limit is removed and the suit eased
+  back ≤ 2 cm per physics frame. The cable is drawn taut (no sag) at the
+  limit. The old failsafe now needs > 8.5 m on the tightest tether
+  (never reached in tests).
+- Arms: the tether's own hand reaches to the ring (IK), stays while the
+  gate seats / opens, and returns.
+
+## C. Anchor graph (Priority 4) — `eva_anchor_graph.gd`
+- One shared graph (ids, positions, kinds, links, BFS `route()`):
+  A1 hatch, A2 / A3 antenna route, H1 upper hull above the hatch, T0 truss
+  at the airlock, L1 (wing root) … L3 (mid) … L5 (outer edge), R0 (hull),
+  R1 (root) … R3 (mid) … R5 (outer). Truss / wing rings sit on the
+  truss's south maintenance HANDRAIL (z −4.88, y 1.62) — never on cells.
+- Longest link 3.6 m against the 7.3 m transfer limit (5.5 tether + 1.8
+  clip reach). Tested: A1→L5→A1, A1→R5→A1, A1→A3→A1 with real transfers,
+  ≥ 1 tether secured every physics frame.
+
+## D. Solar arrays (Priority 3) — `solar_arrays.gd`
+- A truss at z −5.2 (north of the modules) carries two wings: LEFT x −8.7
+  … −25.4, RIGHT x 3.3 … 20.0 — a 45 m span against 13 m of modules.
+  Bolted to the hull by two strut pairs (Control Room and Living Quarters
+  north faces). Four longerons; battens, posts, diagonals, rail
+  standoffs, hinges and amber service lights as MultiMesh (7 draws, ~370
+  instances; ~270 nodes total). Collision: ONE static body with five
+  boxes (truss beam + four panel blankets) so a floating technician bumps
+  into the structure instead of drifting through it.
+- 16 framed 2.0 m sections per wing (both sides of the truss): dark blue
+  cells with a bus-bar grid (one shared 128 px texture), frame bars, back
+  stiffener, hinge brackets; tip spreader + blanket box; rotary joints
+  (SARJ-L / SARJ-R) with gold bands; truss / wing markings; a power
+  conduit on the truss top.
+- Visible to EXT-01 (repositioned far overview — whole vehicle) and the
+  new EXT-05 SOLAR TRUSS camera (on a short mast above the airlock
+  tunnel nose).
+
+## E. Solar power (Priority 5)
+- No second simulation: wing output = 6 kW × the faults owned by the three
+  solar tasks (`wing_factor`). Load = 5.2 kW + 0.5 kW per Bus A channel
+  step (the existing distribution panel). RESERVE (saved, 0..1, a new station starts full) charges on
+  a surplus (0.0004 /kW·s) and drains on a deficit (0.0006 /kW·s): a lost
+  wing takes most of a shift to matter.
+- Bus A voltage droops only when the reserve is < 25 % AND there is a
+  deficit; StationStatus raises an Engineering WARNING ("Solar reserve
+  low") unless a solar order already explains it. Nothing trips or
+  blacks out from solar alone. The power panel shows `SOLAR kW · LOAD ·
+  RES %` with a bar and a SOLAR button (the VERIFY OUTPUT step).
+
+## F. Solar tasks (Priority 6) — `solar_*_task.gd` (+ `solar_task_base.gd`)
+- **Coupler (wing root, ring L1/R1, order `solar_coupler`, day 11):**
+  faults loose (35 %) / degraded (55 %). Inspect window → ISOLATE (wing
+  output 0, string safe) → open LATCH → pull PLUG → (degraded: new insert)
+  → seat → close latch → re-energise → TEST continuity → back inside →
+  power panel SOLAR (verify). Latch / plug refuse while LIVE (AI:
+  "That coupler is live. Isolate the string first."); re-energise refuses
+  with the latch open or plug out.
+- **Hinge latch (mid-wing, ring L3/R3, `solar_hinge`, day 13):** variants
+  latch (open fully, then seat), fastener (3 ratchet turns), bracket
+  (release, then align). While faulted the north section sits 7° off-plane
+  (static, eased) and the wing gives 78 %. A final INSPECT of the lock
+  indicator verifies the mechanical state (order closes).
+- **Outer panel (wing tip, ring L5/R5 only, `solar_clean`, day 10):**
+  three real film patches on the outer cells + a filmed sun-sensor lens;
+  wing at (1 − 0.45 × soil), sensor under-reads 71 %. Wipe patches, wipe
+  the lens, read the sensor (99 %), get back inside (order closes).
+- Faults come from the order seed (never re-rolled; saved per task).
+  `LONG_EVA` rule: never more than one long EVA order open (antenna and
+  the three solar jobs).
+
+## G. Worksites (Priority 7)
+- `eva_system.register_worksite(id, stance, look, rings, parent, hold)`:
+  a yellow handhold bar on the truss rail (antenna: the A1 worklight
+  post). Click within 1.7 m → STABILISE: the body eases ≤ 0.6 s into the
+  stance (never a long move), thrust locks, pose WORK (knees in the foot
+  restraint, both hands forward). Click again or press W to push off.
+  Solar worksites require a SECURED tether on their ring.
+
+## H. Suit (Priority 8) — `technician_rig.gd`
+- ROOT CAUSE of the rectangle when looking down: the Round 39 chest
+  control unit was a BOX whose front face was 7.5 cm IN FRONT of the eye
+  plumb line (EYE_POINT z −0.12) — a downward look hit its flat top.
+- New suit on the same skeleton (skinned, no new bones): white fabric
+  garment (recoloured coverall), grey bearings at shoulders / elbows /
+  wrists / waist / knees / ankles, gauntlet cuffs, boot overshells, hard
+  upper-torso band, dark harness webbing with two D-rings (tether A / B),
+  rounded lofted life-support pack with service panel, O2 bottle bumps,
+  hoses and status lights, a rounded abdomen display (12 cm lower, ≤ 1.3
+  cm ahead of the eye line). Helmet (mirror / camera only): rounded shell,
+  gold visor with rim, neck seal ring, lamps, antenna stub. Tested: at
+  chest height nothing of the suit is in front of the eye line.
+
+## I. EVA animations and sound (Priority 9)
+- `player_body.set_eva_pose(pose, reach)`: idle float (arms out, soft
+  knees, slow drift), thrust (legs extend, arms trail), coast, brake
+  (knees up, arms forward), work (restraint stance, both hands to the work
+  point), reach (one arm IK to a world point; never stretched past
+  0.62 m). Weights ease at 3/s. Re-entry: the left hand grabs the outer
+  hatch frame. Watch / walk / bed poses are untouched inside.
+- Suit audio (SFX bus, so settings apply): muted breathing loop, fan hum,
+  jet hiss while thrusting, carabiner latch / click. No air-borne exterior
+  sound (the Ambient bus stays low-passed in vacuum).
+
+## J. Cameras (Priorities 10-12) — `workstation_shell.gd`, `camera_network.gd`
+- Cameras tab: left list (178 px) in INTERIOR / EXTERIOR groups with
+  rules; each row "ID  LOCATION" at a font size fitted with real font
+  metrics; active row highlighted (cyan, left bar). Right: a 436 × 280
+  feed (4:3) with only a REC/ID tag and the clock on its corners. Under
+  it: one location line and one blind-spot line, each fitted to width.
+  The UI renders into the workstation's fixed 640 × 400 SubViewport, so
+  window size / fullscreen / aspect ratio do not change its layout.
+- Operations: the duplicate camera feed and CAMERAS button are removed
+  (keyboard section → Cameras tab still works).
+- INT-02 "CORRIDOR → CONTROL" now hangs under the Junction ceiling
+  (0.3, 2.47, 5.25) looking through the corridor and the Control Room
+  doorway at the seated operator (verified by ray + frustum). Blind spot:
+  the Control Room corners beside the doorway. Curated set: INT-02, -04,
+  -05, -07, EXT-01, -02, -03, -05 (only the displayed feed renders).
+
+## K. Story events (Priorities 13-17) — `scripts/story/story_events.gd`
+- Separate from DayPlan; observes, never creates work. Phases by day:
+  1-5 "This is my job" (no events), 6-11 "Something is wrong", 12+ "I
+  don't know what reality is" (GAME_DESIGN has no day numbers; this is the
+  Round 41 mapping).
+- Each event: stable id, min_day, chance (deterministic per-day hash —
+  reloads never re-roll), cooldown_days, max_plays, live eligibility,
+  start, safe stop, saved plays / seen / last_day / armed_day. At most one
+  event armed per day; missing it costs nothing.
+- **corridor_presence** (day ≥ 7, cooldown 3, max 3): seated at the
+  workstation, Cameras tab on INT-02, watched ≥ 6 s, INT-02 also watched
+  on an EARLIER day, shift > 90 s, no emergency → a dark, faceless,
+  motionless person-shaped outline appears on INT-02 (CAMERA_ONLY layer:
+  never in the player's eyes or mirrors; no collision). Spots by play
+  (always small on the feed): just inside the doorway half hidden by the
+  west jamb, mid-room, then right behind the stool. Dim matte material. Gone the
+  instant the technician stands, turns toward the doorway, leaves the feed,
+  or after 9 s. Recorded seen if on screen ≥ 1.2 s while watched.
+- **window_mismatch** (day ≥ 9, cooldown 4, max 2): looking out of the
+  observation port ≥ 2.5 s (EXT-03 familiar from an earlier day) →
+  `observation_discrepancy` "displaced" for 40 s (tool bag by the mast in
+  the window, by the hatch on camera), then both agree again.
+- Registered, disabled foundations: hatch_handle, blind_spot_object,
+  wrong_reading, radio_contact, laptop_inconsistency. No popups, no
+  music, no AI line, no explanation, no identity.
+
+## L. Cargo Drop (Priority 18) — `cargo_drop_game.gd`
+- 10 × 15 bay, 18 original loads in four tiers (level 1: block, rods,
+  corner, ell, jay; level 2: tee, zig, zag; level 4: long ell, big tee,
+  pee, cup, rod5; level 6: eff, enn, stair, wye). Seeded manifest bag
+  (every unlocked load once per bag). Wall kicks, ghost, NEXT preview,
+  soft (+1/row) and hard (+2/row) drop, pause, restart; rows 100/300/
+  500/800 × level; level = 1 + rows/6, faster fall. Sounds on SFX.
+- Save: best score as before + an unfinished run (restored PAUSED; the
+  snapshot is validated — dimensions, values, the falling load must fit —
+  or discarded for a clean restart).
+
+## M. Save / load
+- New `r35_equipment` nodes persist automatically: SolarArrays (reserve),
+  SolarCoupler / SolarHinge / SolarClean (faults, progress, request /
+  verify days), StoryEvents (plays, seen, cooldowns, feed familiarity).
+  Tether / worksite state is never saved (saving is still refused
+  outside); a load starts inside with both tethers stowed. Old saves load
+  (missing sections keep defaults).
+
+## N. Tests
+- New: `test_r41_eva_dual_tether`, `test_r41_solar`,
+  `test_r41_story_events`, `test_r41_cargo_drop`, `test_r41_cameras_suit`.
+- Updated (requirement changes): `test_r40_eva_clarity` (staged re-clip is
+  now connect + manual release; W instead of Space; tether chips),
+  `test_r38_laptop_station` (8 curated cameras; Cargo Drop row score now
+  includes the hard-drop bonus).
+
+## O. Limitations
+- The sun is fixed (no orbital day/night on generation).
+- Tether cables are shaped curves, not rope physics.
+- The suit pack / helmet are lofted primitives, not sculpted meshes.
+- Camera labels are English only (no zh-CN for the Cameras tab).
+- The five historical MovementNode-graph clearance failures remain: each is
+  a diagonal authoring edge that clips a doorway corner by a few cm
+  (CommsTunnelANorthWall, CommsEastWallSouth / AlcoveSouthWall,
+  JunctionEastWallNorth, EngineeringTunnelSouthWall,
+  StorageConnectorANorthWall). Free movement passes these doorways; the
+  graph was not re-authored this round (other tests depend on it).
+- Outside, the sun also lights the mirror/camera-only helmet layer (the
+  helmet rendered black on cameras before).

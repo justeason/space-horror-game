@@ -19,7 +19,9 @@ func _init() -> void:
 
 	var cams := {
 		"CameraControlRoom": Vector3(0.7071068, 0, 0.7071068),
-		"CameraCorridor": Vector3(0, 0, 1),
+		# Round 41 (owner request): the corridor camera now looks FROM the
+		# Junction TOWARD the Control Room (-Z), deliberately repointed.
+		"CameraCorridor": Vector3(0, 0, -1),
 		"CameraCorridorEnd": Vector3(0, 0, -1),
 	}
 

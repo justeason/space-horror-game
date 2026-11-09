@@ -36,6 +36,13 @@ var _lamps: Array = []
 var _status: Array = []
 var _meter: Label3D
 var _hint: Label3D
+var _solar: Label3D
+var _solar_bar: CSGBox3D
+var _solar_bar_bg: CSGBox3D
+
+
+func _arrays() -> Node:
+	return get_tree().get_first_node_in_group(&"solar_arrays") if is_inside_tree() else null
 
 
 func _ready() -> void:
@@ -59,6 +66,17 @@ func _ready() -> void:
 		label("-", Vector3(x + 0.04, -0.06, 0.022), 16, Color(0.1, 0.1, 0.1))
 		part(StringName("dn%d" % i), Vector3(0.06, 0.045, 0.05), Vector3(x + 0.04, -0.06, 0.02))
 	_hint = label("", Vector3(0, -0.23, 0.006), 12, Color(0.7, 0.75, 0.75))
+	# Round 41: the solar arrays feed Bus A -- one more readout line and a
+	# SOLAR check button (the VERIFY OUTPUT step of the solar orders).
+	# (Inside the panel face, between the channel status row and the
+	# STABLE hint -- below the panel sits the thermal terminal block.)
+	_solar = label("", Vector3(-0.06, -0.172, 0.006), 13, Color(0.6, 0.85, 1.0))
+	_solar_bar_bg = box(Vector3(0.36, 0.014, 0.008), Vector3(-0.06, -0.197, 0.0), Color(0.05, 0.06, 0.07))
+	_solar_bar = box(Vector3(0.36, 0.012, 0.01), Vector3(-0.06, -0.197, 0.003), Color(0.4, 0.75, 1.0))
+	box(Vector3(0.1, 0.045, 0.02), Vector3(0.235, -0.185, 0.0), Color(0.2, 0.4, 0.6))
+	label("SOLAR", Vector3(0.235, -0.185, 0.012), 12, Color(0.95, 0.95, 0.9))
+	part(&"solar", Vector3(0.11, 0.055, 0.05), Vector3(0.235, -0.185, 0.01))
+	_hint.position.y = -0.255
 	_refresh()
 
 
@@ -110,7 +128,11 @@ func bus_voltage() -> float:
 	var dev := 0
 	for i in CHANNELS.size():
 		dev += absi(int(setting[i]) - int(demand[i]))
-	return 28.0 - 0.6 * dev - (1.0 if is_overloaded() else 0.0)
+	var droop: float = 0.0
+	var sa: Node = _arrays()
+	if sa != null:
+		droop = sa.bus_droop()     # Round 41: only a low reserve + deficit
+	return 28.0 - 0.6 * dev - (1.0 if is_overloaded() else 0.0) - droop
 
 
 func channel_state(i: int) -> String:
@@ -131,6 +153,12 @@ func fan_factor() -> float:
 
 
 func on_part(id: StringName) -> void:
+	if id == &"solar":
+		sfx(&"click")
+		var sa: Node = _arrays()
+		say(sa.readout() if sa != null else "No solar data.", 5.0)
+		get_tree().call_group(&"solar_task", &"on_output_checked")
+		return
 	var s := String(id)
 	var i: int = int(s.substr(s.length() - 1))
 	var up: bool = s.begins_with("up")
@@ -146,6 +174,8 @@ func on_part(id: StringName) -> void:
 
 
 func part_prompt(id: StringName) -> String:
+	if id == &"solar":
+		return "Click: check solar output"
 	var s := String(id)
 	var i: int = int(s.substr(s.length() - 1))
 	return "Click: %s %s (now %d)" % ["Raise" if s.begins_with("up") else "Lower", CHANNELS[i], int(setting[i])]
@@ -174,6 +204,13 @@ func _refresh() -> void:
 		else:
 			txt = "%d" % int(setting[i])
 		(_status[i] as Label3D).text = txt
+	var sa: Node = _arrays()
+	if sa != null and _solar != null:
+		_solar.text = "SOLAR %.1f kW  LOAD %.1f  RES %d%%" % [sa.generation(), sa.load_kw(), roundi(sa.reserve * 100.0)]
+		_solar.modulate = Color(0.6, 0.85, 1.0) if sa.margin() >= 0.0 else (Color(1.0, 0.35, 0.25) if sa.reserve_low() else Color(1.0, 0.75, 0.3))
+		var f: float = clampf(sa.generation() / (2.0 * sa.WING_KW), 0.02, 1.0)
+		_solar_bar.size.x = 0.36 * f
+		_solar_bar.position.x = -0.24 + _solar_bar.size.x * 0.5
 	_hint.text = "STABLE" if verified else ("Stabilising %.0f s" % maxf(VERIFY_S - _stable_s, 0.0) if balanced() else "Adjust channels to demand")
 
 

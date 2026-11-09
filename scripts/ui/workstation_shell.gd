@@ -27,7 +27,7 @@ var dp: Node
 var page: int = Page.OPS
 var selected_room: StringName = &"control_room"
 var selected_duty: int = -1
-var ops_panel: String = ""  # "" | "diag" | "camera"
+var ops_panel: String = ""  # "" | "diag"
 var room_buttons: Dictionary = {}   # room -> Button
 var duty_buttons: Array = []
 var tab_buttons: Array = []
@@ -43,7 +43,6 @@ var _duty_box: VBoxContainer
 var _detail: Label
 var _footer: Label
 var _diag: Label
-var _cam: TextureRect
 var _records: Label
 var _sys_status: Label
 var _save_info: Label
@@ -203,19 +202,12 @@ func _build_ops() -> void:
 	dsb.set_content_margin_all(6)
 	_diag.add_theme_stylebox_override("normal", dsb)
 	_diag.visible = false
-	_cam = TextureRect.new()
-	_cam.position = Vector2(8, 4)
-	_cam.size = Vector2(380, 250)
-	_cam.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_cam.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_cam.visible = false
-	_cam.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	p.add_child(_cam)
+	# Round 41: the Operations page no longer carries a camera feed or a
+	# CAMERAS button (both duplicated the dedicated Cameras tab).
 	# Day actions.
 	action_buttons["checkin"] = _btn("CHECK IN", Vector2(8, 262), Vector2(120, 30), p, func(): screen._run_c01(); refresh(), 13)
 	action_buttons["verify"] = _btn("VERIFY REPAIR", Vector2(134, 262), Vector2(128, 30), p, func(): screen._run_verify(); refresh(), 12)
 	action_buttons["diag"] = _btn("DIAGNOSTIC", Vector2(268, 262), Vector2(118, 30), p, toggle_diag, 12)
-	action_buttons["camera"] = _btn("CAMERAS", Vector2(392, 262), Vector2(100, 30), p, func(): show_page(Page.CAMERAS), 12)
 	_footer = _lbl("", Vector2(10, 298), Vector2(620, 36), p, 11, Color(0.6, 0.68, 0.68))
 
 
@@ -248,44 +240,97 @@ func toggle_camera() -> void:
 
 
 # ---------------------------------------------------------------- CAMERAS
-## Round 38: the dedicated surveillance tab. Click a camera (interior /
-## exterior), see its LIVE feed (rendered only while shown), its id,
-## location, blind spot, and where it sits on a small station plan.
+## Round 38 dedicated surveillance tab; Round 41 LAYOUT (playtest: text
+## overlapped, spacing uneven, feed details crowded):
+##   LEFT  (x 8-186)   camera list in two separated groups, INTERIOR and
+##                     EXTERIOR; each row = compact ID + short location,
+##                     font fitted to the row with real font metrics;
+##                     the active camera is highlighted;
+##   RIGHT (x 194-632) a LARGE live feed (kept 4:3), with only a small
+##                     REC/ID tag and the clock drawn ON the feed corners;
+##   BOTTOM (under the feed) ONE line: location; ONE line: blind spot --
+##                     each fitted to its width (never wrapping into the
+##                     next control), plus a tiny plan of the camera.
 var cam_buttons: Dictionary = {}
 var selected_cam: String = "INT-02"
 var _feed: TextureRect
-var _cam_info: Label
+var _feed_frame: Panel
+var _feed_tag: Label
+var _feed_clock: Label
+var _cam_info: Label            # line 1: id · location
+var _cam_blind: Label           # line 2: blind spot
 var _plan: Control
+var _cam_page: Control
+const CAM_LIST_W := 178.0
+const FEED_RECT := Rect2(194, 2, 438, 282)
 
 
 func _net() -> Node:
 	return dp.get_parent().get_node_or_null("CameraNetwork") if dp != null and dp.get_parent() != null else null
 
 
+## Largest font size <= max_size at which `text` fits `width` (real metrics).
+static func fit_font_size(text: String, width: float, max_size: int, min_size: int = 8) -> int:
+	var f: Font = ThemeDB.fallback_font
+	for sz in range(max_size, min_size - 1, -1):
+		if f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, sz).x <= width:
+			return sz
+	return min_size
+
+
+static func text_width(text: String, size: int) -> float:
+	return ThemeDB.fallback_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+
+
 func _build_cameras() -> void:
 	var p: Control = _pages[Page.CAMERAS]
-	var net: Node = _net()
-	_lbl("INTERIOR", Vector2(10, 2), Vector2(90, 16), p, 10, Color(0.85, 0.75, 0.45))
 	_cam_page = p
-	_build_cam_buttons()
+	_feed_frame = Panel.new()
+	_feed_frame.position = FEED_RECT.position
+	_feed_frame.size = FEED_RECT.size
+	_feed_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var fsb := StyleBoxFlat.new()
+	fsb.bg_color = Color(0.0, 0.0, 0.0)
+	fsb.border_color = Color(0.25, 0.32, 0.34)
+	fsb.set_border_width_all(1)
+	_feed_frame.add_theme_stylebox_override("panel", fsb)
+	p.add_child(_feed_frame)
 	_feed = TextureRect.new()
-	_feed.position = Vector2(212, 4)
-	_feed.size = Vector2(420, 262)
+	_feed.position = FEED_RECT.position + Vector2(1, 1)
+	_feed.size = FEED_RECT.size - Vector2(2, 2)
 	_feed.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_feed.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_feed.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	p.add_child(_feed)
-	_cam_info = _lbl("", Vector2(214, 266), Vector2(302, 44), p, 10, Color(0.8, 0.92, 0.88))
+	# Corner tags on the feed (small, outlined, never over the list).
+	_feed_tag = _feed_corner_label(p, Vector2(FEED_RECT.position.x + 52, FEED_RECT.position.y + 6), HORIZONTAL_ALIGNMENT_LEFT)
+	_feed_clock = _feed_corner_label(p, Vector2(FEED_RECT.end.x - 52 - 110, FEED_RECT.position.y + 6), HORIZONTAL_ALIGNMENT_RIGHT)
+	_cam_info = _lbl("", Vector2(196, 288), Vector2(340, 18), p, 12, Color(0.88, 0.95, 0.92))
+	_cam_info.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_cam_blind = _lbl("", Vector2(196, 310), Vector2(340, 18), p, 10, Color(0.62, 0.72, 0.7))
+	_cam_blind.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_plan = Control.new()
-	_plan.position = Vector2(520, 270)
-	_plan.size = Vector2(112, 64)
+	_plan.position = Vector2(548, 288)
+	_plan.size = Vector2(84, 46)
 	_plan.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_plan.draw.connect(_draw_plan)
 	p.add_child(_plan)
-	action_buttons["back_to_map"] = _btn("< MAP", Vector2(212, 312), Vector2(70, 22), p, func(): show_page(Page.OPS), 11)
+	action_buttons["back_to_map"] = _btn("< MAP", Vector2(8, 306), Vector2(CAM_LIST_W, 26), p, func(): show_page(Page.OPS), 11)
+	_build_cam_buttons()
 
 
-var _cam_page: Control
+func _feed_corner_label(p: Control, pos: Vector2, align: int) -> Label:
+	var l := Label.new()
+	l.position = pos
+	l.size = Vector2(110, 16)
+	l.horizontal_alignment = align
+	l.add_theme_font_size_override("font_size", 11)
+	l.add_theme_color_override("font_color", Color(0.95, 0.97, 0.95))
+	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	l.add_theme_constant_override("outline_size", 4)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_child(l)
+	return l
 
 
 ## Built when the network exists (it is created after the workstation).
@@ -295,23 +340,45 @@ func _build_cam_buttons() -> void:
 		return
 	var p: Control = _cam_page
 	var ids: Array = net.ids()
-	var ni := 0
-	var ne := 0
-	# Round 39: curated set -- the EXTERIOR group follows the interior list.
-	var n_int: int = ids.filter(func(i): return not String(i).begins_with("EXT")).size()
-	var ext_y: float = 20.0 + n_int * 26.0 + 14.0
-	_lbl("EXTERIOR", Vector2(10, ext_y - 18.0), Vector2(90, 16), p, 10, Color(0.85, 0.75, 0.45))
-	for id in ids:
-		var ext: bool = String(id).begins_with("EXT")
-		var y: float = (ext_y + ne * 30) if ext else (20 + ni * 26)
-		var b := _btn("%s %s" % [id, net.info(id)["label"]], Vector2(8, y), Vector2(196, 24 if not ext else 26), p, select_camera.bind(id), 10)
-		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		b.toggle_mode = true
-		cam_buttons[id] = b
-		if ext:
-			ne += 1
-		else:
-			ni += 1
+	if ids.is_empty():
+		return                      # the network has not built its cameras yet
+	var y: float = 2.0
+	for group in [["INTERIOR", false], ["EXTERIOR", true]]:
+		var head := _lbl(group[0], Vector2(10, y), Vector2(CAM_LIST_W - 4, 15), p, 10, Color(0.85, 0.75, 0.45))
+		head.name = "Group" + group[0]
+		head.autowrap_mode = TextServer.AUTOWRAP_OFF
+		var hh: float = maxf(head.get_combined_minimum_size().y, 15.0)
+		head.size = Vector2(CAM_LIST_W - 4, hh)
+		var rule := ColorRect.new()
+		rule.color = Color(0.85, 0.75, 0.45, 0.35)
+		rule.position = Vector2(10, y + hh)
+		rule.size = Vector2(CAM_LIST_W - 4, 1)
+		rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		p.add_child(rule)
+		y += hh + 3.0
+		for id in ids:
+			if String(id).begins_with("EXT") != group[1]:
+				continue
+			var text: String = "%s  %s" % [id, net.info(id)["label"]]
+			var fs: int = fit_font_size(text, CAM_LIST_W - 16.0, 11, 8)
+			var b := _btn(text, Vector2(8, y), Vector2(CAM_LIST_W, 24), p, select_camera.bind(id), fs)
+			b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			b.toggle_mode = true
+			b.clip_text = true
+			b.size = Vector2(CAM_LIST_W, 24)     # re-apply after clipping (no text-driven growth)
+			b.set_meta("font_px", fs)
+			var sel := StyleBoxFlat.new()
+			sel.bg_color = Color(0.16, 0.42, 0.48)
+			sel.border_color = Color(0.6, 0.95, 1.0)
+			sel.set_border_width_all(1)
+			sel.border_width_left = 4
+			sel.set_content_margin_all(4)
+			b.add_theme_stylebox_override("pressed", sel)
+			b.add_theme_stylebox_override("hover_pressed", sel)
+			b.size = Vector2(CAM_LIST_W, 24)
+			cam_buttons[id] = b
+			y += 26.0
+		y += 8.0
 
 
 func select_camera(id: String) -> void:
@@ -329,10 +396,18 @@ func _refresh_cameras() -> void:
 	# Round 39: a shown feed counts as LOOKING at it (lens-grime check).
 	if page == Page.CAMERAS and is_inside_tree():
 		get_tree().call_group(&"lens_task", &"on_feed_viewed", selected_cam)
+		get_tree().call_group(&"story_events", &"on_feed_viewed", selected_cam)
 	var inf: Dictionary = net.info(selected_cam)
 	_feed.texture = net.feed(selected_cam)
 	var tsec: int = int(dp.shift_elapsed_s)
-	_cam_info.text = "%s · %s   LIVE %02d:%02d\nBlind spot: %s" % [selected_cam, inf.get("label", ""), tsec / 60, tsec % 60, inf.get("blind", "-")]
+	_feed_tag.text = "● REC  %s" % selected_cam
+	_feed_clock.text = "%02d:%02d" % [tsec / 60, tsec % 60]
+	var line1: String = "%s · %s" % [selected_cam, String(inf.get("label", ""))]
+	var line2: String = "Blind spot: %s" % String(inf.get("blind", "-"))
+	_cam_info.text = line1
+	_cam_info.add_theme_font_size_override("font_size", fit_font_size(line1, _cam_info.size.x, 12, 9))
+	_cam_blind.text = line2
+	_cam_blind.add_theme_font_size_override("font_size", fit_font_size(line2, _cam_blind.size.x, 10, 8))
 	_plan.queue_redraw()
 
 
@@ -355,6 +430,7 @@ func _draw_plan() -> void:
 	var cam: Camera3D = net.camera(selected_cam)
 	if cam != null:
 		var cp: Vector2 = w2p.call(cam.global_position)
+		cp = cp.clamp(Vector2(3, 3), _plan.size - Vector2(3, 3))
 		var fwd: Vector3 = -cam.global_transform.basis.z
 		var tip: Vector2 = cp + Vector2(fwd.x, fwd.z).normalized() * 10.0
 		_plan.draw_line(cp, tip, Color(1.0, 0.8, 0.3), 2.0)
@@ -449,7 +525,6 @@ func _refresh_ops() -> void:
 	_diag.visible = ops_panel == "diag"
 	if _diag.visible:
 		_diag.text = screen._diagnostics_status.text
-	_cam.visible = false
 	_map.visible = true
 	# Footer: the single most urgent duty on the station (same model).
 	var all_d: Array = st.duties() if st != null else []

@@ -160,7 +160,14 @@ func _loft(s: Surf, rings: Array, sides: int, cap_start := true, cap_end := true
 	for r in rings:
 		for i in sides:
 			var a: float = TAU * float(i) / sides
-			var p: Vector3 = r.c + r.x * (cos(a) * r.rx) + r.z * (sin(a) * r.rz)
+			var ca: float = cos(a)
+			var sa: float = sin(a)
+			if r.has("n"):
+				# Round 41: optional superellipse ring (rounded rectangle).
+				var e: float = 2.0 / float(r["n"])
+				ca = signf(ca) * pow(absf(ca), e)
+				sa = signf(sa) * pow(absf(sa), e)
+			var p: Vector3 = r.c + r.x * (ca * r.rx) + r.z * (sa * r.rz)
 			s.vert(p, r.w)
 	for ri in range(rings.size() - 1):
 		for i in sides:
@@ -808,11 +815,29 @@ func pose_leg_ik(side: String, ankle_target: Vector3) -> void:
 
 
 # ======================================================================
-# Round 39 Priority 6D: the EVA SUIT on the same rig -- white pressure
-# garment (the coverall / gloves / boots recoloured), a life-support PACK
-# on the back, a chest control unit, and a bubble HELMET with a gold sun
-# visor over the head. The helmet is MIRROR_ONLY like the head (never in
-# the wearer's own view); the pack and chest unit are ordinary geometry.
+# Round 39 Priority 6D / Round 41 Priority 8: the EVA SUIT on the same rig.
+# Round 41 ROOT CAUSE of "a rectangular block at the bottom of the view
+# when looking down in EVA": the Round 39 chest control unit was a BOX
+# (0.20 x 0.12 x 0.07 m) whose front face sat at z -0.195 -- 7.5 cm IN
+# FRONT of the eye plumb line (EYE_POINT z -0.12), so a downward look hit
+# its flat top face right under the camera. (The pack, also a box, was
+# behind the eye and never in view.) Now every suit part is shaped and
+# nothing protrudes in front of the chest more than the low-profile
+# display on the ABDOMEN (12 cm lower, rounded, 1.3 cm ahead of the eye
+# line -- what a real suited technician sees looking down).
+# Parts (all on the existing skeleton, skinned, no new bones):
+#   garment  -- the coverall recoloured to white thermal fabric, gloves /
+#               boots recoloured; grey joint bearings at shoulders, elbows,
+#               wrists, waist, knees and ankles; gauntlet cuffs; boot
+#               overshells; a hard upper-torso band with seams;
+#   harness  -- dark webbing at the waist with TWO tether D-rings (left =
+#               tether A, right = tether B: tether_point(k));
+#   pack     -- a rounded life-support backpack (lofted, bevelled), a
+#               darker service panel, O2 bottle bumps, status lights;
+#   abdomen  -- a rounded display & control module;
+#   helmet   -- (mirror / camera only, like the head) a rounded pressure
+#               shell, a gold visor with a visor rim, a neck seal ring,
+#               helmet lamps and a comms antenna stub.
 # ======================================================================
 const SUIT_WHITE := Color(0.88, 0.88, 0.85)
 const SUIT_GLOVE := Color(0.78, 0.78, 0.76)
@@ -821,6 +846,9 @@ const SUIT_STRIPE := Color(0.9, 0.42, 0.1)
 var suit_on: bool = false
 var _suit_body: MeshInstance3D
 var _suit_helmet: MeshInstance3D
+var _suit_attach: Array = []      # BoneAttachment3D hardware (D-rings, lights)
+## Tether D-ring offsets in Hips-bone space (A = left hip, B = right hip).
+const TETHER_RING_OFS := [Vector3(-0.168, 0.0, -0.045), Vector3(0.168, 0.0, -0.045)]
 
 
 func set_eva_suit(on: bool) -> void:
@@ -835,10 +863,27 @@ func set_eva_suit(on: bool) -> void:
 	if _suit_body != null:
 		_suit_body.visible = on
 		_suit_helmet.visible = on
+		for n in _suit_attach:
+			(n as Node3D).visible = on
+
+
+## Tether k's D-ring on the harness, in rig (skeleton) space.
+func tether_point(k: int) -> Vector3:
+	return bone_pos("Hips") + bone_basis("Hips") * (TETHER_RING_OFS[clampi(k, 0, 1)] as Vector3)
+
+
+func _band(s: Surf, c: Vector3, axis: Vector3, lat: Vector3, rx: float, rz: float, h: float, w: Dictionary, sides: int = 16) -> void:
+	var ax: Vector3 = axis.normalized()
+	_loft(s, [
+		_ring(c - ax * h * 0.5, ax, lat, rx * 0.97, rz * 0.97, w),
+		_ring(c - ax * h * 0.25, ax, lat, rx, rz, w),
+		_ring(c + ax * h * 0.25, ax, lat, rx, rz, w),
+		_ring(c + ax * h * 0.5, ax, lat, rx * 0.97, rz * 0.97, w),
+	], sides, false, false)
 
 
 func _build_suit() -> void:
-	for pair in [["suit_pack", Color(0.82, 0.82, 0.8), 0.7, 0.1], ["suit_dark", Color(0.2, 0.21, 0.23), 0.5, 0.4], ["suit_shell", Color(0.92, 0.92, 0.9), 0.35, 0.05], ["suit_visor", Color(0.85, 0.62, 0.18), 0.08, 0.95]]:
+	for pair in [["suit_pack", Color(0.86, 0.86, 0.83), 0.75, 0.05], ["suit_dark", Color(0.16, 0.17, 0.19), 0.6, 0.2], ["suit_grey", Color(0.55, 0.57, 0.6), 0.45, 0.35], ["suit_shell", Color(0.92, 0.92, 0.9), 0.3, 0.05], ["suit_visor", Color(0.85, 0.62, 0.18), 0.06, 0.95], ["suit_metal", Color(0.72, 0.73, 0.75), 0.3, 0.85]]:
 		var m := StandardMaterial3D.new()
 		m.albedo_color = pair[1]
 		m.roughness = pair[2]
@@ -846,32 +891,169 @@ func _build_suit() -> void:
 		_mats[pair[0]] = m
 	var pack := Surf.new()
 	var dark := Surf.new()
+	var grey := Surf.new()
+	var metal := Surf.new()
 	var uc := _w({"UpperChest": 0.7, "Chest": 0.3})
-	# Life-support pack on the back (+z is behind the technician).
-	_box(pack, Vector3(0, 1.22, 0.2), Vector3(0.36, 0.5, 0.16), uc)
-	_box(dark, Vector3(0, 1.22, 0.285), Vector3(0.28, 0.38, 0.015), uc)
-	_box(dark, Vector3(-0.13, 1.5, 0.2), Vector3(0.05, 0.08, 0.05), uc)
-	# Chest display / control unit (visible when looking down).
-	_box(pack, Vector3(0, 1.2, -0.16), Vector3(0.2, 0.12, 0.07), _w({"Chest": 1.0}))
-	_box(dark, Vector3(0, 1.21, -0.197), Vector3(0.14, 0.06, 0.005), _w({"Chest": 1.0}))
+	# --- Life-support pack: a rounded-RECTANGLE body (superellipse rings
+	# along the back axis), bevelled front and back edges.
+	var pz := 0.205
+	var sq := func(c: Vector3, rx: float, ry: float) -> Dictionary:
+		var r: Dictionary = _ring(c, Vector3.BACK, Vector3.RIGHT, rx, ry, uc)
+		r["n"] = 5.0
+		return r
+	_loft(pack, [
+		sq.call(Vector3(0, 1.21, pz - 0.075), 0.15, 0.23),
+		sq.call(Vector3(0, 1.21, pz - 0.05), 0.18, 0.27),
+		sq.call(Vector3(0, 1.21, pz + 0.05), 0.18, 0.27),
+		sq.call(Vector3(0, 1.21, pz + 0.078), 0.155, 0.24),
+	], 32)
+	# Service panel: a slightly proud, mid-grey inset plate (not a dark hole).
+	_loft(grey, [
+		sq.call(Vector3(0, 1.13, pz + 0.077), 0.1, 0.07),
+		sq.call(Vector3(0, 1.13, pz + 0.084), 0.095, 0.065),
+	], 24)
+	# O2 bottle tops and a top handle bar.
+	for sx in [-0.1, 0.1]:
+		_ellipsoid(grey, Vector3(sx, 1.42, pz), Vector3(0.04, 0.035, 0.04), uc, 8, 12)
+	_loft(dark, [
+		_ring(Vector3(-0.09, 1.465, pz + 0.02), Vector3.RIGHT, Vector3.UP, 0.012, 0.012, uc),
+		_ring(Vector3(0.09, 1.465, pz + 0.02), Vector3.RIGHT, Vector3.UP, 0.012, 0.012, uc),
+	], 8)
+	# Pressure fittings / hoses from the pack to the front at the waist.
+	for sx in [-1.0, 1.0]:
+		_loft(dark, [
+			_ring(Vector3(sx * 0.17, 1.12, pz - 0.02), Vector3(sx * 0.2, -0.3, -1.0), Vector3.UP, 0.016, 0.016, uc),
+			_ring(Vector3(sx * 0.165, 1.04, 0.0), Vector3(0.0, -0.3, -1.0), Vector3.UP, 0.016, 0.016, _w({"Spine": 0.6, "Chest": 0.4})),
+		], 8)
+	# --- Hard upper-torso band with seams (2-3 mm proud of the fabric; the
+	# front never moves past the coverall's chest front + 3 mm).
+	_band(grey, Vector3(0, 1.395, 0.012), Vector3.UP, Vector3.RIGHT, 0.148, 0.098, 0.022, _w({"UpperChest": 1.0}), 24)
+	_band(grey, Vector3(0, 1.165, 0.0), Vector3.UP, Vector3.RIGHT, 0.164, 0.106, 0.012, _w({"Chest": 0.6, "Spine": 0.4}), 24)
+	# Waist bearing + harness webbing.
+	_band(grey, Vector3(0, 1.005, 0.003), Vector3.UP, Vector3.RIGHT, 0.155, 0.108, 0.03, _w({"Hips": 0.5, "Spine": 0.5}), 24)
+	_band(dark, Vector3(0, 0.95, 0.008), Vector3.UP, Vector3.RIGHT, 0.165, 0.121, 0.04, _w({"Hips": 1.0}), 24)
+	# Shoulder bearings, elbow / wrist bearings and gauntlet cuffs.
+	for side in [1.0, -1.0]:
+		var pre: String = "Right" if side > 0 else "Left"
+		var sh: Vector3 = _rest[pre + "UpperArm"]
+		var el: Vector3 = _rest[pre + "LowerArm"]
+		var wr: Vector3 = _rest[pre + "Hand"]
+		_band(grey, sh + Vector3(side * 0.01, -0.035, 0), Vector3.DOWN, Vector3(0, 0, 1), 0.064, 0.062, 0.03, _w({pre + "UpperArm": 0.7, "UpperChest": 0.3}))
+		_band(grey, el, el - sh, Vector3(side, 0, 0), 0.05, 0.049, 0.035, _w({pre + "UpperArm": 0.5, pre + "LowerArm": 0.5}))
+		_band(metal, wr + Vector3(0, 0.035, 0), wr - el, Vector3(side, 0, 0), 0.042, 0.04, 0.016, _w({pre + "LowerArm": 1.0}))
+		_loft(grey, [
+			_ring(wr + Vector3(0, 0.022, 0), wr - el, Vector3(side, 0, 0), 0.04, 0.038, _w({pre + "LowerArm": 0.7, pre + "Hand": 0.3})),
+			_ring(wr + Vector3(0, -0.012, 0), wr - el, Vector3(side, 0, 0), 0.036, 0.03, _w({pre + "Hand": 1.0})),
+		], 14, false, false)
+		# Knee / ankle bearings and a boot overshell.
+		var hp: Vector3 = _rest[pre + "UpperLeg"]
+		var kn: Vector3 = _rest[pre + "LowerLeg"]
+		var an: Vector3 = _rest[pre + "Foot"]
+		_band(grey, kn + Vector3(0, 0.005, -0.004), kn - hp, Vector3(side, 0, 0), 0.07, 0.076, 0.04, _w({pre + "UpperLeg": 0.5, pre + "LowerLeg": 0.5}))
+		_band(grey, an + Vector3(0, 0.13, 0), an - kn, Vector3(side, 0, 0), 0.056, 0.06, 0.03, _w({pre + "LowerLeg": 1.0}))
+		_loft(grey, [
+			_ring(Vector3(an.x, 0.03, an.z + 0.085), Vector3.FORWARD, Vector3.RIGHT, 0.052, 0.028, _w({pre + "Foot": 1.0})),
+			_ring(Vector3(an.x, 0.03, an.z - 0.05), Vector3.FORWARD, Vector3.RIGHT, 0.058, 0.03, _w({pre + "Foot": 0.6, pre + "Toes": 0.4})),
+			_ring(Vector3(an.x, 0.026, an.z - 0.19), Vector3.FORWARD, Vector3.RIGHT, 0.034, 0.024, _w({pre + "Toes": 1.0})),
+		], 12)
+	# --- Display & control module on the ABDOMEN (rounded, low profile).
+	var abd := _w({"Spine": 0.6, "Chest": 0.4})
+	_ellipsoid(pack, Vector3(0, 1.085, -0.098), Vector3(0.085, 0.045, 0.034), abd, 8, 16)
+	_ellipsoid(dark, Vector3(0, 1.09, -0.124), Vector3(0.06, 0.026, 0.01), abd, 6, 14)
 	_suit_body = MeshInstance3D.new()
 	_suit_body.name = "SuitMesh"
-	_suit_body.mesh = _commit([[pack, "suit_pack"], [dark, "suit_dark"]])
+	_suit_body.mesh = _commit([[pack, "suit_pack"], [dark, "suit_dark"], [grey, "suit_grey"], [metal, "suit_metal"]])
 	skeleton.add_child(_suit_body)
 	_suit_body.skeleton = NodePath("..")
 	_suit_body.skin = skeleton.create_skin_from_rest_transforms()
+	# --- Hardware on bone attachments: tether D-rings + pack status lights.
+	var hips := BoneAttachment3D.new()
+	hips.name = "SuitHarness"
+	hips.bone_name = "Hips"
+	skeleton.add_child(hips)
+	_suit_attach.append(hips)
+	for k in 2:
+		var ofs: Vector3 = TETHER_RING_OFS[k]
+		var plate := MeshInstance3D.new()
+		var pm := BoxMesh.new()
+		pm.size = Vector3(0.03, 0.045, 0.02)
+		plate.mesh = pm
+		plate.material_override = _mats["suit_dark"]
+		plate.position = ofs + Vector3(0, 0, 0.012)      # bone-head space
+		hips.add_child(plate)
+		var ring := MeshInstance3D.new()
+		var tm := TorusMesh.new()
+		tm.inner_radius = 0.012
+		tm.outer_radius = 0.02
+		ring.mesh = tm
+		ring.material_override = _mats["suit_metal"]
+		ring.position = ofs + Vector3(0, -0.012, -0.004)
+		ring.rotation_degrees = Vector3(0, 0, 90)
+		ring.name = "TetherRing%s" % ["A", "B"][k]
+		hips.add_child(ring)
+	var chest := BoneAttachment3D.new()
+	chest.name = "SuitPackLights"
+	chest.bone_name = "UpperChest"
+	skeleton.add_child(chest)
+	_suit_attach.append(chest)
+	for k in 3:
+		var lamp := MeshInstance3D.new()
+		var sm := SphereMesh.new()
+		sm.radius = 0.008
+		sm.height = 0.016
+		lamp.mesh = sm
+		var lm := StandardMaterial3D.new()
+		var c: Color = [Color(0.3, 1.0, 0.4), Color(0.3, 1.0, 0.4), Color(1.0, 0.7, 0.2)][k]
+		lm.albedo_color = c
+		lm.emission_enabled = true
+		lm.emission = c * 1.6
+		lamp.material_override = lm
+		lamp.position = Vector3(0.14, 1.36 - k * 0.035, pz + 0.08) - (_rest["UpperChest"] as Vector3)   # a column at the pack's upper right corner
+		chest.add_child(lamp)
+	# Abdomen display glow (a few lit segments).
+	var spine := BoneAttachment3D.new()
+	spine.name = "SuitDisplay"
+	spine.bone_name = "Spine"
+	skeleton.add_child(spine)
+	_suit_attach.append(spine)
+	var disp := MeshInstance3D.new()
+	var dm := BoxMesh.new()
+	dm.size = Vector3(0.07, 0.018, 0.002)
+	disp.mesh = dm
+	var dmm := StandardMaterial3D.new()
+	dmm.albedo_color = Color(0.2, 0.6, 0.5)
+	dmm.emission_enabled = true
+	dmm.emission = Color(0.25, 0.9, 0.7) * 0.8
+	disp.material_override = dmm
+	disp.position = Vector3(0, 1.093, -0.1345) - (_rest["Spine"] as Vector3)
+	disp.rotation_degrees.x = -30.0
+	spine.add_child(disp)
+	# --- Helmet (mirror / camera only): rounded pressure shell, gold
+	# visor + rim, neck seal ring, lamps and an antenna stub.
 	var shell := Surf.new()
 	var visor := Surf.new()
+	var hgrey := Surf.new()
 	var hw := _w({"Head": 1.0})
-	_ellipsoid(shell, Vector3(0, 1.6, -0.01), Vector3(0.165, 0.175, 0.17), hw, 16, 24)
-	_ellipsoid(visor, Vector3(0, 1.6, -0.075), Vector3(0.135, 0.11, 0.115), hw, 12, 22)
+	_ellipsoid(shell, Vector3(0, 1.61, -0.005), Vector3(0.17, 0.18, 0.175), hw, 18, 28)
+	_ellipsoid(visor, Vector3(0, 1.6, -0.07), Vector3(0.142, 0.118, 0.122), hw, 14, 26)
+	# Visor rim: a band around the visor opening (axis = forward).
+	_band(hgrey, Vector3(0, 1.6, -0.118), Vector3.FORWARD, Vector3.RIGHT, 0.148, 0.124, 0.02, hw, 28)
+	# Neck seal / helmet ring.
+	_band(hgrey, Vector3(0, 1.445, 0.018), Vector3.UP, Vector3.RIGHT, 0.14, 0.13, 0.035, _w({"UpperChest": 0.6, "Neck": 0.4}), 24)
 	_loft(shell, [
 		_ring(Vector3(0, 1.43, 0.02), Vector3.UP, Vector3.RIGHT, 0.13, 0.12, _w({"UpperChest": 1.0})),
 		_ring(Vector3(0, 1.47, 0.015), Vector3.UP, Vector3.RIGHT, 0.125, 0.12, _w({"Neck": 0.5, "UpperChest": 0.5})),
 	], 20)
+	for side in [1.0, -1.0]:
+		_ellipsoid(hgrey, Vector3(side * 0.158, 1.68, -0.02), Vector3(0.022, 0.03, 0.04), hw, 6, 10)   # helmet lamps
+	_loft(hgrey, [
+		_ring(Vector3(0.12, 1.74, 0.06), Vector3(0.2, 1.0, 0.1), Vector3.RIGHT, 0.006, 0.006, hw),
+		_ring(Vector3(0.14, 1.86, 0.075), Vector3(0.2, 1.0, 0.1), Vector3.RIGHT, 0.004, 0.004, hw),
+	], 6)
+	_mats["suit_hgrey"] = _mats["suit_grey"]
 	_suit_helmet = MeshInstance3D.new()
 	_suit_helmet.name = "SuitHelmet"
-	_suit_helmet.mesh = _commit([[shell, "suit_shell"], [visor, "suit_visor"]])
+	_suit_helmet.mesh = _commit([[shell, "suit_shell"], [visor, "suit_visor"], [hgrey, "suit_hgrey"]])
 	_suit_helmet.layers = MIRROR_ONLY_LAYER
 	_suit_helmet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	skeleton.add_child(_suit_helmet)
