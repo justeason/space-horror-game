@@ -30,7 +30,7 @@ const FILES := {
 	"Documents": [
 		{"name": "rotation_contract_summary.txt", "date": "2026-08-20", "type": "txt", "text": "ROTATION SUMMARY\nRole: Station maintenance technician\nShift: one compressed work period per station day,\n  over when the day's work is done\nMeals: eat and drink every day (galley)\nRest: mandatory between shifts\nContact: Crew Scheduling"},
 		{"name": "payslip_october.txt", "date": "2026-10-31", "type": "txt", "text": "PAYSLIP - OCTOBER\nBase rotation allowance ....... paid\nHazard supplement ............ paid\nLaundry deduction ............ 0.00\n\nThank you for your service."},
-		{"name": "handbook_eva_excerpt.txt", "date": "2026-08-22", "type": "txt", "text": "EVA - QUICK REFERENCE\n1. Suit up at the airlock locker (4.3 psi, pure O2).\n2. Cargo transfers and seal inspections must be finished.\n3. Step into the chamber, press EXIT: inner hatch shuts,\n   14.7 -> 0 psi, outer hatch opens.\n4. Tether is clipped to ring A1. Move it ring to ring.\n   Push gently - you keep drifting.\n5. Back in the chamber, press ENTER."},
+		{"name": "handbook_eva_excerpt.txt", "date": "2026-08-22", "type": "txt", "text": "EVA - QUICK REFERENCE\n1. Suit up at the airlock locker (4.3 psi, pure O2).\n2. Cargo transfers and seal inspections must be finished.\n3. Step into the chamber, press OUT: inner hatch seals,\n   chamber vents 14.7 -> 0 psi, outer hatch opens.\n4. Tether clips to ring A1. Click a ring to move it.\n   Hold SPACE: push toward the crosshair. S: brake.\n5. Back in the chamber, press IN."},
 	],
 	"Entertainment": [
 		{"name": "Cargo Drop", "date": "2026-09-12", "type": "app", "app": "game"},

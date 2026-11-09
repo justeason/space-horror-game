@@ -140,21 +140,108 @@ func _build_visor() -> void:
 	sm.shader = sh
 	frame.material = sm
 	_visor.add_child(frame)
-	_visor_label = Label.new()
-	_visor_label.anchor_left = 0.5
-	_visor_label.anchor_right = 0.5
-	_visor_label.anchor_top = 1.0
-	_visor_label.anchor_bottom = 1.0
-	_visor_label.offset_left = -260
-	_visor_label.offset_right = 260
-	_visor_label.offset_top = -78
-	_visor_label.offset_bottom = -56
-	_visor_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_visor_label.add_theme_font_size_override("font_size", 13)
-	_visor_label.add_theme_color_override("font_color", Color(0.5, 0.95, 0.9, 0.9))
-	_visor_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Round 40: a compact, mostly VISUAL status strip:
+	#   [ZONE]  [ring A1 ▮▮▮▮▯ range]  [O2 ▮▮▮▮▮]  4.3 psi
+	var strip := HBoxContainer.new()
+	strip.name = "Strip"
+	strip.anchor_left = 0.5
+	strip.anchor_right = 0.5
+	strip.anchor_top = 1.0
+	strip.anchor_bottom = 1.0
+	strip.offset_left = -270
+	strip.offset_right = 270
+	strip.offset_top = -86
+	strip.offset_bottom = -60
+	strip.alignment = BoxContainer.ALIGNMENT_CENTER
+	strip.add_theme_constant_override("separation", 14)
+	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_visor.add_child(strip)
+	_zone_chip = _hud_label(strip, "STATION", 13, Color(0.1, 0.12, 0.12))
+	var zb := StyleBoxFlat.new()
+	zb.bg_color = Color(0.5, 0.95, 0.85, 0.85)
+	zb.set_content_margin_all(3)
+	zb.set_corner_radius_all(3)
+	_zone_chip.add_theme_stylebox_override("normal", zb)
+	_teth_label = _hud_label(strip, "A1", 13, Color(0.95, 0.85, 0.35))
+	_teth_bar = _hud_bar(strip, Color(0.3, 0.95, 0.45))
+	_hud_label(strip, "O2", 13, Color(0.5, 0.95, 0.9))
+	_o2_bar = _hud_bar(strip, Color(0.5, 0.95, 0.9))
+	_psi_label = _hud_label(strip, "4.3 psi", 12, Color(0.5, 0.95, 0.9, 0.85))
+	_visor_label = Label.new()        # kept: full text (tests / screen readers)
+	_visor_label.visible = false
 	_visor.add_child(_visor_label)
+	# First-EVA control hint: key caps + one word each.
+	_hint = VBoxContainer.new()
+	_hint.name = "Hint"
+	_hint.anchor_left = 0.5
+	_hint.anchor_right = 0.5
+	_hint.anchor_top = 0.62
+	_hint.anchor_bottom = 0.62
+	_hint.offset_left = -170
+	_hint.offset_right = 170
+	_hint.alignment = BoxContainer.ALIGNMENT_CENTER
+	_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_visor.add_child(_hint)
+	for row in [["SPACE", "push toward  +"], ["S", "brake"], ["A / D", "drift sideways"], ["CLICK RING", "re-clip tether"]]:
+		var h := HBoxContainer.new()
+		h.alignment = BoxContainer.ALIGNMENT_CENTER
+		h.add_theme_constant_override("separation", 10)
+		_hint.add_child(h)
+		var cap := _hud_label(h, row[0], 14, Color(0.05, 0.08, 0.08))
+		var cb := StyleBoxFlat.new()
+		cb.bg_color = Color(0.85, 0.95, 0.92, 0.92)
+		cb.set_content_margin_all(4)
+		cb.set_corner_radius_all(4)
+		cap.add_theme_stylebox_override("normal", cb)
+		cap.custom_minimum_size = Vector2(96, 0)
+		cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_hud_label(h, row[1], 15, Color(0.85, 0.98, 0.95))
+	_hint.visible = false
 	_visor.visible = false
+
+
+var _zone_chip: Label
+var _teth_label: Label
+var _teth_bar: ProgressBar
+var _o2_bar: ProgressBar
+var _psi_label: Label
+var _hint: VBoxContainer
+var _hint_t: float = 0.0
+var _hint_shown: bool = false
+const HINT_S := 9.0
+
+
+func _hud_label(parent: Control, text: String, size: int, col: Color) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", col)
+	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
+	l.add_theme_constant_override("outline_size", 3)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	parent.add_child(l)
+	return l
+
+
+func _hud_bar(parent: Control, col: Color) -> ProgressBar:
+	var b := ProgressBar.new()
+	b.custom_minimum_size = Vector2(70, 10)
+	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	b.show_percentage = false
+	b.max_value = 1.0
+	b.step = 0.001
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = Color(0, 0, 0, 0.45)
+	bg.border_color = col * 0.8
+	bg.set_border_width_all(1)
+	var fg := StyleBoxFlat.new()
+	fg.bg_color = col
+	b.add_theme_stylebox_override("background", bg)
+	b.add_theme_stylebox_override("fill", fg)
+	b.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(b)
+	return b
 
 
 # ------------------------------------------------------------ interaction
@@ -167,7 +254,7 @@ func on_part(id: StringName) -> void:
 				return
 			set_suited(not suited)
 			_sfx(&"latch")
-			_say("EVA suit %s." % ("on — step into the airlock chamber and press EXIT" if suited else "stowed"))
+			_say("EVA suit %s." % ("on — step into the airlock chamber and press OUT" if suited else "stowed"))
 			eva_log.append({"event": "suit_on" if suited else "suit_off", "t": _t})
 			if suited:
 				_ai(&"eva_suit")
@@ -246,15 +333,31 @@ func is_eva_active() -> bool:
 
 # ------------------------------------------------------------------- loop
 const ANCHORS := [
-	[Vector3(-4.35, 1.05, -2.74), "A1 (hatch)"],
-	[Vector3(-3.25, 1.0, -0.6), "A2 (walkway)"],
-	[Vector3(-3.3, 1.0, 1.95), "A3 (mast)"],
+	[Vector3(-4.35, 1.05, -2.74), "A1"],
+	[Vector3(-3.25, 1.0, -0.6), "A2"],
+	[Vector3(-3.3, 1.0, 1.95), "A3"],
 ]
 const TETHER_LEN := 5.5
+const CLIP_REACH := 1.8
+const SWITCH_REACH_S := 0.5       # new cable reaches the ring
+const SWITCH_HOLD_S := 0.35       # both clipped (two-tether rule)
+const SWITCH_RELEASE_S := 0.5     # old cable reels in
 var anchor_index: int = -1        # -1 = not clipped (inside)
 var tether_length: float = 0.0
-var _tether_mesh: MeshInstance3D
 var _anchor_nodes: Array = []
+var _ring_mats: Array = []
+
+## Round 40 Priority 1: an explicit ZONE state -- the tether, zero-g and the
+## failsafe only ever act in "outside". Round 39 derived "outside" from the
+## floor footprints every frame, so a suited technician standing in a
+## doorway gap or on the outer-hatch sill (hatch shut!) counted as outside;
+## the tether then saw a huge distance and the failsafe teleported them to
+## the hatch exterior. Now:
+##   station -> chamber   by walking into the chamber;
+##   chamber -> outside   ONLY through the OPEN outer hatch (suited);
+##   outside -> chamber   only by floating back into the chamber;
+##   chamber -> station   through the inner hatch.
+var zone: String = "station"      # station | chamber | outside
 
 
 func _feet() -> Vector3:
@@ -267,53 +370,89 @@ func _eye() -> Vector3:
 	return fb.current_eye_position() if fb != null and fb.has_method("current_eye_position") else Vector3.ZERO
 
 
-## Outside the pressure hull: beyond the outer hatch plane, or anywhere not
-## over an interior floor footprint.
-func _is_outside(p: Vector3) -> bool:
-	var ext: Node = get_tree().get_first_node_in_group(&"exterior")
-	if p.z < -2.68 and p.x > -5.6 and p.x < -2.0:
-		return true
-	return ext != null and ext.has_method("is_interior") and not ext.is_interior(p.x, p.z)
+func _update_zone(p: Vector3) -> void:
+	var a: Node = _airlock()
+	if a == null:
+		return
+	var in_ch: bool = a.in_chamber(p)
+	match zone:
+		"outside":
+			if in_ch:
+				_set_zone("chamber")
+		"chamber":
+			if a.outer_open and suited and p.z < a.Z_OUTER - 0.1 and absf(p.x - (-4.8)) < 0.7:
+				_set_zone("outside")
+			elif not in_ch and p.z > a.Z_INNER + 0.05:
+				_set_zone("station")
+		_:
+			if in_ch:
+				_set_zone("chamber")
+
+
+func _set_zone(z: String) -> void:
+	if z == zone:
+		return
+	var was: String = zone
+	zone = z
+	eva_log.append({"event": "zone_" + z, "from": was, "t": _t})
+	if z == "outside":
+		_set_outside(true)
+	elif was == "outside":
+		_set_outside(false)
 
 
 func _process(delta: float) -> void:
 	_t += delta
 	var a: Node = _airlock()
-	var vac: bool = outside or (a != null and a.is_vacuum() and a.in_chamber(_feet()))
+	var vac: bool = outside or (a != null and a.is_vacuum() and zone == "chamber")
 	_set_vacuum_audio(vac)
 	_refresh()
 	if suited:
-		_update_visor()
+		_update_visor(delta)
+		if outside and Input.is_key_pressed(KEY_H):
+			show_hint()
+	_update_switch(delta)
 	_update_tether_visual()
 
 
-func _physics_process(delta: float) -> void:
+func _physics_process(_delta: float) -> void:
 	var fb: CharacterBody3D = _n("FreeMoveBody") as CharacterBody3D
 	if fb == null:
 		return
-	var p: Vector3 = fb.global_position
-	var now_out: bool = _is_outside(p) and suited
-	if now_out != outside:
-		_set_outside(now_out)
-	if not outside:
+	_update_zone(fb.global_position)
+	if zone != "outside" or not outside:
 		return
-	# Tether: a soft, inelastic limit from the clipped ring.
-	var anchor: Vector3 = ANCHORS[anchor_index][0] if anchor_index >= 0 else ANCHORS[0][0]
-	var eye: Vector3 = fb.current_eye_position()
-	var hip: Vector3 = eye - Vector3(0, 0.7, 0)
-	var d: Vector3 = hip - anchor
-	tether_length = d.length()
-	if tether_length > TETHER_LEN:
-		var dir: Vector3 = d / tether_length
-		var out_v: float = fb.velocity.dot(dir)
-		if out_v > 0.0:
-			fb.velocity -= dir * out_v * 1.2
-		fb.global_position -= dir * minf(tether_length - TETHER_LEN, 0.05)
-	# Failsafe (should never trigger with the tether): back to the hatch.
-	if tether_length > TETHER_LEN + 2.0 or p.y < -4.0:
+	# Tether: a soft, inelastic limit from every clipped ring (two during a
+	# re-clip). Only ever applied OUTSIDE.
+	var hip: Vector3 = _harness_point()
+	tether_length = 0.0
+	for i in _clipped_rings():
+		var d: Vector3 = hip - (ANCHORS[i][0] as Vector3)
+		var L: float = d.length()
+		if i == anchor_index:
+			tether_length = L
+		if L > TETHER_LEN:
+			var dir: Vector3 = d / L
+			var out_v: float = fb.velocity.dot(dir)
+			if out_v > 0.0:
+				fb.velocity -= dir * out_v * 1.2
+			fb.global_position -= dir * minf(L - TETHER_LEN, 0.05)
+	# Failsafe (should never trigger with the tether): back to the hatch,
+	# OUTSIDE it -- never applies in the station or the chamber.
+	if tether_length > TETHER_LEN + 2.0 or fb.global_position.y < -4.0:
 		_place(ANCHORS[0][0] + Vector3(-0.45, 0.6, -0.35), PI)
-		_say("Tether retracted — back at the hatch.")
+		_say("Tether reeled in — back at the hatch.")
 		eva_log.append({"event": "tether_return", "t": _t})
+
+
+## Rings the suit is clipped to right now (during a re-clip: both).
+func _clipped_rings() -> Array:
+	var out: Array = []
+	if anchor_index >= 0:
+		out.append(anchor_index)
+	if _switch.has("to") and _switch["t"] >= SWITCH_REACH_S and not out.has(int(_switch["to"])):
+		out.append(int(_switch["to"]))
+	return out
 
 
 func _set_outside(out: bool) -> void:
@@ -326,104 +465,232 @@ func _set_outside(out: bool) -> void:
 	var body: Node = _n("Player/PlayerBody")
 	if body != null and body.has_method("set_floating"):
 		body.set_floating(out)
+	_switch = {}
 	if out:
 		anchor_index = 0
+		_clip_in_t = 0.0             # the cable visibly runs out to ring A1
 		_sfx(&"click")
-		_say("Tether clipped to ring A1. You're floating — W/S push, Space/C rise/sink.", 4.0)
 		_ai(&"eva_outside")
 		eva_log.append({"event": "outside", "t": _t})
+		if not _hint_shown:
+			_hint_shown = true
+			_hint_t = HINT_S
 	else:
 		anchor_index = -1
 		eva_log.append({"event": "inside", "t": _t})
 	_set_presentation(out)
 
 
-## Move the tether to another ring (must be within reach).
+# ------------------------------------------------------------ re-clipping
+## Round 40: a STAGED re-clip (never an instant "magic" swap): the new
+## cable reaches out from the suit to the ring (0.5 s), clicks on (the ring
+## light turns green -- both tethers held for a moment, the two-tether
+## rule), then the old cable unclips and reels in (0.5 s).
+var _switch: Dictionary = {}      # {to, from, t}
+var _clip_in_t: float = -1.0
+
+
 func clip_to(i: int) -> bool:
-	if not outside or i < 0 or i >= ANCHORS.size():
+	if not outside or i < 0 or i >= ANCHORS.size() or i == anchor_index or not _switch.is_empty():
 		return false
-	var hip: Vector3 = _eye() - Vector3(0, 0.7, 0)
-	if hip.distance_to(ANCHORS[i][0]) > 1.8:
-		_say("Ring %s is out of reach." % ANCHORS[i][1])
+	if _harness_point().distance_to(ANCHORS[i][0]) > CLIP_REACH:
+		_say("Ring %s: out of reach." % ANCHORS[i][1])
+		_sfx(&"fail")
 		return false
-	anchor_index = i
-	_sfx(&"click")
-	_say("Tether clipped to ring %s." % ANCHORS[i][1])
-	eva_log.append({"event": "clip_%d" % i, "t": _t})
+	_switch = {"to": i, "from": anchor_index, "t": 0.0, "clicked": false}
+	eva_log.append({"event": "clip_start_%d" % i, "t": _t})
 	return true
+
+
+func is_switching() -> bool:
+	return not _switch.is_empty()
+
+
+func _update_switch(delta: float) -> void:
+	if _clip_in_t >= 0.0:
+		_clip_in_t += delta
+		if _clip_in_t >= SWITCH_REACH_S:
+			_clip_in_t = -1.0
+	if _switch.is_empty():
+		return
+	_switch["t"] += delta
+	var t: float = _switch["t"]
+	if t >= SWITCH_REACH_S and not _switch["clicked"]:
+		_switch["clicked"] = true
+		_sfx(&"click")
+		eva_log.append({"event": "clip_%d" % int(_switch["to"]), "t": _t})
+		if not _taught_switch:
+			_taught_switch = true
+			_ai(&"tether_switch")
+	if t >= SWITCH_REACH_S + SWITCH_HOLD_S and anchor_index != int(_switch["to"]):
+		eva_log.append({"event": "unclip_%d" % int(_switch["from"]), "t": _t})
+		anchor_index = int(_switch["to"])
+		_sfx(&"latch")
+	if t >= SWITCH_REACH_S + SWITCH_HOLD_S + SWITCH_RELEASE_S:
+		_switch = {}
+var _taught_switch: bool = false
+
+
+## Instantly complete a pending re-clip (tests / loads).
+func finish_switch() -> void:
+	while not _switch.is_empty():
+		_update_switch(0.1)
+
+
+# --------------------------------------------------------- tether visuals
+## The suit's tether attachment (a harness D-ring at the front of the hip,
+## from the real rig) -- where the cable is clipped on.
+func _harness_point() -> Vector3:
+	var body: Node = _n("Player/PlayerBody")
+	if body != null and body.get("_rig") != null:
+		var rig: Node3D = body._rig
+		return rig.global_transform * (rig.bone_pos("Hips") + Vector3(0.1, 0.02, -0.12))
+	return _eye() - Vector3(-0.1, 0.7, 0.1)
 
 
 func _build_anchors() -> void:
 	var root := Node3D.new()
 	root.name = "TetherAnchors"
 	_root().add_child.call_deferred(root)
-	var ring_m := _mat(Color(0.95, 0.75, 0.15), 0.6)
 	for i in ANCHORS.size():
 		var a := Node3D.new()
 		a.name = "Anchor%d" % i
 		a.position = ANCHORS[i][0]
 		root.add_child(a)
+		var rm := _mat(Color(0.95, 0.75, 0.15), 0.6, Color(0.95, 0.75, 0.15) * 0.25)
+		_ring_mats.append(rm)
 		var ring := MeshInstance3D.new()
 		var tm := TorusMesh.new()
 		tm.inner_radius = 0.035
 		tm.outer_radius = 0.06
 		ring.mesh = tm
-		ring.material_override = ring_m
+		ring.material_override = rm
 		ring.rotation_degrees.x = 90.0
-		ring.layers = 1 | EXTERIOR
 		a.add_child(ring)
 		var base := MeshInstance3D.new()
 		var bm := BoxMesh.new()
-		bm.size = Vector3(0.08, 0.05, 0.08)
+		bm.size = Vector3(0.1, 0.05, 0.1)
 		base.mesh = bm
 		base.material_override = _mat(Color(0.3, 0.3, 0.32), 0.6)
-		base.position.y = -0.06
-		base.layers = 1 | EXTERIOR
+		base.position.y = -0.07
 		a.add_child(base)
 		var lbl := Label3D.new()
-		lbl.text = String(ANCHORS[i][1]).get_slice(" ", 0)
-		lbl.font_size = 22
+		lbl.text = String(ANCHORS[i][1])
+		lbl.font_size = 26
 		lbl.pixel_size = 0.0012
-		lbl.position = Vector3(0, 0.13, 0)
+		lbl.position = Vector3(0, 0.14, 0)
 		lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		lbl.modulate = Color(0.95, 0.8, 0.3)
-		lbl.layers = 1 | EXTERIOR
 		a.add_child(lbl)
-		_click(a, StringName("anchor_%d" % i), Vector3(0.18, 0.18, 0.18), Vector3.ZERO)
+		for v in a.find_children("*", "VisualInstance3D", true, false):
+			(v as VisualInstance3D).layers = 1 | EXTERIOR
+		_click(a, StringName("anchor_%d" % i), Vector3(0.22, 0.22, 0.22), Vector3.ZERO)
 		_anchor_nodes.append(a)
-	_tether_mesh = MeshInstance3D.new()
-	_tether_mesh.name = "TetherLine"
-	_tether_mesh.mesh = ImmediateMesh.new()
-	var tm2 := _mat(Color(0.95, 0.85, 0.3), 0.1)
-	tm2.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_tether_mesh.material_override = tm2
-	_tether_mesh.layers = 1 | EXTERIOR
-	_tether_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	root.add_child(_tether_mesh)
+	for k in 2:
+		var c := _build_cable("TetherCable%d" % k)
+		root.add_child(c["root"])
+		_cables.append(c)
 
 
-## A thin sagging cable (camera-facing ribbon) ring -> suit hip.
+## A real TUBE cable (segments) with a carabiner at each end -- a solid
+## mesh, so the player camera, the exterior cameras and the mirror all
+## see it (Round 39's camera-facing ribbon was edge-on to other cameras).
+var _cables: Array = []           # [{root, segs:[MeshInstance3D], hook_a, hook_b}]
+const CABLE_SEGS := 18
+
+
+func _build_cable(name: String) -> Dictionary:
+	var root := Node3D.new()
+	root.name = name
+	var cm := _mat(Color(0.95, 0.8, 0.2), 0.1)
+	cm.roughness = 0.7
+	var segs: Array = []
+	for k in CABLE_SEGS:
+		var mi := MeshInstance3D.new()
+		var cyl := CylinderMesh.new()
+		cyl.top_radius = 0.011
+		cyl.bottom_radius = 0.011
+		cyl.height = 1.0
+		cyl.radial_segments = 6
+		cyl.rings = 1
+		mi.mesh = cyl
+		mi.material_override = cm
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.layers = 1 | EXTERIOR
+		root.add_child(mi)
+		segs.append(mi)
+	var hooks: Array = []
+	for k in 2:
+		var h := MeshInstance3D.new()
+		var tm := TorusMesh.new()
+		tm.inner_radius = 0.018
+		tm.outer_radius = 0.032
+		h.mesh = tm
+		h.material_override = _mat(Color(0.78, 0.8, 0.82), 0.85)
+		h.layers = 1 | EXTERIOR
+		h.scale = Vector3(1.0, 1.0, 1.6)
+		root.add_child(h)
+		hooks.append(h)
+	root.visible = false
+	return {"root": root, "segs": segs, "hook_a": hooks[0], "hook_b": hooks[1]}
+
+
+## Draw cable `c` from the harness to ring `i`, `ext` (0..1) of the way
+## (a cable reaching out / reeling in), sagging and gently swaying.
+func _draw_cable(c: Dictionary, i: int, ext: float) -> void:
+	var root: Node3D = c["root"]
+	if i < 0 or ext <= 0.01:
+		root.visible = false
+		return
+	root.visible = true
+	var a: Vector3 = _harness_point()
+	var b: Vector3 = a.lerp(ANCHORS[i][0], ext)
+	var span: float = a.distance_to(b)
+	var slack: float = clampf((TETHER_LEN - span) / TETHER_LEN, 0.0, 1.0) * 0.45 * ext
+	var sway: float = sin(_t * 1.3 + float(i)) * 0.04 * ext
+	var pts: Array = []
+	for k in CABLE_SEGS + 1:
+		var u: float = float(k) / CABLE_SEGS
+		pts.append(a.lerp(b, u) + Vector3(sway * sin(u * PI), -sin(u * PI) * slack, sway * 0.5 * sin(u * TAU)))
+	for k in CABLE_SEGS:
+		var p0: Vector3 = pts[k]
+		var p1: Vector3 = pts[k + 1]
+		var seg: MeshInstance3D = c["segs"][k]
+		var dv: Vector3 = p1 - p0
+		var L: float = maxf(dv.length(), 0.001)
+		var y: Vector3 = dv / L
+		var x: Vector3 = y.cross(Vector3.FORWARD if absf(y.dot(Vector3.FORWARD)) < 0.9 else Vector3.RIGHT).normalized()
+		seg.global_transform = Transform3D(Basis(x, y * L, x.cross(y)), (p0 + p1) * 0.5)
+	(c["hook_a"] as Node3D).global_position = a
+	(c["hook_b"] as Node3D).global_position = b
+
+
 func _update_tether_visual() -> void:
-	if _tether_mesh == null:
+	if _cables.is_empty():
 		return
-	var im: ImmediateMesh = _tether_mesh.mesh
-	im.clear_surfaces()
-	if not outside or anchor_index < 0:
+	for k in _ring_mats.size():
+		var col: Color = Color(0.95, 0.75, 0.15)
+		if outside and k == anchor_index:
+			col = Color(0.3, 0.95, 0.4)
+		if _switch.has("to") and k == int(_switch["to"]):
+			col = Color(0.3, 0.95, 0.4) if _switch["clicked"] else Color(0.95, 0.95, 0.4).lerp(Color(0.95, 0.75, 0.15), 0.5 + 0.5 * sin(_t * 18.0))
+		(_ring_mats[k] as StandardMaterial3D).albedo_color = col
+		(_ring_mats[k] as StandardMaterial3D).emission = col * 0.6
+	if not outside:
+		_draw_cable(_cables[0], -1, 0.0)
+		_draw_cable(_cables[1], -1, 0.0)
 		return
-	var a: Vector3 = ANCHORS[anchor_index][0]
-	var b: Vector3 = _eye() - Vector3(-0.12, 0.72, 0.05)
-	var slack: float = clampf((TETHER_LEN - a.distance_to(b)) / TETHER_LEN, 0.0, 1.0) * 0.6
-	var cam: Camera3D = get_viewport().get_camera_3d() if get_viewport() != null else null
-	var cp: Vector3 = cam.global_position if cam != null else b + Vector3(0, 0, 1)
-	im.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
-	var n := 24
-	for k in n + 1:
-		var u: float = float(k) / n
-		var p: Vector3 = a.lerp(b, u) + Vector3(0, -sin(u * PI) * slack, 0) + Vector3(0, 0, sin(u * TAU) * slack * 0.15)
-		var side: Vector3 = ((b - a).cross(cp - p)).normalized() * 0.016
-		im.surface_add_vertex(p - side)
-		im.surface_add_vertex(p + side)
-	im.surface_end()
+	var main_ext: float = 1.0 if _clip_in_t < 0.0 else smoothstep(0.0, SWITCH_REACH_S, _clip_in_t)
+	if _switch.is_empty():
+		_draw_cable(_cables[0], anchor_index, main_ext)
+		_draw_cable(_cables[1], -1, 0.0)
+		return
+	var t: float = _switch["t"]
+	var new_ext: float = smoothstep(0.0, SWITCH_REACH_S, t)
+	var old_i: int = int(_switch["from"])
+	var old_ext: float = 1.0 - smoothstep(SWITCH_REACH_S + SWITCH_HOLD_S, SWITCH_REACH_S + SWITCH_HOLD_S + SWITCH_RELEASE_S, t)
+	_draw_cable(_cables[0], old_i, old_ext)
+	_draw_cable(_cables[1], int(_switch["to"]), new_ext)
 
 
 func _set_vacuum_audio(vac: bool) -> void:
@@ -466,11 +733,41 @@ func _set_presentation(out: bool) -> void:
 			vi.layers = (vi.layers | EXTERIOR) if out else (vi.layers & ~EXTERIOR)
 
 
-func _update_visor() -> void:
+func zone_word() -> String:
+	if zone == "outside":
+		var to_hatch: float = _eye().distance_to(ANCHORS[0][0])
+		return "RETURN" if to_hatch < 1.6 else "OUTSIDE"
+	if zone == "chamber":
+		var a: Node = _airlock()
+		return "CHAMBER" if a == null else ("CHAMBER · VAC" if a.is_vacuum() else "CHAMBER")
+	return "STATION"
+
+
+func _update_visor(delta: float = 0.0) -> void:
 	var a: Node = _airlock()
+	var o2: float = 1.0 - minf(_t / 30.0, 40.0) / 100.0
+	_zone_chip.text = zone_word()
+	var zcol: Color = Color(1.0, 0.55, 0.3) if zone == "outside" else (Color(0.95, 0.8, 0.3) if zone == "chamber" else Color(0.5, 0.95, 0.85))
+	(_zone_chip.get_theme_stylebox("normal") as StyleBoxFlat).bg_color = Color(zcol, 0.88)
+	var ring: String = String(ANCHORS[anchor_index][1]) if outside and anchor_index >= 0 else "—"
+	if _switch.has("to"):
+		ring = "%s>%s" % [String(ANCHORS[int(_switch["from"])][1]), String(ANCHORS[int(_switch["to"])][1])]
+	_teth_label.text = ring
+	var r: float = clampf(tether_length / TETHER_LEN, 0.0, 1.0) if outside else 0.0
+	_teth_bar.value = r
+	(_teth_bar.get_theme_stylebox("fill") as StyleBoxFlat).bg_color = Color(0.3, 0.95, 0.45).lerp(Color(1.0, 0.3, 0.2), smoothstep(0.65, 1.0, r))
+	_o2_bar.value = o2
+	_psi_label.text = "%.1f psi" % AirlockChamber.SUIT_PSI
 	var amb: String = ("%.1f psi" % a.psi) if a != null and not outside else "VACUUM"
-	var teth: String = ("TETHER %s %.1f/%.1f m" % [String(ANCHORS[anchor_index][1]).get_slice(" ", 0), tether_length, TETHER_LEN]) if outside and anchor_index >= 0 else "TETHER —"
-	_visor_label.text = "SUIT %.1f psi O2   ·   O2 %d %%   ·   %s   ·   AMB %s" % [AirlockChamber.SUIT_PSI, 100 - mini(int(_t / 30.0), 40), teth, amb]
+	_visor_label.text = "SUIT %.1f psi O2   ·   O2 %d %%   ·   TETHER %s %.1f/%.1f m   ·   AMB %s   ·   %s" % [AirlockChamber.SUIT_PSI, roundi(o2 * 100.0), ring, tether_length, TETHER_LEN, amb, zone_word()]
+	if _hint_t > 0.0:
+		_hint_t -= delta
+	_hint.visible = outside and _hint_t > 0.0
+
+
+## Show the EVA control hint again (H while outside).
+func show_hint() -> void:
+	_hint_t = HINT_S
 
 
 func _refresh() -> void:
@@ -494,6 +791,7 @@ func load_dict(d: Dictionary) -> void:
 	set_suited(bool(d.get("suited", false)))
 	if outside:
 		_set_outside(false)
+	zone = "station"
 	var al: Node = _airlock()
 	if al != null:
 		al.reset_default()

@@ -15,7 +15,7 @@ const POS := [Vector3(0, 0.88, 0.07), Vector3(0.37, 0, 0.07), Vector3(0, -0.88, 
 const SIZE := [Vector3(0.5, 0.05, 0.03), Vector3(0.05, 1.3, 0.03), Vector3(0.5, 0.05, 0.03), Vector3(0.05, 1.3, 0.03)]
 const TEST_S := 3.0
 @export var cargo_port_path: NodePath = ^"../../Interactables/CargoPort"
-@export var panel_offset: Vector3 = Vector3(0.38, -0.05, 0.42)   # tunnel east wall, beside the hatch
+@export var panel_offset: Vector3 = Vector3(0.385, 0.05, 0.42)   # Round 40: on the AIRLOCK A-1 console (chamber east wall), level with the chamber panel
 
 var faults: Array = ["", "", "", ""]
 var inspected: Array = [false, false, false, false]

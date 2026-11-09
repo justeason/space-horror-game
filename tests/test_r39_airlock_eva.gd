@@ -49,7 +49,7 @@ func _init() -> void:
 	for i in 3: await process_frame
 	_check("suit on: the body wears the EVA suit (rig suit + helmet mesh, mirror/camera-only helmet)", eva.suited and body.eva_suit and body._rig.suit_on and body._rig._suit_helmet.visible and body._rig._suit_helmet.layers == 4)
 	_check("visor frame + suit status (4.3 psi O2) in view", eva._visor.visible and eva._visor_label.text.find("4.3 psi O2") != -1)
-	_check("chain: airlock EXIT", ant.order_next()["short"] == "AIRLOCK EXIT")
+	_check("chain: airlock EXIT", ant.order_next()["short"] == "AIRLOCK OUT")
 	_check("EXIT refused from outside the chamber ('%s')" % al.exit_blocker(), al.exit_blocker() != "" and not al.begin_cycle_out())
 	# --- Interlocks inside the chamber ---
 	await _walk([Vector3(-4.8, 0, -1.45)])
@@ -81,7 +81,8 @@ func _init() -> void:
 	await _walk([Vector3(-4.8, 0, -3.25)])
 	await create_timer(0.2).timeout
 	_check("outside: EVA active, ZERO-G (no gravity), body floating", eva.outside and fb.zero_g and body.floating)
-	_check("tether auto-clipped to ring A1, visible cable", eva.anchor_index == 0 and (eva._tether_mesh.mesh as ImmediateMesh).get_surface_count() > 0)
+	await create_timer(0.7).timeout
+	_check("tether auto-clipped to ring A1, visible cable (Round 40: a tube mesh)", eva.anchor_index == 0 and (eva._cables[0]["root"] as Node3D).visible)
 	var y0: float = fb.global_position.y
 	await create_timer(1.0).timeout
 	_check("no gravity: no fall in 1 s (%.2f -> %.2f)" % [y0, fb.global_position.y], absf(fb.global_position.y - y0) < 0.1)
@@ -91,7 +92,10 @@ func _init() -> void:
 	# Float to the walkway ring A2 and re-clip.
 	# (Clear the open outer hatch leaf -- it swings out to z ~ -3.3.)
 	await _walk([Vector3(-4.8, 0.05, -3.75), Vector3(-3.75, 0.05, -3.75), Vector3(-3.75, 0.05, -0.6)])
-	_check("re-clip tether to ring A2 within reach", eva.clip_to(1) and eva.anchor_index == 1)
+	# Round 40: re-clipping is STAGED (~1.35 s): new cable out, click, old released.
+	var started: bool = eva.clip_to(1)
+	await create_timer(1.6).timeout
+	_check("re-clip tether to ring A2 within reach", started and eva.anchor_index == 1 and not eva.is_switching())
 	# Tether limit: try to drift far away.
 	await _walk([Vector3(1.5, 0.05, -4.0)], 4000)
 	_check("tether holds: %.2f m <= %.1f m from the ring" % [eva.tether_length, eva.TETHER_LEN], eva.tether_length <= eva.TETHER_LEN + 0.25)
@@ -114,10 +118,11 @@ func _init() -> void:
 		if cam.get_hovered() != null:
 			cam.get_hovered().interact()
 	_check("feed A1 repaired outside (link %d %%)" % roundi(ant.link_quality() * 100), ant.feed_ok() and ant.link_quality() >= 0.99)
-	_check("chain: back to the airlock (ENTER)", ant.order_next()["short"] == "AIRLOCK ENTER")
+	_check("chain: back to the airlock (ENTER)", ant.order_next()["short"] == "AIRLOCK IN")
 	# --- Back into the chamber and ENTER ---
 	if fb.global_position.distance_to(eva.ANCHORS[1][0]) < 1.8:
 		eva.clip_to(1)
+		eva.finish_switch()
 	await _walk([Vector3(-3.75, 0.05, -0.6), Vector3(-3.75, 0.05, -3.75), Vector3(-4.8, 0.05, -3.75), Vector3(-4.8, 0.05, -1.5)])
 	await create_timer(0.6).timeout
 	_check("back inside the chamber: gravity again, tether unclipped", not eva.outside and not fb.zero_g and eva.anchor_index == -1 and al.in_chamber(fb.global_position))

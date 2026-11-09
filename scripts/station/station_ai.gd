@@ -92,13 +92,16 @@ const LINES := {
 	&"env_pressure": [Prio.SAFETY, "Cabin pressure is falling. Inspect the airlock hatch seal.", "舱内气压正在下降，请检查气闸舱门密封。"],
 	&"env_o2": [Prio.SAFETY, "Oxygen below nominal. Restore Life Support airflow.", "氧气低于正常值，请恢复生命维持气流。"],
 	&"repeat_none": [Prio.INFO, "No active instruction.", "当前没有指令。"],
-	&"eva_suit": [Prio.INSTRUCT, "Suit on. Four point three psi, pure oxygen. Step into the airlock chamber and press EXIT.", "宇航服已穿好。四点三磅每平方英寸，纯氧。进入气闸舱后按退出。"],
-	&"eva_outside": [Prio.INSTRUCT, "Tether clipped to ring A1. Push gently. You keep drifting until you stop yourself.", "安全绳已扣在 A1 环上。轻推前进。你会一直漂移，直到自己停下。"],
+	&"eva_suit": [Prio.INSTRUCT, "Suit on. Step into the airlock chamber and press OUT.", "宇航服已穿好。进入气闸舱后按“出舱”。"],
+	&"eva_outside": [Prio.INSTRUCT, "Tether clipped to A1. Hold space to push toward your crosshair. S to brake.", "安全绳已扣在 A1。按住空格朝准星方向推进，按 S 制动。"],
+	&"tether_switch": [Prio.INFO, "New tether clipped. Old tether released.", "新安全绳已扣上，旧安全绳已解开。"],
+	&"tether_intro": [Prio.INSTRUCT, "Tether ring. Click it to move your tether here.", "安全绳挂环。点击它把安全绳移到这里。"],
+	&"eva_repair": [Prio.INSTRUCT, "Work site. Stop first, then work with the panel.", "作业点。先停稳，再操作面板。"],
 	&"eva_interlock": [Prio.SAFETY, "Airlock interlock. Check the suit, the cargo port and the hatch seal.", "气闸联锁：请检查宇航服、货运口和舱门密封。"],
 	# Round 39: airlock chamber, EVA tasks, daily routine, end of shift.
-	&"airlock_intro": [Prio.INSTRUCT, "Airlock chamber. Suited, step inside and press EXIT. The hatches cycle one at a time.", "气闸舱。穿好宇航服后进入舱内按退出。舱门会依次循环。"],
-	&"airlock_cycle_out": [Prio.INFO, "Inner hatch closing. Depressurizing to vacuum.", "内舱门关闭，正在泄压至真空。"],
-	&"airlock_cycle_in": [Prio.INFO, "Outer hatch closing. Repressurizing to fourteen point seven psi.", "外舱门关闭，正在复压至十四点七磅每平方英寸。"],
+	&"airlock_intro": [Prio.INSTRUCT, "Airlock control. Press OUT. Inner seals, chamber vents, outer opens. IN reverses it.", "气闸控制。按“出舱”：内门密封、舱室泄压、外门打开。“进舱”反向执行。"],
+	&"airlock_cycle_out": [Prio.INFO, "Sealing inner hatch. Venting.", "正在密封内舱门，泄压中。"],
+	&"airlock_cycle_in": [Prio.INFO, "Sealing outer hatch. Pressurizing.", "正在密封外舱门，加压中。"],
 	&"lens_intro": [Prio.INSTRUCT, "Exterior camera lens is fouled. Wipe it on EVA, then check the feed again.", "外部摄像头镜头脏污。出舱擦拭后再次检查画面。"],
 	&"meal_intro": [Prio.INSTRUCT, "Galley. Eat and drink every day. It counts toward your shift.", "厨房。每天都要吃饭喝水，这计入你的班次。"],
 	&"underfed": [Prio.INFO, "You skipped a meal. Eat first. You will be slower until you do.", "你漏了一餐。先吃东西，否则你会变慢。"],
@@ -146,6 +149,8 @@ const TOPICS := {
 	&"comms_link": ["Equipment/AntennaMast/CommsLinkPanel", 1.8, &"comms_link_intro"],
 	&"tools": ["Equipment/ToolRack", 1.6, &"tools_intro"],
 	&"airlock": ["AirlockChamber/Panel_chamber", 1.9, &"airlock_intro"],
+	&"tether_ring": ["TetherAnchors/Anchor1", 2.2, &"tether_intro"],
+	&"eva_worksite": ["Equipment/AntennaMast/FeedBox", 2.4, &"eva_repair"],
 	&"galley": ["Equipment/QuartersLife/Galley", 1.9, &"meal_intro"],
 }
 ## Step narration: (tag, next-step short[@room]) -> line.
@@ -852,6 +857,9 @@ func _topic_active(t: StringName) -> bool:
 		&"airlock":
 			var eva: Node = get_tree().get_first_node_in_group(&"eva_system")
 			return (eva != null and eva.suited) or _dp.has_open_order(&"antenna") or _dp.has_open_order(&"lens")
+		&"tether_ring", &"eva_worksite":
+			var e2: Node = get_tree().get_first_node_in_group(&"eva_system")
+			return e2 != null and e2.outside
 		&"galley":
 			return _dp.has_method("meal_done") and not _dp.meal_done()
 		&"disposal":

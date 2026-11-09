@@ -5,8 +5,8 @@ extends "res://scripts/station/equipment_base.gd"
 ## the camera's near plane, so the feed on the workstation genuinely looks
 ## smeared, and the camera housing shows the film from outside.
 ## Chain (work order "lens", from day 9):
-##   CHECK FEED (Cameras tab, select EXT-02) -> SUIT UP -> AIRLOCK EXIT ->
-##   WIPE LENS (float up to the camera mount: two wipes) -> AIRLOCK ENTER
+##   CHECK FEED (Cameras tab, select EXT-02) -> SUIT UP -> AIRLOCK OUT ->
+##   WIPE LENS (float up to the camera mount: two wipes) -> AIRLOCK IN
 ##   -> VERIFY FEED (view EXT-02 again: clean).
 
 const CAM_ID := "EXT-02"
@@ -157,9 +157,9 @@ func order_next() -> Dictionary:
 			return {"action": "Float up to the hatch camera, wipe the lens", "short": "WIPE LENS", "room": &"airlock"}
 		if not suited:
 			return {"action": "Put on the EVA suit (airlock)", "short": "SUIT UP", "room": &"airlock"}
-		return {"action": "Airlock chamber: press EXIT", "short": "AIRLOCK EXIT", "room": &"airlock"}
+		return {"action": "Airlock chamber: press OUT", "short": "AIRLOCK OUT", "room": &"airlock"}
 	if outside:
-		return {"action": "Float back into the chamber, press ENTER", "short": "AIRLOCK ENTER", "room": &"airlock"}
+		return {"action": "Float back into the chamber, press IN", "short": "AIRLOCK IN", "room": &"airlock"}
 	return {"action": "View the %s feed again" % CAM_ID, "short": "VERIFY FEED", "room": &"control_room"}
 
 

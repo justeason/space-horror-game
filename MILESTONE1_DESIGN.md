@@ -9722,3 +9722,102 @@ Fixes:
 - **Meal model.** One meal + one drink per day; no hunger meter by design (low friction).
 - **Hard limit.** The shift's hard limit is still the old clock (the 10-minute balance setting).
 - **Pre-existing:** the Junction wall at x ≈ 1.4 inside the Comms footprint (Round 38 note) and the 5 known navigation-sweep edges.
+
+# Round 40 — EVA clarity, unified airlock module, walkway audit, spacecraft polish
+
+## A. EVA (Priority 1)
+
+- **Interior-to-exterior snap bug (root cause).**
+  - Round 39 derived "outside" from interior floor footprints *every frame*. A suited technician standing on a spot not covered by a floor slab counted as outside:
+    - the Control ↔ Quarters doorway gap;
+    - the outer-hatch sill with the hatch SHUT.
+  - Once "outside", the tether saw a huge distance, and the failsafe teleported the technician to the hatch exterior. The rendered probe reproduced it (LivingDoor, JunctionNode2: moved 10.5 m; chamber sill).
+  - **Fix** (`eva_system.gd`): an explicit ZONE state.
+    - station → chamber: walking in.
+    - chamber → outside: ONLY through the OPEN outer hatch, suited.
+    - outside → chamber: floating back in.
+    - chamber → station: through the inner hatch.
+  - Zero-g, the tether limit and the failsafe act only in `outside`.
+  - Regression test: `test_r40_eva_clarity` checks 38 spots (every navigation node plus chamber and doorway spots) and the logged zone sequence.
+- **Visible tether.** Round 39's cable was a ribbon turned toward the *player* camera: edge-on (invisible) to the exterior cameras and below the first-person view. It is now a solid tube (18 segments) from a harness D-ring on the suit's hip (rig bone) to the ring, with a carabiner at each end. It sags with slack and sways slightly. It sits on the normal and exterior layers, so the first-person view, EXT-02 (tested) and the mirror all see it. The cable visibly runs out to ring A1 as you leave the hatch.
+- **Staged re-clip** (click a ring within 1.8 m):
+  1. a second cable reaches out to the new ring (0.5 s);
+  2. it clicks on and the ring turns green; both tethers hold for a moment (the two-tether rule, 0.35 s; both constrain movement);
+  3. the old cable unclips and reels in (0.5 s).
+
+  The visor shows "A1>A2" during the switch.
+- **Controls** (`free_move_controller.zero_g`): one clear idea instead of "WASD + Space/C".
+  - **Space (or W):** suit jets push toward the crosshair.
+  - **Release:** coast, with a slow drag.
+  - **S:** brake.
+  - **A/D:** gentle sideways drift.
+  - **C** no longer sinks you (it was also the wristwatch key).
+  - **Space no longer picks up / drops items during EVA** (the carry system yields).
+- **Visor HUD:**
+  - a zone chip: STATION / CHAMBER (· VAC) / OUTSIDE / RETURN near the hatch;
+  - the tether ring plus a range bar (green → red);
+  - an O₂ bar and suit pressure (4.3 psi);
+  - a first-EVA key-cap hint (SPACE push, S brake, A/D drift, CLICK RING re-clip) for 9 s; H shows it again.
+
+## B. One airlock module (Priority 2)
+
+- **Console.** The chamber panel and the HATCH SEAL panel are mounted together on one "AIRLOCK A-1" console on the chamber wall. The seal panel moved up to the chamber panel's height; the chamber panel moved next to it.
+- **Status strip** of four lamps:
+  - INNER: green when open;
+  - CHAMBER: green pressurized / amber cycling / red vacuum;
+  - OUTER: red when open to space;
+  - SEAL: the last hold test — green pass, red fail, amber inspecting or testing, grey untested.
+- **Wording.** The buttons are now "OUT >>" / "<< IN" (was EXIT/ENTER). The screens show short step text ("1/3 SEAL INNER", "2/3 VENT 9.2 psi", "3/3 OPEN OUTER"; "SEAL OUTER / PRESSURIZE / OPEN INNER" on the way in).
+- **Labels everywhere** follow suit: work orders (AIRLOCK OUT / AIRLOCK IN), the AI lines and the laptop EVA handbook.
+- **Assistant** (short, first time or context-triggered):
+  - `airlock_intro` (OUT seals, vents, opens; IN reverses);
+  - `eva_outside` (push toward the crosshair; S brakes);
+  - `tether_intro` (near ring A2 while outside);
+  - `tether_switch`;
+  - `eva_repair` (at the worksite: stop first, then work).
+
+## C. Walkway audit (Priority 3)
+
+- **Root causes.** Corridor decor placed rib posts, handrails and ceiling cladding along each side's full length, so at side openings they crossed the doorway. The Junction → Comms opening had a post in it, a handrail across it and cladding over it.
+- **Now.** Posts, rails, cladding and the new details exist only along real WALL segments (`_wall_segments`); a cross-beam needs walls on both sides.
+- **New test** `test_r40_walkway_clear`: sweeps a person-sized volume along every navigation edge against ~900 visual-only pieces (decor, seals, airlock, exterior, scene trim without collision). Only overlaps visible from the walkway count.
+- **Hull plating found by the audit:**
+  - **Wrong footprint lookup.** The hull generator found interior footprints by names ending in "Floor". `JunctionFloorNorth` was missed, so the north Junction counted as outside and got hull plating on its INNER walls.
+  - **Overhang.** Plates overhung wall ends by 0.12 m (into doorways), and plate ends sat flush with neighbouring walls (z-fighting stripes in the Engineering tunnel).
+  - **Fixes:** floor-slab detection by geometry; plates are the wall's length minus 2 cm at each end.
+- **Comms rack** moved clear of the alcove doorway.
+- **Excluded from the audit** (named in the test): the operator stool, which is deliberate furniture.
+
+## D. Spacecraft feel (Priority 4)
+
+- **Corridors** (visual only, along walls):
+  - lower 45° chamfer panels, giving an octagonal tunnel section with the ceiling chamfers;
+  - twin cable conduits;
+  - vertical panel seams every ~0.75 m and floor plate seams;
+  - cyan floor guide lights;
+  - labelled ACCESS panels on long wall runs.
+- **Exterior:**
+  - the observation port has a yellow painted surround and a warmer cabin glow, so it reads from outside;
+  - EVA WORKSITE A1 at the antenna: foot restraints, a worklight on a post aimed at the feed box, a tool caddy and a site plate.
+
+## E. Routine (Priority 5)
+
+When the shift ends, a warm glow comes on over the bunk: a wordless "go to bed" (`quarters_life.bunk_glow_energy()`, tested).
+
+## F. Tests
+
+- **New:**
+  - `test_r40_eva_clarity` (zones and the regression, sequence, tether visibility, staged re-clip, controls, HUD, console);
+  - `test_r40_walkway_clear`.
+- **Updated, with reasons:**
+  - `test_r39_airlock_eva`: the re-clip is staged now (it waits ≈1.6 s); the cable is a tube (`_cables`); step labels are AIRLOCK OUT / IN; it gained the B-04 coverage check.
+  - `test_r39_routine_layout`: adds the bunk glow check.
+- **Rib count** (`test_r38_laptop_station`): the metric now counts rib stations with at least one wall post. Posts no longer stand in openings; the threshold is unchanged.
+
+## G. Limitations
+
+- **Re-clip animation.** The cables animate; the suit's arm does not reach for the ring.
+- **Hint keys.** The hint uses plain text key caps (no icon art).
+- **Tether physics.** The tether is a kinematic curve, not rope physics.
+- **Walkway audit.** It checks volumes along navigation edges, not every possible player path.
+- **Existing items.** The operator stool remains walk-through furniture, and the 5 known navigation-sweep edges remain.

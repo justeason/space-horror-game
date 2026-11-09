@@ -54,6 +54,7 @@ func _ready() -> void:
 	_build_equipment()
 	_build_eva_area()
 	_build_port_exterior()
+	_build_worksite()
 	if geo != null:
 		_dress_hull(geo)
 
@@ -220,7 +221,10 @@ func _build_space() -> void:
 # ------------------------------------------------------------------- hull
 func _collect_footprints(geo: Node) -> void:
 	for n in geo.get_children():
-		if n is CSGBox3D and String(n.name).ends_with("Floor"):
+		# Round 40: every interior FLOOR slab -- not only names ending in
+		# "Floor" ("JunctionFloorNorth" was missed, so the north Junction
+		# counted as outside and got hull plating on its INNER walls).
+		if n is CSGBox3D and _is_floor_slab(n):
 			var b: CSGBox3D = n
 			var c: Vector3 = b.global_position
 			_floor_rects.append(Rect2(Vector2(c.x - b.size.x * 0.5, c.z - b.size.z * 0.5), Vector2(b.size.x, b.size.z)))
@@ -229,6 +233,11 @@ func _collect_footprints(geo: Node) -> void:
 ## Round 39: is (x, z) over the pressure hull's interior footprint?
 func is_interior(x: float, z: float) -> bool:
 	return _interior(x, z)
+
+
+static func _is_floor_slab(b: CSGBox3D) -> bool:
+	var nm: String = String(b.name)
+	return nm.find("Floor") != -1 and nm.find("Basin") == -1 and b.size.y <= 0.3 and b.size.x > 0.8 and b.size.z > 0.8
 
 
 func _interior(x: float, z: float) -> bool:
@@ -260,7 +269,7 @@ func _build_hull(geo: Node) -> void:
 			_box(Vector3(s.x + 0.2, 0.12, s.z + 0.2), c + Vector3(0, s.y * 0.5 + 0.06, 0), _module_mat(nm), hull)
 			panel_count += 1
 			continue
-		if nm.ends_with("Floor") and s.y <= 0.3 and s.x > 0.8:
+		if _is_floor_slab(b):
 			_box(Vector3(s.x + 0.2, 0.12, s.z + 0.2), c - Vector3(0, s.y * 0.5 + 0.06, 0), _hull_grey, hull)
 			panel_count += 1
 			continue
@@ -276,7 +285,12 @@ func _build_hull(geo: Node) -> void:
 			if _interior(probe.x, probe.z):
 				continue
 			var off: Vector3 = Vector3(sgn * (s.x * 0.5 + 0.06), 0, 0) if thin_x else Vector3(0, 0, sgn * (s.z * 0.5 + 0.06))
-			var sz: Vector3 = Vector3(0.12, s.y + 0.2, s.z + 0.12) if thin_x else Vector3(s.x + 0.12, s.y + 0.2, 0.12)
+			# Round 40: exactly the wall's length (a 0.12 m overhang used to
+			# poke past wall ends into doorways / tunnels: the walkway audit).
+			# 2 cm short at each end: a plate end must never sit flush with a
+			# neighbouring wall's inner face (coplanar faces z-fight -- a
+			# flickering hull strip showed inside the Engineering tunnel).
+			var sz: Vector3 = Vector3(0.12, s.y + 0.2, s.z - 0.04) if thin_x else Vector3(s.x - 0.04, s.y + 0.2, 0.12)
 			_box(sz, c + off, _module_mat(nm), hull)
 			panel_count += 1
 
@@ -417,11 +431,23 @@ func _build_port_exterior() -> void:
 	glass.mesh = cyl
 	glass.rotation_degrees.z = 90.0
 	glass.position.x = -0.012          # just outside the hull plate (x -1.52)
-	var gm := _m(Color(0.04, 0.06, 0.08), 0.9, Color(0.45, 0.38, 0.28) * 0.35)
+	var gm := _m(Color(0.04, 0.06, 0.08), 0.9, Color(0.55, 0.45, 0.3) * 0.75)   # Round 40: warmer cabin glow, readable from outside
 	gm.roughness = 0.04
 	glass.material_override = gm
 	glass.layers = 1 | EXTERIOR
 	port_exterior.add_child(glass)
+	# Round 40: painted surround ring (yellow) so the port reads at a glance.
+	var paint := MeshInstance3D.new()
+	var ptm := TorusMesh.new()
+	ptm.inner_radius = 0.47
+	ptm.outer_radius = 0.53
+	ptm.rings = 32
+	paint.mesh = ptm
+	paint.rotation_degrees.z = 90.0
+	paint.scale = Vector3(1.0, 0.15, 1.0)
+	paint.position.x = 0.01
+	paint.material_override = _m(Color(0.95, 0.75, 0.15), 0.2)
+	port_exterior.add_child(paint)
 	# Sun hood over the top half and bolts.
 	var hood := _box(Vector3(0.18, 0.05, 1.0), Vector3(-0.08, 0.5, 0.0), rim_m, port_exterior)
 	hood.rotation_degrees.z = -18.0
@@ -531,3 +557,54 @@ func _dress_hull(geo: Node) -> void:
 	for n in dress.find_children("*", "GeometryInstance3D", true, false):
 		(n as GeometryInstance3D).layers = 1 | EXTERIOR
 		(n as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+
+# ======================================================================
+# Round 40 Priority 4: a believable EVA WORK SITE at antenna A1 -- foot
+# restraints on the walkway, a worklight on a post aimed at the feed box,
+# a tool caddy on the handrail and a site plate. Visual only.
+# ======================================================================
+func _build_worksite() -> void:
+	var ws := Node3D.new()
+	ws.name = "WorksiteA1"
+	add_child(ws)
+	var yel := _m(Color(0.95, 0.72, 0.1), 0.3)
+	var grey := _m(Color(0.45, 0.47, 0.5), 0.6)
+	# Foot restraints (two loops) on the walkway facing the feed box.
+	for dz in [-0.14, 0.14]:
+		var loop := MeshInstance3D.new()
+		var tm := TorusMesh.new()
+		tm.inner_radius = 0.07
+		tm.outer_radius = 0.1
+		loop.mesh = tm
+		loop.scale = Vector3(1.0, 1.0, 0.6)
+		loop.material_override = yel
+		loop.position = Vector3(-3.55, 0.03, 0.75 + dz)
+		ws.add_child(loop)
+	_box(Vector3(0.36, 0.02, 0.5), Vector3(-3.55, 0.01, 0.75), grey, ws)
+	# Worklight on a short post, aimed at the feed box.
+	_box(Vector3(0.05, 1.5, 0.05), Vector3(-3.75, 0.75, 1.25), grey, ws)
+	var head := _box(Vector3(0.16, 0.1, 0.12), Vector3(-3.72, 1.52, 1.2), _m(Color(0.3, 0.3, 0.32), 0.5, Color(0.95, 0.95, 1.0) * 0.8), ws)
+	head.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var sl := SpotLight3D.new()
+	sl.light_color = Color(0.95, 0.97, 1.0)
+	sl.light_energy = 1.6
+	sl.spot_range = 3.0
+	sl.spot_angle = 40.0
+	sl.light_cull_mask = EXTERIOR
+	ws.add_child(sl)
+	sl.look_at_from_position(Vector3(-3.7, 1.5, 1.18), Vector3(-3.06, 0.85, 0.75), Vector3.UP)
+	# Tool caddy clipped to the walkway rail.
+	_box(Vector3(0.22, 0.16, 0.12), Vector3(-3.25, 0.9, 0.2), _m(Color(0.75, 0.3, 0.12), 0.3), ws)
+	_box(Vector3(0.2, 0.02, 0.02), Vector3(-3.25, 1.0, 0.2), grey, ws)
+	var plate := Label3D.new()
+	plate.text = "WORKSITE A1\nFEED BOX · TETHER A3"
+	plate.font_size = 28
+	plate.pixel_size = 0.0016
+	plate.modulate = Color(0.95, 0.85, 0.4)
+	plate.position = Vector3(-3.74, 1.72, 1.25)
+	plate.rotation_degrees.y = -90.0
+	ws.add_child(plate)
+	for n in ws.find_children("*", "VisualInstance3D", true, false):
+		(n as VisualInstance3D).layers = 1 | EXTERIOR

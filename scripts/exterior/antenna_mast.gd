@@ -236,9 +236,9 @@ func order_next() -> Dictionary:
 			return {"action": "Service antenna A1 feed box", "short": "FIX FEED A1", "room": &"airlock"}
 		if not suited:
 			return {"action": "Put on the EVA suit (airlock)", "short": "SUIT UP", "room": &"airlock"}
-		return {"action": "Airlock chamber: press EXIT", "short": "AIRLOCK EXIT", "room": &"airlock"}
+		return {"action": "Airlock chamber: press OUT", "short": "AIRLOCK OUT", "room": &"airlock"}
 	if outside:
-		return {"action": "Float back into the chamber, press ENTER", "short": "AIRLOCK ENTER", "room": &"airlock"}
+		return {"action": "Float back into the chamber, press IN", "short": "AIRLOCK IN", "room": &"airlock"}
 	return {"action": "Verify the comms link", "short": "VERIFY LINK", "room": &"communications"}
 
 
@@ -247,7 +247,7 @@ func order_progress() -> String:
 
 
 func order_detail() -> Array:
-	return ["Antenna A1 (exterior, courtyard) feed: %s." % feed, "Comms link %d %%%s." % [roundi(link_quality() * 100.0), "" if comms_powered() else " — B-04 off"], "EVA: suit locker, then the airlock chamber (EXIT / ENTER). Tether rings A1-A3."]
+	return ["Antenna A1 (exterior, courtyard) feed: %s." % feed, "Comms link %d %%%s." % [roundi(link_quality() * 100.0), "" if comms_powered() else " — B-04 off"], "EVA: suit locker, then the airlock chamber (OUT / IN). Tether rings A1-A3."]
 
 
 func state_dict() -> Dictionary:

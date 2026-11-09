@@ -64,13 +64,14 @@ func _ready() -> void:
 	_build_inner_bulkhead()
 	_build_outer_bulkhead()
 	_build_panels()
+	_build_console()
 	_light = OmniLight3D.new()
 	_light.position = Vector3(-4.8, 2.3, -1.5)
 	_light.omni_range = 2.6
 	_light.light_energy = 0.9
 	add_child(_light)
 	_big = Label3D.new()
-	_big.position = Vector3(-4.415, 2.0, -1.5)
+	_big.position = Vector3(-4.415, 2.2, -1.62)
 	_big.rotation_degrees.y = -90.0
 	_big.font_size = 40
 	_big.pixel_size = 0.0012
@@ -226,7 +227,7 @@ func _build_outer_bulkhead() -> void:
 ## Panels: [id, position, yaw, title].
 const PANELS := [
 	[&"station", Vector3(-4.415, 1.35, -0.1), -90.0, "AIRLOCK"],
-	[&"chamber", Vector3(-4.415, 1.35, -0.95), -90.0, "CHAMBER"],
+	[&"chamber", Vector3(-4.415, 1.35, -1.35), -90.0, "CHAMBER"],
 	[&"outside", Vector3(-3.95, 1.3, -2.81), 180.0, "AIRLOCK A-1"],
 ]
 
@@ -256,8 +257,8 @@ func _build_panels() -> void:
 		var scr := _label("", Vector3(0, 0.05, 0.006), 0.0, 13, Color(0.55, 0.95, 0.75), root)
 		_screens.append(scr)
 		if p[0] == &"chamber":
-			_button(root, &"exit", Vector3(-0.08, -0.12, 0.0), "EXIT ▶", Color(0.75, 0.2, 0.15))
-			_button(root, &"enter", Vector3(0.08, -0.12, 0.0), "◀ ENTER", Color(0.2, 0.55, 0.3))
+			_button(root, &"exit", Vector3(-0.08, -0.12, 0.0), "OUT >>", Color(0.75, 0.2, 0.15))
+			_button(root, &"enter", Vector3(0.08, -0.12, 0.0), "<< IN", Color(0.2, 0.55, 0.3))
 		else:
 			_button(root, p[0], Vector3(0, -0.12, 0.0), "OPEN" if p[0] == &"outside" else "CYCLE", Color(0.75, 0.2, 0.15) if p[0] == &"outside" else Color(0.2, 0.55, 0.3))
 		if p[0] == &"outside":
@@ -294,9 +295,9 @@ func part_prompt(id: StringName) -> String:
 	match id:
 		&"exit":
 			var why: String = exit_blocker()
-			return "Click: EXIT — close inner, depressurize, open outer" if why == "" else "EXIT: %s" % why
+			return "Click: OUT — seal inner, vent, open outer" if why == "" else "OUT: %s" % why
 		&"enter":
-			return "Click: ENTER — close outer, repressurize, open inner" if not (inner_open and psi >= 14.5) else ""
+			return "Click: IN — seal outer, pressurize, open inner" if not (inner_open and psi >= 14.5) else ""
 		&"station":
 			return "Click: open the inner hatch" if not inner_open else ""
 		&"outside":
@@ -431,6 +432,7 @@ var _steps: Array = []
 func _start(kind: String, steps: Array) -> void:
 	sequence = kind
 	_steps = steps.duplicate()
+	_step_total = steps.size()
 	events.append({"event": "seq_" + kind, "t": _t})
 	_next_step()
 
@@ -443,7 +445,7 @@ func _next_step() -> void:
 		step = ""
 		events.append({"event": "done_" + k, "t": _t})
 		_sfx(&"success")
-		_say("Outer hatch open. Clip your tether to the ring." if k == "out" and outer_open else ("Inner hatch open. Welcome back." if k == "in" else "Airlock ready."), 3.5)
+		_say("Outer hatch open. Tether clips on as you go out." if k == "out" and outer_open else ("Inner hatch open. Welcome back." if k == "in" else "Airlock ready."), 3.5)
 		sequence_finished.emit(k)
 		state_changed.emit()
 		return
@@ -591,11 +593,110 @@ func _refresh() -> void:
 	if _beacon_mat != null:
 		_beacon_mat.albedo_color = col
 		_beacon_mat.emission = col
-	var txt: String = "%s\n%4.1f psi\nIN %s · OUT %s" % [state_word(), psi, "OPEN" if inner_open else "SHUT", "OPEN" if outer_open else "SHUT"]
+	var txt: String = "%s\n%4.1f psi" % [state_word(), psi]
+	if sequence != "":
+		txt = "%s\n%4.1f psi" % [step_text(), psi]
 	if waiting != "":
-		txt = "%s\n%4.1f psi\n%s" % [state_word(), psi, waiting.to_upper()]
+		txt = "%s\n%s" % [waiting.to_upper(), step_text()]
+	_refresh_console()
 	for s in _screens:
 		(s as Label3D).text = txt
 	if _big != null:
 		_big.text = "%4.1f psi" % psi
 		_big.modulate = col
+
+
+
+# ======================================================================
+# Round 40 Priority 2: ONE airlock control module. The chamber panel and
+# the HATCH SEAL panel (hatch_seal.gd, same wall) sit together on one
+# console "AIRLOCK A-1", under one header and a STATUS STRIP of four
+# lamps -- INNER (green = open), CHAMBER (green pressurized / amber
+# cycling / red vacuum), OUTER (red = open to space), SEAL (green = last
+# hold test passed, red = failed, amber = inspecting / testing, grey =
+# not tested). Step text on the screens is short ("2/3 VENT").
+# ======================================================================
+var _lamps: Dictionary = {}       # name -> StandardMaterial3D
+const STEP_NAMES := {"close_inner": "SEAL INNER", "depressurize": "VENT", "open_outer": "OPEN OUTER", "close_outer": "SEAL OUTER", "repressurize": "PRESSURIZE", "open_inner": "OPEN INNER"}
+var _step_total: int = 0
+
+
+func step_text() -> String:
+	if sequence == "" or step == "":
+		return state_word()
+	var n: int = _step_total - _steps.size()
+	return "%d/%d %s" % [n, _step_total, STEP_NAMES.get(step, step.to_upper())]
+
+
+func _build_console() -> void:
+	var root := Node3D.new()
+	root.name = "ControlConsole"
+	add_child(root)
+	# Backplate along the chamber's east wall behind both panels.
+	var back := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.012, 0.95, 1.18)
+	back.mesh = bm
+	back.material_override = _mat(Color(0.14, 0.15, 0.17), 0.5)
+	back.position = Vector3(-4.404, 1.47, -1.62)
+	root.add_child(back)
+	var trim := MeshInstance3D.new()
+	var tmm := BoxMesh.new()
+	tmm.size = Vector3(0.02, 0.03, 1.18)
+	trim.mesh = tmm
+	trim.material_override = _mat(Color(0.95, 0.72, 0.1), 0.2)
+	trim.position = Vector3(-4.408, 1.955, -1.62)
+	root.add_child(trim)
+	_label("AIRLOCK A-1", Vector3(-4.41, 1.9, -1.62), -90.0, 20, Color(0.95, 0.9, 0.8), root)
+	var names := ["INNER", "CHAMBER", "OUTER", "SEAL"]
+	for k in names.size():
+		var z: float = -1.2 - k * 0.28
+		var lamp := MeshInstance3D.new()
+		var sm := SphereMesh.new()
+		sm.radius = 0.022
+		sm.height = 0.044
+		lamp.mesh = sm
+		var m := _mat(Color(0.3, 0.3, 0.3), 0.0, Color(0.1, 0.1, 0.1))
+		lamp.material_override = m
+		lamp.position = Vector3(-4.412, 1.78, z)
+		root.add_child(lamp)
+		_lamps[names[k]] = m
+		_label(names[k], Vector3(-4.41, 1.73, z), -90.0, 11, Color(0.8, 0.85, 0.85), root)
+		if k < names.size() - 1:
+			var link := MeshInstance3D.new()
+			var lm := BoxMesh.new()
+			lm.size = Vector3(0.006, 0.006, 0.2)
+			link.mesh = lm
+			link.material_override = _mat(Color(0.5, 0.5, 0.52), 0.3)
+			link.position = Vector3(-4.41, 1.78, z - 0.14)
+			root.add_child(link)
+
+
+func _set_lamp(name: String, c: Color) -> void:
+	var m: StandardMaterial3D = _lamps.get(name, null)
+	if m != null:
+		m.albedo_color = c
+		m.emission = c * 0.9
+
+
+func _refresh_console() -> void:
+	if _lamps.is_empty():
+		return
+	var grey := Color(0.25, 0.26, 0.27)
+	_set_lamp("INNER", Color(0.3, 0.95, 0.45) if inner_open else grey)
+	_set_lamp("OUTER", Color(1.0, 0.25, 0.15) if outer_open else grey)
+	_set_lamp("CHAMBER", Color(1.0, 0.65, 0.15) if sequence != "" else (Color(1.0, 0.25, 0.15) if is_vacuum() else Color(0.3, 0.95, 0.45)))
+	_set_lamp("SEAL", seal_color())
+
+
+func seal_color() -> Color:
+	var hs: Node = get_node_or_null(^"../Equipment/HatchSeal")
+	if hs == null:
+		return Color(0.25, 0.26, 0.27)
+	if hs.inspection_mode or hs.test_state == "running":
+		return Color(1.0, 0.65, 0.15)
+	if hs.test_state == "pass":
+		return Color(0.3, 0.95, 0.45)
+	if hs.test_state == "fail":
+		return Color(1.0, 0.25, 0.15)
+	return Color(0.25, 0.26, 0.27)

@@ -119,6 +119,8 @@ func _shift() -> void:
 	dp.shift_elapsed_s = dp.work_done_at_s + dp.WRAP_UP_S + 0.1
 	await create_timer(0.2).timeout
 	_check("after the wrap-up the shift ends (bunk expected)", dp.shift_ended and dp.bed_required() and dp.shift_status_text().find("REST") != -1)
+	await create_timer(1.8).timeout
+	_check("Round 40: a warm glow comes on over the bunk (wordless 'go to bed')", q.bunk_glow_energy() > 0.5)
 	_check("not tired yet inside the grace period", dp.tiredness() == 0.0 and is_equal_approx(dp.movement_factor(), 1.0))
 	dp.awake_after_shift_s = dp.BED_GRACE_S + dp.TIRED_RAMP_S
 	await create_timer(0.2).timeout

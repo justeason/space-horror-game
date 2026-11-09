@@ -291,6 +291,11 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed and event.keycode == KEY_SPACE):
 		return
+	# Round 40: during EVA, SPACE is the suit jet (push toward the
+	# crosshair) -- never pick up / drop / throw anything out there.
+	var eva: Node = get_tree().get_first_node_in_group(&"eva_system") if is_inside_tree() else null
+	if eva != null and eva.outside:
+		return
 	# Same exclusive-state signal workstation_state.gd/sleep_state.gd
 	# already drive (begin_use()/begin_sitting() set this false) -- see
 	# interaction_controller.gd's class doc comment. Reusing it here is

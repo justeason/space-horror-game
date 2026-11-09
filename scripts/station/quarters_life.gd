@@ -244,7 +244,31 @@ func part_prompt(id: StringName) -> String:
 	return ""
 
 
+## Round 40 Priority 5: a diegetic end-of-shift cue -- once the shift is
+## over, a warm reading glow comes on over the bunk ("go to bed" without
+## words); it goes out with the new day.
+var _bunk_glow: OmniLight3D
+
+
+func _update_bunk_glow(delta: float) -> void:
+	if _bunk_glow == null:
+		_bunk_glow = OmniLight3D.new()
+		_bunk_glow.name = "BunkGlow"
+		_bunk_glow.light_color = Color(1.0, 0.72, 0.42)
+		_bunk_glow.omni_range = 2.2
+		_bunk_glow.light_energy = 0.0
+		_bunk_glow.position = Vector3(5.0, 1.1, -0.6)
+		add_child(_bunk_glow)
+	var want: float = 0.9 if _dp != null and _dp.shift_ended else 0.0
+	_bunk_glow.light_energy = move_toward(_bunk_glow.light_energy, want, delta * 0.6)
+
+
+func bunk_glow_energy() -> float:
+	return _bunk_glow.light_energy if _bunk_glow != null else 0.0
+
+
 func _process(delta: float) -> void:
+	_update_bunk_glow(delta)
 	if brewing < 0.0:
 		return
 	brewing += delta

@@ -26,28 +26,35 @@ extends CharacterBody3D
 @export var move_speed: float = 1.8
 ## Round 39: set every frame by DayPlan (underfed / overtired: < 1.0).
 var speed_scale: float = 1.0
-## Round 39 Priority 6C: EVA free-floating. No gravity, no floor: W/S push
-## along the LOOK direction (pitch included), A/D strafe, Space / C rise /
-## sink -- gentle suit thrusters with a slow auto-stabilising drag, so the
-## technician drifts and has to plan a stop. The tether (eva_system.gd)
-## limits how far they can go.
+## Round 39/40: EVA free-floating. Round 40 control scheme (one clear
+## idea instead of "WASD + Space/C"): hold SPACE (or W) and the suit's
+## jets PUSH you toward the crosshair -- look where you want to go, push,
+## let go and coast. S = brake (stabilise to a stop). A / D = gentle
+## sideways drift. No gravity, no floor; a slow auto-stabilising drag
+## keeps drift readable. The tether (eva_system.gd) limits range.
 var zero_g: bool = false
-const ZG_ACCEL := 0.9
-const ZG_MAX := 1.1
-const ZG_DRAG := 0.55
+const ZG_ACCEL := 1.0
+const ZG_MAX := 1.2
+const ZG_DRAG := 0.18      # coasting
+const ZG_BRAKE := 1.6      # holding S
+var thrusting: bool = false
+var braking: bool = false
 
 
 func _zero_g_step(delta: float, input_dir: Vector2) -> void:
 	var cam_basis: Basis = look_pivot.get_node("PitchPivot").global_transform.basis if look_pivot != null and look_pivot.has_node("PitchPivot") else global_transform.basis
 	var fwd: Vector3 = -cam_basis.z
 	var right: Vector3 = cam_basis.x
-	var thrust: Vector3 = fwd * -input_dir.y + right * input_dir.x
-	if Input.is_key_pressed(KEY_SPACE):
-		thrust += Vector3.UP
-	if Input.is_key_pressed(KEY_C):
-		thrust += Vector3.DOWN
-	if thrust.length_squared() > 0.0001:
-		velocity += thrust.normalized() * ZG_ACCEL * delta
+	thrusting = Input.is_key_pressed(KEY_SPACE) or Input.is_key_pressed(KEY_W)
+	braking = Input.is_key_pressed(KEY_S)
+	var thrust: Vector3 = Vector3.ZERO
+	if thrusting:
+		thrust += fwd
+	thrust += right * input_dir.x * 0.5
+	if braking:
+		velocity = velocity.move_toward(Vector3.ZERO, ZG_BRAKE * delta)
+	elif thrust.length_squared() > 0.0001:
+		velocity += thrust.normalized() * ZG_ACCEL * delta * minf(thrust.length(), 1.0)
 	else:
 		velocity = velocity.move_toward(Vector3.ZERO, ZG_DRAG * delta)
 	if velocity.length() > ZG_MAX:

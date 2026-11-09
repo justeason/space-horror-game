@@ -160,6 +160,8 @@ TESTS=(
   test_r39_hull_seal
   test_r39_airlock_eva
   test_r39_routine_layout
+  test_r40_walkway_clear
+  test_r40_eva_clarity
 )
 
 if [ "$#" -gt 0 ]; then

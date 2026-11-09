@@ -191,11 +191,13 @@ func _dress_room(f: CSGBox3D, c: CSGBox3D, spec: Array) -> void:
 			# Slim transceiver rack on the free east-wall segment (z 6.0-6.6;
 			# the north wall carries the signal station and the link panel),
 			# with status LEDs on the B-04 circuit, and a ceiling cable bundle.
+			# Round 40: kept clear of the alcove doorway corner (walkway audit).
 			var rx: float = ctr.x + sx * 0.5 - 0.16
-			_box(Vector3(0.12, 1.7, 0.5), Vector3(rx, 0.95, ctr.z - sz * 0.5 + 0.38), _frame)
+			var rz: float = ctr.z - sz * 0.5 + 0.3
+			_box(Vector3(0.12, 1.7, 0.36), Vector3(rx, 0.95, rz), _frame)
 			for k in 5:
-				_box(Vector3(0.01, 0.22, 0.44), Vector3(rx - 0.065, 0.4 + k * 0.3, ctr.z - sz * 0.5 + 0.38), _m(Color(0.14, 0.15, 0.17), 0.5))
-				_strip(Vector3(0.01, 0.015, 0.12), Vector3(rx - 0.072, 0.47 + k * 0.3, ctr.z - sz * 0.5 + 0.26), col, zone)
+				_box(Vector3(0.01, 0.22, 0.3), Vector3(rx - 0.065, 0.4 + k * 0.3, rz), _m(Color(0.14, 0.15, 0.17), 0.5))
+				_strip(Vector3(0.01, 0.015, 0.1), Vector3(rx - 0.072, 0.47 + k * 0.3, rz - 0.08), col, zone)
 			for k in 3:
 				_cyl(0.025, sz - 0.3, Vector3(ctr.x + sx * 0.5 - 0.3 - k * 0.06, top - 0.06, ctr.z), false, _m(Color(0.1, 0.1, 0.12), 0.3))
 		"storage":
@@ -235,25 +237,149 @@ func _dress_corridor(f: CSGBox3D, c: CSGBox3D) -> void:
 	var top: float = c.global_position.y - c.size.y * 0.5
 	var axis: Vector3 = Vector3(1, 0, 0) if along_x else Vector3(0, 0, 1)
 	var side: Vector3 = Vector3(0, 0, 1) if along_x else Vector3(1, 0, 0)
+	# Round 40 Priority 3: posts, handrails and ceiling cladding exist only
+	# where that side actually has WALL -- never across a side opening
+	# (the Junction -> Comms doorway had a rib post standing in it, a
+	# handrail across it and cladding over its top: the "bars").
+	var fc: Vector3 = f.global_position
+	var segs := {}
+	for sgn in [-1.0, 1.0]:
+		segs[sgn] = _wall_segments(fc, f.size.x, f.size.z, side * sgn, along_x)
 	var n: int = maxi(int(length / 0.75), 1)
 	for i in n + 1:
 		var p: Vector3 = ctr + axis * (-length * 0.5 + length * float(i) / float(n))
 		if i == 0 or i == n or _near_equipment(p):
 			continue
-		for s in [-1.0, 1.0]:
-			var post: Vector3 = Vector3(p.x, top * 0.5, p.z) + side * s * (width * 0.5 - 0.04)
-			_box(Vector3(0.06, top - 0.3, 0.12) if not along_x else Vector3(0.12, top - 0.3, 0.06), post if along_x else post, _frame)
-			var corner: Vector3 = Vector3(p.x, top - 0.16, p.z) + side * s * (width * 0.5 - 0.16)
-			_box(Vector3(0.06, 0.32, 0.12) if not along_x else Vector3(0.12, 0.32, 0.06), corner, _frame, (Vector3(0, 0, -45.0 * s) if not along_x else Vector3(45.0 * s, 0, 0)))
+		var a_pos: float = p.x if along_x else p.z
+		var both: bool = true
+		var any_post: bool = false
+		for sgn in [-1.0, 1.0]:
+			if not _in_segments(segs[sgn], a_pos, 0.12):
+				both = false
+				continue
+			any_post = true
+			var post: Vector3 = Vector3(p.x, top * 0.5, p.z) + side * sgn * (width * 0.5 - 0.04)
+			_box(Vector3(0.06, top - 0.3, 0.12) if not along_x else Vector3(0.12, top - 0.3, 0.06), post, _frame)
+			var corner: Vector3 = Vector3(p.x, top - 0.16, p.z) + side * sgn * (width * 0.5 - 0.16)
+			_box(Vector3(0.06, 0.32, 0.12) if not along_x else Vector3(0.12, 0.32, 0.06), corner, _frame, (Vector3(0, 0, -45.0 * sgn) if not along_x else Vector3(45.0 * sgn, 0, 0)))
+		if any_post:
+			rib_count += 1       # a rib station (frame posts on the wall)
+		if not both:
+			continue             # the overhead beam needs walls on both sides
 		_box(Vector3(0.12, 0.06, width - 0.5) if along_x else Vector3(width - 0.5, 0.06, 0.12), Vector3(p.x, top - 0.04, p.z), _frame)
-		rib_count += 1
-	for s in [-1.0, 1.0]:
-		var cp: Vector3 = Vector3(ctr.x, top - 0.12, ctr.z) + side * s * (width * 0.5 - 0.12)
-		_box(Vector3(length - 0.1, 0.26, 0.02) if along_x else Vector3(0.02, 0.26, length - 0.1), cp, _clad, (Vector3(-45.0 * s, 0, 0) if along_x else Vector3(0, 0, 45.0 * s)))
+	for sgn in [-1.0, 1.0]:
+		for seg in segs[sgn]:
+			var lo: float = seg[0]
+			var hi: float = seg[1]
+			if hi - lo < 0.3:
+				continue
+			var mid: float = (lo + hi) * 0.5
+			var at := Vector3(mid, 0, ctr.z) if along_x else Vector3(ctr.x, 0, mid)
+			var cp: Vector3 = Vector3(at.x, top - 0.12, at.z) + side * sgn * (width * 0.5 - 0.12)
+			_box(Vector3(hi - lo - 0.05, 0.26, 0.02) if along_x else Vector3(0.02, 0.26, hi - lo - 0.05), cp, _clad, (Vector3(-45.0 * sgn, 0, 0) if along_x else Vector3(0, 0, 45.0 * sgn)))
+			if sgn > 0.0 and hi - lo > 0.6:
+				var hp: Vector3 = Vector3(at.x, 1.0, at.z) + side * (width * 0.5 - 0.05)
+				if not _near_equipment(hp, 0.3):
+					_cyl(0.018, hi - lo - 0.3, hp, along_x, _m(Color(0.7, 0.55, 0.15), 0.6))
 	_strip(Vector3(length - 0.3, 0.015, 0.05) if along_x else Vector3(0.05, 0.015, length - 0.3), Vector3(ctr.x, top - 0.01, ctr.z), Color(0.35, 0.8, 0.95), &"")
-	var hp: Vector3 = Vector3(ctr.x, 1.0, ctr.z) + side * (width * 0.5 - 0.05)
-	if not _near_equipment(hp, 0.3):
-		_cyl(0.018, length - 0.4, hp, along_x, _m(Color(0.7, 0.55, 0.15), 0.6))
+	_corridor_details(ctr, along_x, length, width, top, segs, side)
+
+
+# ======================================================================
+# Round 40 Priority 4: SPACECRAFT corridors -- lower chamfer panels at the
+# floor/wall corners (an octagonal "tunnel" section with the ceiling
+# chamfers), cable conduits along the upper wall, vertical panel seams,
+# floor plate seams, cyan floor guide lights, labelled access panels.
+# All against walls / on the floor; visual only (no collision), so
+# navigation is untouched, and only where a WALL runs.
+# ======================================================================
+var _access_n: int = 0
+
+
+func _corridor_details(ctr: Vector3, along_x: bool, length: float, width: float, top: float, segs: Dictionary, side: Vector3) -> void:
+	var seam := _m(Color(0.12, 0.13, 0.14), 0.3)
+	var conduit := _m(Color(0.18, 0.19, 0.21), 0.5)
+	var lower := _m(Color(0.26, 0.28, 0.31), 0.45)
+	for sgn in [-1.0, 1.0]:
+		for seg in segs[sgn]:
+			var lo: float = seg[0]
+			var hi: float = seg[1]
+			var L: float = hi - lo
+			if L < 0.3:
+				continue
+			var mid: float = (lo + hi) * 0.5
+			var at := Vector3(mid, 0, ctr.z) if along_x else Vector3(ctr.x, 0, mid)
+			var wall: Vector3 = at + side * sgn * (width * 0.5)
+			# Lower chamfer panel (45 deg, 0.18 m) along the floor corner:
+			# it stays below ankle height and within 0.13 m of the wall.
+			var lp: Vector3 = Vector3(wall.x, 0.064, wall.z) - side * sgn * 0.064
+			_box(Vector3(L - 0.05, 0.18, 0.02) if along_x else Vector3(0.02, 0.18, L - 0.05), lp, lower, (Vector3(45.0 * sgn, 0, 0) if along_x else Vector3(0, 0, -45.0 * sgn)))
+			# Two cable conduits high on the wall.
+			for k in 2:
+				var cp: Vector3 = Vector3(wall.x, top - 0.42 - k * 0.07, wall.z) - side * sgn * 0.045
+				_cyl(0.022, L - 0.08, cp, along_x, conduit)
+			# Vertical panel seams every ~0.75 m.
+			var ns: int = int(L / 0.75)
+			for k in range(1, ns + 1):
+				var sp: float = lo + L * float(k) / float(ns + 1)
+				var sv := Vector3(sp, 1.15, ctr.z) if along_x else Vector3(ctr.x, 1.15, sp)
+				sv += side * sgn * (width * 0.5 - 0.006)
+				_box(Vector3(0.012, 1.7, 0.012), sv, seam)
+			# A labelled access panel on longer runs.
+			if L > 1.3:
+				_access_n += 1
+				var ap: Vector3 = Vector3(at.x, 1.25, at.z) + side * sgn * (width * 0.5 - 0.012)
+				_box(Vector3(0.42, 0.5, 0.02) if along_x else Vector3(0.02, 0.5, 0.42), ap, _m(Color(0.3, 0.32, 0.35), 0.5))
+				var lbl := Label3D.new()
+				lbl.text = "ACCESS %d%s" % [_access_n, "AB"[_access_n % 2]]
+				lbl.font_size = 18
+				lbl.pixel_size = 0.0012
+				lbl.modulate = Color(0.85, 0.85, 0.8)
+				lbl.position = ap + Vector3(0, 0.17, 0) - side * sgn * 0.015
+				lbl.rotation_degrees.y = (0.0 if sgn < 0.0 else 180.0) if along_x else (90.0 if sgn < 0.0 else -90.0)
+				add_child(lbl)
+			# Cyan floor guide lights along the base.
+			var nl: int = int(L / 0.5)
+			for k in nl:
+				var gp: float = lo + 0.25 + k * 0.5
+				var g := Vector3(gp, 0.012, ctr.z) if along_x else Vector3(ctr.x, 0.012, gp)
+				g += side * sgn * (width * 0.5 - 0.2)
+				_strip(Vector3(0.12, 0.008, 0.03) if along_x else Vector3(0.03, 0.008, 0.12), g, Color(0.3, 0.85, 1.0), &"")
+	# Floor plate seams across the walkway.
+	var nf: int = int(length / 0.75)
+	for k in range(1, nf + 1):
+		var fp: float = (ctr.x if along_x else ctr.z) - length * 0.5 + length * float(k) / float(nf + 1)
+		var fv := Vector3(fp, 0.004, ctr.z) if along_x else Vector3(ctr.x, 0.004, fp)
+		_box(Vector3(0.015, 0.006, width - 0.1) if along_x else Vector3(width - 0.1, 0.006, 0.015), fv, seam)
+
+
+## Merged [lo, hi] intervals (along the corridor axis) covered by wall on
+## side `n` of the floor rectangle.
+func _wall_segments(ctr: Vector3, sx: float, sz: float, n: Vector3, along_x: bool) -> Array:
+	var iv: Array = []
+	var lo_lim: float = (ctr.x - sx * 0.5) if along_x else (ctr.z - sz * 0.5)
+	var hi_lim: float = (ctr.x + sx * 0.5) if along_x else (ctr.z + sz * 0.5)
+	for w in _side_walls(ctr, sx, sz, n):
+		var a: AABB = w[0]
+		var lo: float = maxf(a.position.x if along_x else a.position.z, lo_lim)
+		var hi: float = minf(a.end.x if along_x else a.end.z, hi_lim)
+		if hi - lo > 0.05:
+			iv.append([lo, hi])
+	iv.sort_custom(func(p, q): return p[0] < q[0])
+	var merged: Array = []
+	for v in iv:
+		if not merged.is_empty() and v[0] <= merged[-1][1] + 0.02:
+			merged[-1][1] = maxf(merged[-1][1], v[1])
+		else:
+			merged.append([v[0], v[1]])
+	return merged
+
+
+static func _in_segments(segs: Array, x: float, margin: float) -> bool:
+	for sg in segs:
+		if x >= sg[0] + margin and x <= sg[1] - margin:
+			return true
+	return false
 
 
 ## Strips follow their module's lighting breaker.

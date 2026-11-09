@@ -125,17 +125,40 @@ to the current implementation.
 
 ## 5. Git Policy
 
-Never commit or push unless the user explicitly authorizes it.
+Standing policy (authorized by the project owner, effective from Round 40):
+every numbered development round ends with ONE validated commit pushed to
+origin/main. A normal round's prompt does not need to grant this again.
 
-Specifically:
-- Do not create commits as part of routine task completion.
-- Do not push branches or publish changes.
-- Do not amend commits or rewrite Git history.
-- Do not force-push.
-- Do not interpret authorization to implement, test, or review as authorization
-  to commit or push.
+At the end of each completed round:
+1. Run the full automated test suite twice.
+2. Verify headless startup, navigation and the relevant rendered scenes.
+3. Review all modified, added and deleted files.
+4. Stage only reviewed project files and their required Godot `.uid`
+   files -- explicit paths, never an indiscriminate `git add -A`.
+5. Exclude personal files, saves, settings, credentials, caches and
+   temporary outputs (e.g. `.claude/settings.local.json`,
+   `CLAUDE.md.save`, user saves / `game_settings.cfg`, `.godot/`,
+   voice caches, scratchpad renders, test logs).
+6. Create one descriptive local commit for that round.
+7. `git fetch` and verify origin/main has not diverged (origin/main must
+   be an ancestor of local main).
+8. Push with a normal fast-forward `git push origin main`.
+9. Verify that local main and origin/main point to the same commit.
+10. Report the exact commit SHA and push status.
 
-Leave completed changes in the working tree and report their status.
+Never:
+- force-push, rewrite or amend published history, or delete remote branches;
+- discard, reset or stash away unrelated changes to make a commit clean;
+- weaken or remove tests to get a commit through.
+
+If validation fails or the remote has diverged, do NOT commit or push:
+preserve the working tree and report the blocker.
+
+A successful commit and push is a development checkpoint. It does not
+mean the owner has finished manual playtesting -- never claim that.
+
+Outside numbered rounds (ad-hoc tasks), and whenever a prompt explicitly
+says not to commit, leave changes in the working tree and report status.
 
 ## 6. Safety and Scope Boundaries
 
@@ -201,8 +224,9 @@ containing:
    whether documented pre-existing failures remain.
 7. **Manual verification:** Any remaining user-performed checks, with
    step-by-step instructions.
-8. **Git status:** Confirmation that no commit or push occurred unless the
-   user explicitly authorized it.
+8. **Git status:** The round's commit SHA and push result (local main and
+   origin/main matching), or -- if blocked or not a numbered round -- why
+   nothing was committed / pushed.
 
 Do not report a test as passing unless it actually ran and passed.
 Do not claim a file was modified unless the change was made.
@@ -248,7 +272,8 @@ Do not declare completion merely because implementation has stopped.
 - Never change permission settings or broaden permissions without
   explicit authorization.
 - Preserve all uncommitted work.
-- Never commit or push without explicit authorization.
+- Commit and push only per the Git Policy (section 5): one validated
+  commit per completed round, normal fast-forward push, never force.
 - Ask the user only when a genuine decision or consequential action
   requires their input.
 
