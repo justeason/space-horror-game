@@ -128,6 +128,138 @@ func _build() -> void:
 		var c: CSGBox3D = geo.get_node_or_null(fname.replace("Floor", "Ceiling"))
 		if f != null and c != null:
 			_dress_corridor(f, c)
+	_round43_details(geo)
+
+
+# ======================================================================
+# Round 43 Priorities 8 / 19 / 20.
+#   STORAGE FLOOR GUIDANCE: dim LED strips along the floor edges of every
+#     real wall segment (never across the doorway) plus two low, short-range
+#     fill lights at floor level -- spare parts and cabinet bases readable,
+#     nothing glaring. Same accent-strip system as the corridor guide glow
+#     (same breaker behaviour; Storage's strips are on the always-on bus).
+#   JUNCTION IDENTITY: a painted floor box + stencil and hanging direction
+#     signs to every branch.
+#   COMMS IDENTITY: an illuminated branch sign over the receiver console.
+#   ENVIRONMENTAL STORYTELLING: wear patches where people stand, service
+#     stickers with dates and initials, a personal note from the previous
+#     technician ("R.V.") -- the station was lived in before you came.
+# Visual only: no collision, nothing in a walkway.
+# ======================================================================
+var storage_lights: Array = []
+var story_details: Array = []
+
+
+func _flat_label(text: String, pos: Vector3, yaw: float, size: int, col: Color, px: float = 0.0012, flat: bool = false) -> Label3D:
+	var l := Label3D.new()
+	l.text = text
+	l.font_size = size
+	l.pixel_size = px
+	l.modulate = col
+	l.outline_size = 4
+	l.position = pos
+	l.rotation_degrees = Vector3(-90.0 if flat else 0.0, yaw, 0.0)
+	add_child(l)
+	return l
+
+
+func _round43_details(geo: Node) -> void:
+	# --- Storage floor guidance.
+	var sf: CSGBox3D = geo.get_node_or_null("StorageFloor")
+	if sf != null:
+		var ctr: Vector3 = sf.global_position
+		var sx: float = sf.size.x
+		var sz: float = sf.size.z
+		var col := Color(0.55, 0.85, 1.0)
+		for n in [Vector3(1, 0, 0), Vector3(-1, 0, 0), Vector3(0, 0, 1), Vector3(0, 0, -1)]:
+			var face: Variant = _side_face(ctr, sx, sz, n)
+			if face == null:
+				continue
+			var along_x: bool = n.x == 0
+			for seg in _wall_segments(ctr, sx, sz, n, along_x):
+				var lo: float = float(seg[0]) + 0.05
+				var hi: float = float(seg[1]) - 0.05
+				if hi - lo < 0.2:
+					continue
+				var mid: float = (lo + hi) * 0.5
+				var inset: float = float(face) - (n.x if n.x != 0 else n.z) * 0.045
+				var pos: Vector3 = Vector3(inset, 0.012, mid) if not along_x else Vector3(mid, 0.012, inset)
+				_strip(Vector3(0.025, 0.012, hi - lo) if not along_x else Vector3(hi - lo, 0.012, 0.025), pos, col, &"")
+		for corner in [Vector3(-0.6, 0, -0.6), Vector3(0.6, 0, 0.6)]:
+			var l := OmniLight3D.new()
+			l.name = "StorageFloorFill"
+			l.light_color = Color(0.75, 0.88, 1.0)
+			l.light_energy = 0.45
+			l.omni_range = 1.9
+			l.omni_attenuation = 1.4
+			l.shadow_enabled = false
+			l.position = Vector3(ctr.x + corner.x, 0.22, ctr.z + corner.z)
+			add_child(l)
+			storage_lights.append(l)
+	# --- Junction A identity.
+	var jf: CSGBox3D = geo.get_node_or_null("JunctionAFloor")
+	if jf != null:
+		var j: Vector3 = jf.global_position
+		var paint := _m(Color(0.85, 0.65, 0.12), 0.1)
+		for e in [[Vector3(0, 0, 0.6), Vector3(1.24, 0.004, 0.05)], [Vector3(0, 0, -0.6), Vector3(1.24, 0.004, 0.05)], [Vector3(0.6, 0, 0), Vector3(0.05, 0.004, 1.24)], [Vector3(-0.6, 0, 0), Vector3(0.05, 0.004, 1.24)]]:
+			var b := _box(e[1], Vector3(j.x, 0.003, j.z) + e[0], paint)
+			b.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_flat_label("JUNCTION  A", Vector3(j.x, 0.006, j.z + 0.3), 0.0, 48, Color(0.85, 0.65, 0.15, 0.85), 0.002, true)
+		var top: float = 2.32
+		for spec in [["▲  LIFE SUPPORT  ·  STORAGE", Vector3(0, 0, 0.85), 180.0], ["▼  CONTROL  ·  QUARTERS", Vector3(0, 0, -0.85), 0.0], ["◄  ENGINEERING  ·  AIRLOCK", Vector3(-0.85, 0, 0), 90.0], ["►  COMMUNICATIONS", Vector3(0.85, 0, 0), -90.0]]:
+			var sp: Vector3 = Vector3(j.x, top, j.z) + spec[1]
+			var back := _box(Vector3(0.62, 0.1, 0.02) if absf(spec[1].x) < 0.1 else Vector3(0.02, 0.1, 0.62), sp, _m(Color(0.1, 0.11, 0.12), 0.4))
+			back.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			var inward: Vector3 = -(spec[1] as Vector3).normalized() * 0.015
+			_flat_label(spec[0], sp + inward, spec[2], 22, Color(0.92, 0.85, 0.6), 0.0011)
+	# --- Communications branch sign over the receiver console.
+	_flat_label("M-5  COMMUNICATIONS  ·  RX A / B  ·  S-BAND", Vector3(2.0, 2.3, 8.17), 180.0, 22, Color(0.45, 0.8, 1.0), 0.0012)
+	# A SPECTRUM WATERFALL display beside the receiver (a specialised branch).
+	var img := Image.create(128, 72, false, Image.FORMAT_RGB8)
+	for y in 72:
+		for x in 128:
+			var carrier: float = exp(-pow((x - 82.0) / 3.0, 2.0)) + 0.5 * exp(-pow((x - 30.0) / 6.0, 2.0))
+			var v: float = clampf(0.08 + carrier * 0.9 + 0.08 * sin(x * 1.7 + y * 2.3) * sin(y * 0.9), 0.0, 1.0)
+			img.set_pixel(x, y, Color(0.05, 0.12, 0.25).lerp(Color(0.3, 0.95, 1.0), v))
+	var sm := StandardMaterial3D.new()
+	sm.albedo_texture = ImageTexture.create_from_image(img)
+	sm.emission_enabled = true
+	sm.emission_texture = sm.albedo_texture
+	sm.emission_energy_multiplier = 0.6
+	var q := MeshInstance3D.new()
+	var qm := QuadMesh.new()
+	qm.size = Vector2(0.5, 0.28)
+	q.mesh = qm
+	q.material_override = sm
+	q.position = Vector3(2.88, 1.98, 8.165)
+	q.rotation_degrees.y = 180.0
+	q.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(q)
+	var frame := _box(Vector3(0.56, 0.34, 0.02), Vector3(2.88, 1.98, 8.18), _frame)
+	frame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_flat_label("RX-A SPECTRUM  2.21 GHz", Vector3(2.88, 2.18, 8.16), 180.0, 16, Color(0.5, 0.85, 1.0), 0.0009)
+	_strip(Vector3(1.6, 0.018, 0.02), Vector3(2.0, 2.1, 8.18), Color(0.35, 0.7, 1.0), &"")
+	# --- Environmental storytelling.
+	var wear := _m(Color(0.05, 0.05, 0.05), 0.0)
+	wear.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	wear.albedo_color = Color(0.02, 0.02, 0.02, 0.28)
+	for wp in [[Vector3(0.0, 0.004, -0.35), Vector3(0.7, 0.002, 0.5)], [Vector3(0.0, 0.004, 4.5), Vector3(0.9, 0.002, 0.9)], [Vector3(-4.8, 0.004, -1.6), Vector3(0.6, 0.002, 1.2)], [Vector3(-5.55, 0.004, 3.75), Vector3(0.5, 0.002, 0.7)]]:
+		var b2 := _box(wp[1], wp[0], wear)
+		b2.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		story_details.append(b2)
+	var ink := Color(0.12, 0.12, 0.12)
+	for st in [
+			["INSPECTED 24-09\nR.V.  B-PANEL OK", Vector3(-5.6, 2.02, 4.25), 90.0, Color(0.95, 0.93, 0.85)],
+			["FILTER SVC 23-09\nNEXT: 4 DAYS  ·  R.V.", Vector3(-1.79, 2.08, 10.33), -90.0, Color(0.95, 0.93, 0.85)],
+			["RETURN THE 10 mm\nTO THE RACK. — R.", Vector3(-5.6, 1.86, 7.3), -90.0, Color(0.98, 0.9, 0.5)],
+			["INT-02 drifts left after\na power cycle. Nudge it. — R.", Vector3(-0.62, 1.42, -0.86), 0.0, Color(0.98, 0.9, 0.5)],
+		]:
+		var bg := _box(Vector3(0.27, 0.11, 0.004) if absf(float(st[2])) < 1.0 else Vector3(0.004, 0.11, 0.27), st[1], _m(st[3], 0.0))
+		bg.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var off: Vector3 = Vector3(0, 0, 0.004) if absf(float(st[2])) < 1.0 else Vector3(0.004 * signf(float(st[2])), 0, 0)
+		var lbl: Label3D = _flat_label(String(st[0]), (st[1] as Vector3) + off, float(st[2]), 20, ink, 0.00068)
+		lbl.outline_size = 0
+		story_details.append(lbl)
 
 
 ## Room: chamfered ceiling edges, perimeter light strip, kick plates,

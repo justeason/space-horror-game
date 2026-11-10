@@ -43,11 +43,12 @@ func _laptop() -> void:
 	scr._on_app(&"files")
 	await process_frame
 	_check("Files: the six top folders", scr._files_box.get_child_count() == 2 and scr._files_box.get_child(1).get_child_count() == 6)
-	scr.open_entry({"kind": "dir", "target": "Documents"})
+	# Round 43: "Documents" became Work/ with subfolders (Training, Station
+	# Procedures, Shift Handover, Archived Reports) + its own 2 files.
+	scr.open_entry({"kind": "dir", "target": "Work"})
 	await process_frame
-	# Round 42: + the previous technician's handover note (a story document).
-	_check("open Documents/ (4 files + ..)", scr.folder == "Documents" and scr._files_box.get_child(1).get_child_count() == 5)
-	var doc: Dictionary = scr.Files.list("Documents")[0]
+	_check("open Work/ (.. + 4 subfolders + 2 files)", scr.folder == "Work" and scr._files_box.get_child(1).get_child_count() == 7)
+	var doc: Dictionary = scr.Files.list("Work")[0]
 	scr.open_entry({"kind": "txt", "rec": doc})
 	_check("open a text file: '%s'" % scr.open_file, scr.current_view() == &"file" and scr._report.text.find("ROTATION SUMMARY") != -1)
 	scr._on_app(&"files")

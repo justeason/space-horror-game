@@ -303,7 +303,9 @@ func mark_complete() -> void:
 func _sync_world_diorama() -> void:
 	if _world_diorama == null:
 		return
-	_world_diorama.sync_full_state(_frequency, _gain, signal_quality(), noise_level(), is_complete())
+	_world_diorama.sync_full_state(_frequency, _gain, link_quality() if receiver_powered() else 0.0, noise_level(), is_complete())
+	if _world_diorama.has_method("set_powered"):
+		_world_diorama.set_powered(receiver_powered())
 	if _world_diorama.has_method("set_readout_text") and not is_complete():
 		_world_diorama.set_readout_text(physical_readout())
 

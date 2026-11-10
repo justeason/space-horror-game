@@ -2254,8 +2254,12 @@ func _pose_consume_arm(delta: float) -> void:
 	var ofs: Vector3 = CONSUME_MOUTH_HEAD
 	if u >= 0.28 and u < 0.78:
 		# Bites: the hand dips away and back; sips: a slow tilt (prop rotation).
-		var bob: float = sin((u - 0.28) / 0.5 * TAU * (2.0 if _consume_kind == "meal" else 1.0))
-		ofs += Vector3(0.0, -0.04, -0.04) * maxf(bob, 0.0) * (1.0 if _consume_kind == "meal" else 0.3)
+		var eating: bool = _consume_kind in ["meal", "dinner"]
+		var bob: float = sin((u - 0.28) / 0.5 * TAU * (2.0 if eating else 1.0))
+		ofs += Vector3(0.0, -0.04, -0.04) * maxf(bob, 0.0) * (1.0 if eating else 0.3)
+		if _consume_kind == "brush":
+			# Round 43: brushing -- a quick side-to-side scrub at the mouth.
+			ofs = CONSUME_MOUTH_HEAD + Vector3(sin(_consume_t * TAU * 3.2) * 0.03, -0.01, 0.02)
 	var mouth_rig: Vector3 = _rig.bone_pos("Head") + _rig.bone_basis("Head") * ofs
 	var hold_rig: Vector3 = (CONSUME_REST + _rig.EYE_POINT).lerp(mouth_rig, k)
 	var blend: float = clampf(minf(u / 0.12, (1.0 - u) / 0.12), 0.0, 1.0)
@@ -2266,7 +2270,7 @@ func _pose_consume_arm(delta: float) -> void:
 		var hb: Basis = _rig.bone_basis("RightHand")
 		_consume_prop.position = hp + hb * Vector3(0.0, -0.07, 0.0)
 		var tilt: float = 0.0
-		if _consume_kind != "meal" and u >= 0.28 and u < 0.78:
+		if not _consume_kind in ["meal", "dinner", "brush"] and u >= 0.28 and u < 0.78:
 			tilt = smoothstep(0.28, 0.45, u) * (1.0 - smoothstep(0.65, 0.78, u)) * deg_to_rad(55.0)
 		_consume_prop.basis = Basis(Vector3.RIGHT, tilt)
 		_consume_prop.visible = u > 0.03 and u < 0.97
@@ -2316,6 +2320,26 @@ func _make_consume_prop(kind: String) -> Node3D:
 			st.bottom_radius = 0.004
 			st.height = 0.05
 			add.call(st, Color(0.95, 0.95, 0.95), Vector3(0.0, 0.075, 0.0))
+		"brush":
+			# Round 43: the toothbrush (teal handle, white bristle head).
+			var hdl := BoxMesh.new()
+			hdl.size = Vector3(0.012, 0.16, 0.012)
+			add.call(hdl, Color(0.2, 0.75, 0.75), Vector3(0, 0.04, 0), Vector3(70, 0, 0))
+			var head := BoxMesh.new()
+			head.size = Vector3(0.016, 0.028, 0.02)
+			add.call(head, Color(0.97, 0.97, 0.97), Vector3(0, 0.07, -0.07), Vector3(70, 0, 0))
+		"dinner":
+			# Round 43: the evening meal is a heated foil TRAY with a spork --
+			# a different object (and moment) from the breakfast pouch.
+			var tray := BoxMesh.new()
+			tray.size = Vector3(0.15, 0.03, 0.1)
+			add.call(tray, Color(0.78, 0.78, 0.8), Vector3(0, -0.02, 0))
+			var stew := BoxMesh.new()
+			stew.size = Vector3(0.13, 0.006, 0.085)
+			add.call(stew, Color(0.45, 0.28, 0.15), Vector3(0, -0.003, 0))
+			var spork := BoxMesh.new()
+			spork.size = Vector3(0.012, 0.12, 0.006)
+			add.call(spork, Color(0.95, 0.6, 0.2), Vector3(0.03, 0.05, 0.0), Vector3(-30, 0, 0))
 		_:
 			var b2 := BoxMesh.new()
 			b2.size = Vector3(0.09, 0.13, 0.03)

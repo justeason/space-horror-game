@@ -111,7 +111,7 @@ func _build_app_bar() -> void:
 	brand.add_theme_color_override("font_color", Color(0.95, 0.8, 0.55))
 	_bar.add_child(brand)
 	_bar.move_child(brand, 0)
-	for spec in [[&"home", "< Desktop"], [&"save", "Save"], [&"back", "< Save & Back"], [&"close", "Close"]]:
+	for spec in [[&"home", "< Desktop"], [&"note_history", "History"], [&"save", "Save"], [&"back", "< Save & Back"], [&"close", "Close"]]:
 		_add_button(_bar, spec[0], spec[1])
 	_clock = Label.new()
 	_clock.name = "Clock"
@@ -223,6 +223,8 @@ func _build_app_bar() -> void:
 
 
 const APPS := [
+	[&"note", "Today's Note", Color(0.98, 0.88, 0.45)],
+	[&"handover", "Shift Handover", Color(0.95, 0.55, 0.4)],
 	[&"log", "Personal Log", Color(0.85, 0.7, 0.35)],
 	[&"messages", "Messages", Color(0.35, 0.7, 1.0)],
 	[&"schedule", "Schedule", Color(0.45, 0.85, 0.6)],
@@ -232,7 +234,8 @@ const APPS := [
 	[&"game", "Cargo Drop", Color(0.95, 0.6, 0.25)],
 	[&"holdout", "Holdout", Color(0.55, 0.85, 0.4)],
 ]
-const APP_TITLES := {&"home": "DESKTOP", &"log": "PERSONAL LOG", &"messages": "MESSAGES", &"schedule": "SCHEDULE", &"photos": "PHOTOS", &"files": "FILES", &"file": "FILES", &"report": "SHIFT REPORT", &"game": "CARGO DROP", &"holdout": "HOLDOUT"}
+const DailyNote = preload("res://scripts/ui/daily_note.gd")
+const APP_TITLES := {&"note": "TODAY'S NOTE", &"note_record": "NOTE ARCHIVE", &"handover": "SHIFT HANDOVER", &"home": "DESKTOP", &"log": "PERSONAL LOG", &"messages": "MESSAGES", &"schedule": "SCHEDULE", &"photos": "PHOTOS", &"files": "FILES", &"file": "FILES", &"report": "SHIFT REPORT", &"game": "CARGO DROP", &"holdout": "HOLDOUT"}
 const Files = preload("res://scripts/ui/laptop_files.gd")
 var _app_title: Label
 var _brand: Label
@@ -290,6 +293,8 @@ func _on_app(id: StringName) -> void:
 			open_app(&"home")
 		&"back", &"save", &"close":
 			app_requested.emit(id)
+		&"note_history":
+			_show_view(&"note_record")
 		&"photo_prev":
 			photo_index = posmod(photo_index - 1, Files.list("Photos").size())
 			_show_view(&"photos")
@@ -309,6 +314,11 @@ func _on_app(id: StringName) -> void:
 func open_app(id: StringName) -> void:
 	if id == &"files":
 		folder = ""
+	if is_entertainment(id) and _day_plan != null and _day_plan.has_method("entertainment_allowed"):
+		var ok: Dictionary = _day_plan.entertainment_allowed()
+		if not ok["ok"]:
+			_show_block(String(ok["reason"]))
+			return
 	_show_view(id)
 
 
@@ -318,7 +328,7 @@ func _fit_bar() -> void:
 	if _bar == null or _brand == null:
 		return
 	var avail: float = float(size.x) - 24.0
-	_brand.visible = true
+	_brand.visible = not entertainment_hold
 	if _bar.get_combined_minimum_size().x > avail:
 		_brand.visible = false
 
@@ -329,7 +339,14 @@ func content_width() -> float:
 
 func _show_view(v: StringName) -> void:
 	_view = v
-	var text_view: bool = v in [&"report", &"messages", &"schedule", &"file"]
+	if v == &"handover":
+		# The desktop shortcut LINKS to the one real record in Files.
+		folder = Files.HANDOVER_PATH
+		open_entry({"kind": "txt", "rec": Files.find(Files.HANDOVER_PATH, Files.HANDOVER_FILE)})
+		return
+	var text_view: bool = v in [&"report", &"messages", &"schedule", &"file", &"note", &"note_record"]
+	if _report != null:
+		_report.add_theme_font_size_override("font_size", 12)
 	_home.visible = v == &"home"
 	_window.visible = v != &"home"
 	_title.visible = v == &"log"
@@ -361,8 +378,21 @@ func _show_view(v: StringName) -> void:
 	_buttons[&"back"].visible = _zoomed
 	_buttons[&"close"].visible = true
 	_app_title.text = APP_TITLES.get(v, "")
+	_app_title.add_theme_color_override("font_color", Color(0.75, 0.95, 0.8))
+	if v != &"home":
+		blocked_reason = ""
 	_fit_bar()
+	if _buttons.has(&"note_history"):
+		_buttons[&"note_history"].visible = v == &"note"
 	match v:
+		&"note":
+			_note_opened()
+			_report.text = "\n".join(daily_note_lines())
+			_report.add_theme_font_size_override("font_size", 11)
+		&"note_record":
+			_report.text = "\n".join(DailyNote.record_lines(daily_note(), int(_day_plan.day_number) if _day_plan != null else 1))
+			if is_inside_tree():
+				get_tree().call_group(&"story_events", &"on_record_checked", "note_archive")
 		&"messages":
 			_report.text = "\n".join(messages_lines())
 			for m in messages_today():
@@ -412,6 +442,8 @@ func _build_file_list() -> void:
 			entries.append({"name": f + "/", "kind": "dir", "target": f})
 	else:
 		entries.append({"name": "../", "kind": "up"})
+		for sf in Files.subfolders(folder):
+			entries.append({"name": sf + "/", "kind": "dir", "target": folder + "/" + sf})
 		for f in Files.list(folder):
 			entries.append({"name": f["name"], "kind": f["type"], "rec": f})
 	for e in entries:
@@ -438,7 +470,7 @@ func open_entry(e: Dictionary) -> void:
 			folder = e["target"]
 			_show_view(&"files")
 		"up":
-			folder = ""
+			folder = folder.get_base_dir() if folder.find("/") != -1 else ""
 			_show_view(&"files")
 		"txt":
 			open_file = "%s/%s" % [folder, e["rec"]["name"]]
@@ -646,11 +678,11 @@ func _build_chrome() -> void:
 	var root: Control = $Control
 	_wallpaper = TextureRect.new()
 	_wallpaper.name = "Wallpaper"
-	_wallpaper.texture = Files.photo("coast")
+	_wallpaper.texture = Files.wallpaper(960, 560)
 	_wallpaper.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_wallpaper.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	_wallpaper.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_wallpaper.modulate = Color(0.62, 0.66, 0.72)
+	_wallpaper.modulate = Color(0.95, 0.95, 0.95)
 	_wallpaper.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(_wallpaper)
 	root.move_child(_wallpaper, 1)
@@ -702,12 +734,15 @@ func _refresh_note() -> void:
 	if _day_plan != null:
 		lines.append("DAY %d" % _day_plan.day_number)
 		lines.append(String(_day_plan.today_title()))
-		if _day_plan.has_method("meal_done") and not _day_plan.meal_done():
-			lines.append("- eat + drink")
+		# Round 43: the sticky shows what is still open on today's checklist.
+		var open_items: Array = Array(daily_note()["items"]).filter(func(it): return not it["done"])
+		for it in open_items.slice(0, 3):
+			lines.append("- " + String(it["label"]).to_lower())
+		if open_items.is_empty():
+			lines.append("- all done. rest.")
 	var n: int = unread_count() if _day_plan != null else 0
 	if n > 0:
 		lines.append("- %d new message%s" % [n, "" if n == 1 else "s"])
-	lines.append("- water the basil")
 	_note.text = "\n".join(lines)
 	_refresh_clock()
 
@@ -718,7 +753,9 @@ func _refresh_clock() -> void:
 	# Round 42: a compact computer clock (day + station time); the long
 	# shift status made the menu bar wider than the screen.
 	if _day_plan.has_method("clock_text_hhmm"):
-		_clock.text = "D%d  %s" % [_day_plan.day_number, _day_plan.clock_text_hhmm()]
+		# Round 43: the shift clock visibly PAUSED while a game is played.
+		_clock.text = "D%d  %s%s" % [_day_plan.day_number, _day_plan.clock_text_hhmm(), "  PAUSED" if entertainment_hold else ""]
+		_clock.add_theme_color_override("font_color", Color(0.98, 0.8, 0.35) if entertainment_hold else Color(0.85, 0.9, 0.88))
 	elif _day_plan.has_method("shift_status_text"):
 		_clock.text = _day_plan.shift_status_text()
 	else:
@@ -733,6 +770,64 @@ func _process(delta: float) -> void:
 	if _clock_tick >= 1.0:
 		_clock_tick = 0.0
 		_refresh_clock()
+	_update_entertainment_hold()
+
+
+# ======================================================================
+# Round 43 Priority 1: PERSONAL GAMES PAUSE THE SHIFT CLOCK. The laptop
+# distinguishes PRODUCTIVITY apps (log, notes, messages, files, report --
+# the clock runs) from ENTERTAINMENT apps (Cargo Drop, Holdout, any future
+# game listed in ENTERTAINMENT_APPS). While a game is actively in use
+# (its window open on the zoomed-in laptop) DayPlan's clock is held under
+# the &"entertainment" reason; it resumes the moment the game is left
+# (desktop, zoom out, laptop closed). Emergency policy (the safer one):
+# games refuse to open during an active station emergency, and an
+# emergency that starts mid-game pauses the game and releases the hold
+# immediately, with an unmistakable alert in the game window.
+# ======================================================================
+const ENTERTAINMENT_APPS := [&"game", &"holdout"]
+var entertainment_hold: bool = false
+var blocked_reason: String = ""
+
+
+func is_entertainment(id: StringName) -> bool:
+	return id in ENTERTAINMENT_APPS
+
+
+func _update_entertainment_hold() -> void:
+	var want: bool = _zoomed and is_entertainment(_view) and is_visible_game()
+	if want and _day_plan != null and _day_plan.has_method("entertainment_allowed"):
+		var ok: Dictionary = _day_plan.entertainment_allowed()
+		if not ok["ok"]:
+			want = false
+			_pause_games()
+			_show_block(String(ok["reason"]))
+	if want != entertainment_hold:
+		entertainment_hold = want
+		_refresh_clock()
+		_fit_bar()
+		if _day_plan != null and _day_plan.has_method("hold_clock"):
+			_day_plan.hold_clock(&"entertainment", want)
+
+
+func is_visible_game() -> bool:
+	return (_view == &"game" and _game != null and _game.visible) or (_view == &"holdout" and holdout != null and holdout.visible)
+
+
+func _pause_games() -> void:
+	if _game != null and not _game.game_over:
+		_game.paused = true
+	if holdout != null and holdout.mode == "play":
+		holdout.action("pause")
+
+
+## Shown in place of a refused / interrupted game: back on the desktop with
+## a clear alert in the menu bar title.
+func _show_block(reason: String) -> void:
+	blocked_reason = reason
+	_show_view(&"home")
+	_app_title.text = reason
+	_app_title.add_theme_color_override("font_color", Color(1.0, 0.45, 0.3))
 
 
 ## A small pictogram per app (procedural; no external assets).
@@ -780,6 +875,18 @@ static func _app_icon(id: StringName, c: Color) -> ImageTexture:
 			for p in [[7, 13], [13, 13], [13, 7], [19, 13]]:
 				img.fill_rect(Rect2i(p[0], p[1], 5, 5), Color(0.9, 0.55, 0.2))
 				img.fill_rect(Rect2i(p[0], p[1], 5, 1), Color(1.0, 0.8, 0.5))
+		&"note":
+			img.fill_rect(Rect2i(7, 3, 16, 20), paper)
+			img.fill_rect(Rect2i(7, 3, 16, 3), Color(0.9, 0.4, 0.3))
+			for k in 4:
+				img.fill_rect(Rect2i(9, 9 + k * 3, 2, 2), ink)
+				img.fill_rect(Rect2i(12, 9 + k * 3, 9, 1), ink)
+		&"handover":
+			img.fill_rect(Rect2i(5, 7, 8, 3), Color(0.98, 0.85, 0.45))
+			img.fill_rect(Rect2i(5, 9, 20, 12), Color(0.98, 0.8, 0.35))
+			img.fill_rect(Rect2i(10, 4, 12, 13), paper)
+			img.fill_rect(Rect2i(12, 7, 8, 1), ink)
+			img.fill_rect(Rect2i(12, 10, 6, 1), ink)
 		&"holdout":
 			# A survivor (blue) among three shamblers (green).
 			img.fill_rect(Rect2i(4, 4, 22, 18), Color(0.1, 0.12, 0.08))
@@ -788,3 +895,35 @@ static func _app_icon(id: StringName, c: Color) -> ImageTexture:
 			img.fill_rect(Rect2i(14, 12, 4, 4), Color(0.55, 0.8, 1.0))
 			img.fill_rect(Rect2i(18, 13, 3, 1), Color(1.0, 0.92, 0.45))
 	return ImageTexture.create_from_image(img)
+
+
+
+# ======================================================================
+# Round 43 Priorities 9-11 / 22: TODAY'S NOTE (daily shift note) and the
+# SHIFT HANDOVER shortcut on the desktop. The note's content is derived
+# (scripts/ui/daily_note.gd); story PRESENTATION overlays are layered on at
+# display time only (story_events.gd laptop_overlays()) -- authentic
+# player data (the Personal Log) and the save are never altered.
+# ======================================================================
+func _quarters_node() -> Node:
+	return get_tree().get_first_node_in_group(&"quarters_life") if is_inside_tree() else null
+
+
+func _story() -> Node:
+	return get_tree().get_first_node_in_group(&"story_events") if is_inside_tree() else null
+
+
+func daily_note() -> Dictionary:
+	return DailyNote.build(_day_plan, _quarters_node())
+
+
+func daily_note_lines() -> Array:
+	var st: Node = _story()
+	var ov: Array = st.laptop_overlays("daily_note") if st != null and st.has_method("laptop_overlays") else []
+	return DailyNote.lines(daily_note(), ov)
+
+
+func _note_opened() -> void:
+	var st: Node = _story()
+	if st != null and st.has_method("on_document_opened"):
+		st.on_document_opened("daily_note")

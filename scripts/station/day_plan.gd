@@ -122,7 +122,82 @@ signal notify(text: String)
 @export var message_label_path: NodePath = ^"../Player/HUD/TaskMessageLabel"
 
 
+# ======================================================================
+# Round 43 Priorities 1/7: CLOCK HOLDS. The station clock (shift time,
+# post-shift grace, everything derived from it: scheduled emergencies, the
+# orbit, tiredness) only runs while the DAY IS ACTIVE and nothing holds it:
+#   - day_active: false from the new-day reset (eyes closed) until the
+#     technician is up -- out of the lying position. Waking, the wake
+#     animation and lying in the bunk never consume work time, so a new
+#     day reads exactly 08:00 when the technician sits up.
+#   - holds: named reasons (&"entertainment" while a personal laptop GAME
+#     is actively played; future reasons may join). Holds never stack time:
+#     releasing simply lets the next frame advance by its own delta (no
+#     catch-up jump, no duplicate timer).
+# EMERGENCY POLICY: games are refused while a real timed emergency is
+# active (entertainment_allowed()); if one starts while a game is open the
+# game pauses itself and the hold is released at once, so the real
+# countdown is never frozen by entertainment (laptop_view / session_log).
+# Continuous equipment physics in other nodes keeps running -- but nothing
+# SCHEDULED happens while the clock is held (scheduled events are keyed to
+# shift_elapsed_s), so a calm station stays calm.
+# ======================================================================
+var day_active: bool = false
+var _holds: Dictionary = {}
+signal clock_hold_changed(paused: bool)
+
+
+func hold_clock(reason: StringName, on: bool) -> void:
+	var was: bool = clock_paused()
+	if on:
+		_holds[reason] = true
+	else:
+		_holds.erase(reason)
+	if was != clock_paused():
+		clock_hold_changed.emit(clock_paused())
+
+
+func is_held(reason: StringName) -> bool:
+	return _holds.has(reason)
+
+
+func clock_paused() -> bool:
+	return not day_active or not _holds.is_empty()
+
+
+func clock_hold_reasons() -> Array:
+	var out: Array = _holds.keys()
+	if not day_active:
+		out.push_front(&"waking")
+	return out
+
+
+## {"ok": bool, "reason": String}: may a personal entertainment app run now?
+func entertainment_allowed() -> Dictionary:
+	var ss: Node = get_tree().get_first_node_in_group(&"station_status") if is_inside_tree() else null
+	if ss != null and ss.has_method("emergency") and not ss.emergency().is_empty():
+		return {"ok": false, "reason": "STATION ALERT — %s. Games are locked until it is resolved." % String(ss.emergency().get("title", "EMERGENCY"))}
+	if _eva_active():
+		return {"ok": false, "reason": "Not while suited up."}
+	return {"ok": true, "reason": ""}
+
+
+## The day starts once the technician is up (sleep_state reports not
+## sleeping / not lying). Polled, so every path (new game, autosave load,
+## a mid-day load, tests without a bunk) resolves without bespoke calls.
+func _poll_day_active() -> void:
+	if day_active:
+		return
+	var ss: Node = get_node_or_null(^"../SleepState")
+	if ss == null or not ss.has_method("is_lying_in_bed") or (not ss.is_lying_in_bed() and not ss.is_sleeping()):
+		day_active = true
+		clock_hold_changed.emit(clock_paused())
+
+
 func _process(delta: float) -> void:
+	_poll_day_active()
+	if clock_paused():
+		delta = 0.0
 	if not shift_ended:
 		shift_elapsed_s += delta
 		if shift_elapsed_s >= shift_duration_s():
@@ -134,7 +209,7 @@ func _process(delta: float) -> void:
 		# are suited / outside / cycling the airlock -- the post-shift grace
 		# period (and tiredness) only runs once they are safely back inside.
 		pass
-	else:
+	elif delta > 0.0:
 		awake_after_shift_s += delta
 		# Gentle reminders once the grace period is over (then every 90 s).
 		if awake_after_shift_s >= BED_GRACE_S:
@@ -332,8 +407,8 @@ func _meal_row() -> Dictionary:
 		return {}
 	var m: Dictionary = meal_status()
 	var n: int = int(m["ate"]) + int(m["drank"])
-	var action: String = "Eat and drink" if n == 0 else ("Drink" if m["ate"] else "Eat")
-	return {"id": "MEAL", "tag": "MEAL", "action": action + " at the galley", "short": "EAT + DRINK" if n == 0 else action.to_upper(), "label": action, "room": &"living_quarters",
+	var action: String = "Breakfast and a drink" if n == 0 else ("Drink" if m["ate"] else "Breakfast")
+	return {"id": "MEAL", "tag": "MEAL", "action": action + " at the galley", "short": "BREAKFAST + DRINK" if n == 0 else action.to_upper(), "label": action, "room": &"living_quarters",
 		"progress": "%d/2" % n, "done": n == 2, "priority": 1, "carried": false, "severity": 1}
 
 
@@ -860,6 +935,10 @@ func is_task_done(task_id: StringName) -> bool:
 
 
 func mark_done(task_id: StringName) -> void:
+	# Round 43: after the first day's check-in, one brief pointer to the
+	# previous technician's handover (desktop shortcut).
+	if task_id == &"c01" and day_number == 1 and not is_task_done(&"c01"):
+		_ai_event.call_deferred(&"handover_day1")
 	match task_id:
 		&"c01": c01_status = TaskStatus.DONE
 		&"e06": e06_status = TaskStatus.DONE
@@ -1192,6 +1271,7 @@ func reset_for_new_day() -> void:
 				carry["tasks"][step[3]] = true
 	if meal_required and _quarters() != null:
 		underfed = not meal_status()["ate"]
+	var prev_day: int = day_number
 	work_done_at_s = -1.0
 	awake_after_shift_s = 0.0
 	_bed_reminders = 0
@@ -1202,6 +1282,8 @@ func reset_for_new_day() -> void:
 	readings = {}
 	shift_elapsed_s = 0.0
 	shift_ended = false
+	# Round 43: the new day's clock waits at 08:00 until the technician is up.
+	day_active = false
 	if cargo_duty == "done":
 		cargo_duty = ""
 	day_number += 1
@@ -1238,6 +1320,8 @@ func reset_for_new_day() -> void:
 		required_component_id = carry["required"]
 		log_event("Carried over from day %d: %s" % [carry["from"], String(WORKDAY_TITLES[workday]).get_slice(" —", 0)])
 	plan_emergency()
+	if _quarters() != null and _quarters().has_method("on_new_day"):
+		_quarters().on_new_day(prev_day)
 	day_started.emit(day_number)
 	if underfed:
 		_ai_event.call_deferred(&"underfed")

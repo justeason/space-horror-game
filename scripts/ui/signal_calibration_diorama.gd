@@ -59,6 +59,11 @@ func _ready() -> void:
 		_readout.pixel_size = 0.0045
 		_readout.outline_size = 8
 		_readout.position.y += 0.08
+		# Round 43: the FREQ / GAIN / meter captions readable from the room.
+		for lb in $Labels.get_children():
+			if lb is Label3D and lb != _readout:
+				(lb as Label3D).pixel_size *= 2.4
+				(lb as Label3D).outline_size = 6
 		for light_name in ["KeyLight", "FillLight"]:
 			var light: Node = get_node_or_null(light_name)
 			if light != null:
@@ -141,14 +146,30 @@ func _update_bars() -> void:
 			mat = StandardMaterial3D.new()
 			mat.resource_local_to_scene = true
 			bar.material = mat
-		mat.albedo_color = COLOR_BAR_QUIET.lerp(COLOR_BAR_NOISY, _current_noise)
-		mat.emission_enabled = true
+		mat.albedo_color = COLOR_BAR_QUIET.lerp(COLOR_BAR_NOISY, _current_noise) if powered else Color(0.05, 0.06, 0.06)
+		mat.emission_enabled = powered
 		mat.emission = mat.albedo_color.darkened(0.3)
 		mat.emission_energy_multiplier = 0.3 + _current_quality * 0.6
+		if not powered:
+			bar.scale.y = 0.2
 
 
 func set_readout_text(text: String) -> void:
 	_readout.text = text
+
+
+## Round 43 Priority 17: an UNPOWERED receiver (breaker B-04 off) looks
+## dead in the world: dark bars, the meter needle at rest, a dim red readout.
+var powered: bool = true
+
+
+func set_powered(on: bool) -> void:
+	powered = on
+	_readout.modulate = Color(0.55, 0.95, 0.75, 1) if on else Color(0.85, 0.3, 0.25, 0.9)
+	if not on:
+		_needle.rotation.z = deg_to_rad(-_SWEEP_DEG)
+		_current_quality = 0.0
+		_current_noise = 0.0
 
 
 ## Full authoritative resync -- called on (re)open and whenever the

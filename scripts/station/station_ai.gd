@@ -99,7 +99,9 @@ const LINES := {
 	&"eva_repair": [Prio.INSTRUCT, "Work position. Hands free. W pushes off.", "作业位已固定，双手可用。按 W 蹬离。"],
 	# Round 41: dual tethers, aim-and-push movement, solar array work.
 	&"eva_aim": [Prio.INSTRUCT, "Aim at your destination. Your tethers limit how far you travel.", "瞄准目的地。安全绳会限制你的移动范围。"],
-	&"handover_note": [Prio.INFO, "There's a handover note from the previous technician in your laptop Documents.", "上一位技术员在你笔记本电脑的文档里留了交接说明。"],
+	&"handover_note": [Prio.INFO, "The previous technician's handover is on your laptop desktop: SHIFT HANDOVER.", "上一位技术员的交接说明在你笔记本电脑桌面上：SHIFT HANDOVER。"],
+	&"handover_day1": [Prio.INFO, "Checked in. Review the previous shift handover on your laptop.", "已签到。请在笔记本电脑上查看上一班的交接说明。"],
+	&"hygiene_intro": [Prio.INFO, "Hygiene niche. Brush your teeth; the push tap saves water.", "洗漱角。刷牙吧，按压式水龙头很省水。"],
 	&"solar_intro": [Prio.INSTRUCT, "Solar truss. Follow the rings. Clip the next ring before you release the last.", "太阳能桁架。沿挂环前进：先扣下一个挂环，再解开上一个。"],
 	&"coupler_live": [Prio.SAFETY, "That coupler is live. Isolate the string first.", "该耦合器带电。请先隔离该组串。"],
 	&"eva_interlock": [Prio.SAFETY, "Airlock interlock. Check the suit, the cargo port and the hatch seal.", "气闸联锁：请检查宇航服、货运口和舱门密封。"],
@@ -108,7 +110,7 @@ const LINES := {
 	&"airlock_cycle_out": [Prio.INFO, "Sealing inner hatch. Venting.", "正在密封内舱门，泄压中。"],
 	&"airlock_cycle_in": [Prio.INFO, "Sealing outer hatch. Pressurizing.", "正在密封外舱门，加压中。"],
 	&"lens_intro": [Prio.INSTRUCT, "Exterior camera lens is fouled. Wipe it on EVA, then check the feed again.", "外部摄像头镜头脏污。出舱擦拭后再次检查画面。"],
-	&"meal_intro": [Prio.INSTRUCT, "Galley. Eat and drink every day. It counts toward your shift.", "厨房。每天都要吃饭喝水，这计入你的班次。"],
+	&"meal_intro": [Prio.INSTRUCT, "Galley. Breakfast and a drink count toward your shift; dinner comes after it.", "厨房。早餐和喝水计入你的班次；晚餐在下班后。"],
 	&"underfed": [Prio.INFO, "You skipped a meal. Eat first. You will be slower until you do.", "你漏了一餐。先吃东西，否则你会变慢。"],
 	&"work_complete": [Prio.INFO, "Required work complete. Wrap up, then go to your bunk.", "必要工作已完成。收尾后回到床铺。"],
 	&"bed_reminder": [Prio.INFO, "Your shift is over. Get some rest.", "班次已结束，去休息吧。"],
@@ -158,6 +160,7 @@ const TOPICS := {
 	&"eva_worksite": ["Equipment/AntennaMast/FeedBox", 2.4, &"eva_repair"],
 	&"solar_truss": ["TetherAnchors/Anchor4", 2.6, &"solar_intro"],
 	&"galley": ["Equipment/QuartersLife/Galley", 1.9, &"meal_intro"],
+	&"hygiene": ["Equipment/QuartersLife/HygieneNiche", 1.4, &"hygiene_intro"],
 }
 ## Step narration: (tag, next-step short[@room]) -> line.
 const STEP_KEYS := {

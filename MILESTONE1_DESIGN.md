@@ -10171,3 +10171,183 @@ When the shift ends, a warm glow comes on over the bunk: a wordless "go to bed" 
 - English-only camera / developer UI. Suit donning has no animation (the
   state change is immediate). Holdout runs are not saved mid-run (by
   design). The orbit timing is compressed for play.
+
+# Round 43 — Laptop expansion (games pause the clock, Holdout roguelike, daily notes), station routines, Comms world view, stored suit, exterior hull finishing, environmental storytelling, investigation framework
+
+## A. Laptop entertainment time policy
+- The laptop separates PRODUCTIVITY apps (log, note, handover, messages,
+  schedule, photos, files, report: the clock runs) from ENTERTAINMENT apps
+  (`ENTERTAINMENT_APPS`: Cargo Drop, Holdout; future games join the list).
+- While a game window is open on the ZOOMED-IN laptop, DayPlan's clock is
+  held under the `&"entertainment"` reason (`DayPlan.hold_clock()`): shift
+  time, the post-shift grace / tiredness, and everything keyed to the shift
+  clock (scheduled emergencies, the orbit) stop. Leaving the game
+  (desktop, zoom out, close) releases the hold; the next frame advances by
+  its own delta only (no catch-up jump, no double timer). Holds are never
+  saved. The laptop's clock reads `PAUSED` (amber) meanwhile.
+- EMERGENCY POLICY (the safer option): games refuse to open during an
+  active station emergency (`entertainment_allowed()`: "STATION ALERT —
+  …"), and while suited. An emergency that starts mid-game pauses the
+  game, returns to the desktop with the alert and releases the hold at
+  once — real countdowns are never frozen by entertainment. Continuous
+  equipment physics elsewhere keeps running; nothing scheduled happens.
+
+## B. Wristwatch / new day 08:00
+- Root cause: the new-day reset happens with the eyes closed, but the
+  eyes-open tween, the wake and lying in the bunk all ran the shift clock
+  (and a new game started with the clock already running in bed).
+- Fix: `DayPlan.day_active` is false from the reset until the technician
+  is up (SleepState not sleeping / not lying, polled — covers new game,
+  autosave load, mid-day load, tests). The day reads exactly 08:00 with
+  zero elapsed time while waking; the autosave after waking stores 0.
+  Time starts when they sit up. After the day-1 check-in the assistant
+  says once "Review the previous shift handover on your laptop."
+
+## C. Holdout (miniature roguelike)
+- Scrolling town 1800 x 1200 world px (screen shows ~275 x 110 world px at
+  1.6x zoom), camera follows, deterministic map: 4 roads with lane
+  dashes, 6 named landmark buildings (MOTEL, PHARMACY, FUEL STOP, CHAPEL,
+  BUS DEPOT, DINER) + PARK (fence, trees) + PLAZA (fountain), parked cars,
+  barricades, flickering broken streetlights, supply crates, a minimap.
+- Collision: circle-vs-rect / circle push-out (no physics engine);
+  bullets stop at solid obstacles (buildings, cars), not at fences /
+  barricades; zombies steer via the nearest free corner of the blocking
+  obstacle (re-planned 3x/s).
+- Enemies: WALKER, SWARM (packs), RUNNER (lunge), SPITTER (keeps 85-135 px,
+  0.55 s glowing wind-up, 72 px/s glob — sidestep-able), BRUTE (knock-back),
+  BLOATER (0.85 s visible fuse, 34 px burst that also hurts zombies),
+  ARMORED (35% damage from non-AP rounds), ELITE every 5th wave (gold ring,
+  scrap cache). Distinct silhouettes, hit flash, fading corpse + stain.
+- Weapons (one equipped, ARMORY): PISTOL, SMG (fast, sprays), SHOTGUN
+  (6-pellet cone, short), RIFLE (heavy, pierces 3, AP), ARC COIL (instant
+  bolt chaining through nearby zombies, AP). Unlock with credits
+  (notification banner).
+- Upgrades (9): fire rate, damage, multishot, max health, armor, speed,
+  regen, MAGNET (pickup radius — scrap drops and medkits must be
+  collected), CRIT. Credits: kills, cleared waves, milestones (waves
+  5/10/15/20), scrap. Wave banners, hurt vignette, game-over summary with
+  best score / wave.
+- Persistence: wallet, ranks, unlocked + equipped weapon, best score /
+  wave, runs. An active run is deliberately never saved.
+
+## D. Laptop content, wallpaper, handover shortcut, daily notes
+- Wallpaper: an ORIGINAL procedural landscape (blue sky, drifting clouds,
+  rolling bright-green hills; `LaptopFiles.wallpaper()`), generated at
+  960 x 560 (twice the screen's layout size) — not a copy of any photo.
+- Desktop: TODAY'S NOTE and SHIFT HANDOVER shortcuts. The handover
+  shortcut opens the ONE real record (`Work/Shift Handover/
+  handover_previous_technician.txt`); reading it is the same story
+  discovery as before.
+- Files tree: Personal/{Family, Travel, Old Messages}, Work/{Training,
+  Station Procedures, Shift Handover, Archived Reports}, Photos (+ a
+  childhood cat, a hill picnic), Messages, Journal, Entertainment — fewer
+  documents with personality (Mara's birthday, Mum's letter, Pip's vet
+  card, a coast trip, an old chat, a certificate, procedures, the previous
+  rotation's reports). "Documents" became Work/.
+- DAILY NOTE (`scripts/ui/daily_note.gd`): one short note a day from the
+  same author (Ines · ops desk): priority, cargo, supplies, one ordinary
+  rotating reminder, a two-column TODAY checklist (brush teeth, breakfast,
+  drink, work orders / check-in, dinner, basil) DERIVED from DayPlan and
+  the quarters routine — nothing ticked by hand, DayPlan stays the work
+  authority. The desktop sticky shows what is still open.
+
+## E. Routines: toothbrushing, two meals, basil
+- Hygiene niche on the quarters wall beside the galley: recessed basin,
+  push tap (water-saving, no running stream), mirror, toothbrush in its
+  holder, toothpaste, towel. Brushing plays the hand-to-mouth gesture
+  with a real toothbrush prop (side-to-side scrub, 4 s); the brush leaves
+  and returns to the holder. One morning brush counts (an evening brush
+  is optional). Proximity hint once.
+- Two meals: MEAL 1 breakfast (oat & apricot POUCH) — the first meal
+  pack; MEAL 2 dinner (heated lentil TRAY with a spork, its own prop and
+  gesture) — only after breakfast and from 15:00 / once work is done / the
+  shift is over. One interaction never satisfies both. The shift's MEAL
+  row is "Breakfast and a drink" (dinner is an evening routine, never
+  blocks the shift). No meal at all -> underfed next day (existing mild
+  slowdown); a skipped dinner is only remembered (the next note says so).
+- Basil: click to water once a day; each forgotten day it droops and
+  pales a little (max 3 steps), watering restores it. Saved.
+
+## F. Communications world view
+- ROOT CAUSE: the physical console twin faced the WALL — the player saw
+  its back: a mirrored readout, the dials and meter hidden behind the
+  backplate (Round 42 only compared script values). The station node is
+  rotated 180 deg so its front faces the room.
+- The world twin shows the shared tuning (dials, meter = the real
+  end-to-end LINK incl. antenna / patch bay, bars, numeric readout),
+  keeps it after the focused view closes, larger captions. Breaker B-04
+  off: bars dark, needle at rest, readout red "RX OFF B-04". Saved state
+  re-syncs on load. No separate gauge system.
+
+## G. Stored EVA suit
+- ROOT CAUSE of the headless stored suit: the rig puts the helmet (like
+  the wearer's head) on the MIRROR-ONLY layer, which the first-person
+  camera never renders (renders with a free camera showed it, play did
+  not). The stowed rig's meshes now use the normal world layer; helmet,
+  neck seal, pack, gloves, boots, harness all visible; worn -> empty yoke;
+  returned -> full suit again.
+
+## H. Storage lighting, interiors, environmental storytelling
+- Storage: dim cyan LED strips along the floor edge of every real wall
+  segment (never across the doorway) + two low, short-range fill lights
+  at floor level (0.45 energy, 1.9 m). Before/after rendered from the
+  same camera.
+- Junction A: painted floor box + "JUNCTION A" stencil, four hanging
+  direction signs (LIFE SUPPORT · STORAGE / CONTROL · QUARTERS /
+  ENGINEERING · AIRLOCK / COMMUNICATIONS).
+- Comms: illuminated branch sign, accent strip, an RX-A spectrum waterfall
+  display beside the receiver.
+- Storytelling: wear patches where people stand (workstation, Junction,
+  airlock tunnel, breaker panel), dated service stickers initialled
+  "R.V." (the previous technician), a sticky note on the workstation
+  wall ("INT-02 drifts left after a power cycle. Nudge it. — R.").
+  Decor is visual only (no collision).
+
+## I. Exterior hull finishing pass
+- Every outward hull wall plate (recorded by `_build_hull`, so inside and
+  outside agree) gets: structural ribs (~1.5 m), top / bottom stringers,
+  a painted module belt + stencilled module ID (C-1, H-1, E-2, L-3, S-4,
+  M-5), small hull lamps (13 with a real light on the exterior layer
+  only), raised thermal-blanket patches on habitation modules, a labelled
+  SERVICE ACCESS hatch on long walls, conduit with brackets on machinery
+  modules. Kept clear (1 m) of the observation window, outer hatch,
+  exterior cameras and tether anchors; visual only, shadows off.
+
+## J. Investigation framework + laptop horror foundation
+- `StoryEvents.evidence`: observations (an anomaly seen), checks (went
+  and looked), contradictions (a RECORD disagrees), per event id;
+  `investigation_state(id)` = none / observed / checked / contradicted;
+  `RECORD_LINKS` maps records to the events they can contradict;
+  `on_record_checked(record)` turns an observed anomaly into a
+  contradiction and counts as an investigation (phase 3 eligibility).
+  Saved; shown in the developer STORY tab.
+- Laptop presentation overlays: `laptop_overlays(doc)` are applied at
+  DISPLAY time only; authentic player data (Personal Log) and the save
+  are never modified.
+- One restrained anomaly: `note_extra_item` (phase 2): on opening TODAY'S
+  NOTE, one checklist line nobody issued ("Check the corridor feed before
+  bed."; phase 3 variant). Opened again, it is simply not there. The note's
+  History (archive) shows "rev 1 · no edits" -> evidence. Developer panel:
+  trigger / preview (shown on the next opening) / cancel / reset.
+
+## K. Future vertical shaft (proposal only, nothing built)
+- The Storage connector run (x -6.5 .. -5.4, z 6.9 .. 9.1) and the
+  Engineering tunnel ceiling are the only places a 1.2 x 1.2 m vertical
+  maintenance shaft fits without cutting a room, a camera sightline or an
+  EVA route; a ladder well at the Storage connector's east end could rise
+  to a small upper service deck over Engineering / Storage (both grey
+  machinery modules). Needs: ceiling opening + hull extrusion on the
+  roof, ladder-climb movement state, navigation nodes, hull-leak sweep
+  rays for the new volume.
+
+## L. Limitations
+- The laptop SubViewport still renders at 480 x 280 (only the wallpaper
+  is generated at 2x); the zoomed laptop is softer than the workstation.
+- Toothbrush / dinner props are close to the camera during the gesture
+  and partly out of frame; no running-water or mouth animation.
+- The note anomaly is the only laptop anomaly. Only the note archive
+  is a consultable record so far; the `environment_log` link is defined
+  but no in-game record view calls it yet.
+- The daily note's two-column checklist is aligned with a proportional
+  font (approximate columns). Holdout is single-weapon by design.
+- Not manually playtested.

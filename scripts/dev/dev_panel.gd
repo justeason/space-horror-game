@@ -402,6 +402,16 @@ func story_text() -> String:
 		"Armed today (day %d): %s" % [se.day(), String(se.armed_id()) if se.armed_id() != &"" else "nothing"],
 		"Variant for triggers: %s" % _variant,
 	]
+	# Round 43: the INVESTIGATION state per event + gathered evidence.
+	if se.has_method("investigation_state"):
+		var inv: Array = []
+		for id in se.EVENTS:
+			var st: String = se.investigation_state(String(id))
+			if st != "none":
+				inv.append("%s=%s" % [id, st])
+		lines.append("Investigation state: %s" % (", ".join(inv) if not inv.is_empty() else "nothing observed yet"))
+		for e in se.evidence.slice(maxi(se.evidence.size() - 4, 0)):
+			lines.append("  · d%d %s [%s] %s" % [int(e["day"]), e["event"], e["kind"], String(e["text"]).left(70)])
 	return "\n".join(lines)
 
 

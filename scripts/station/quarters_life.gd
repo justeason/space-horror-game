@@ -24,7 +24,18 @@ const EAT_S := 3.2
 
 var tea_day: int = -1
 var drank_day: int = -1
-var meal_day: int = -1
+var meal_day: int = -1              # MEAL 1 (breakfast) eaten on this day
+## Round 43 Priorities 14-16 / 23A: the daily ROUTINE.
+var dinner_day: int = -1            # MEAL 2 (dinner) eaten on this day
+var brush_day: int = -1             # morning teeth brushed on this day
+var brush_pm_day: int = -1          # optional evening brush
+var basil_day: int = -1             # basil watered on this day
+var basil_dry_days: int = 0         # consecutive days without water (visible)
+var missed_dinner: bool = false     # yesterday ended without dinner (mild)
+const DINNER_FROM_MIN := 15 * 60    # dinner from 15:00 (or once work is done)
+const BRUSH_S := 4.0
+var _leaves: Array = []
+var _brush_holder: Node3D
 var brewing: float = -1.0
 var _mug: Node3D
 var _steam: CSGCylinder3D
@@ -89,6 +100,7 @@ func _ready() -> void:
 	part(&"mug", Vector3(0.12, 0.16, 0.12), Vector3(-0.02, 1.0, 0.1), g)
 	_build_photo_frame()
 	_build_lived_in()
+	_build_hygiene()
 	_refresh()
 
 
@@ -126,6 +138,9 @@ func _build_lived_in() -> void:
 		lm.albedo_color = Color(0.25, 0.55, 0.22)
 		leaf.material = lm
 		d.add_child(leaf)
+		_leaves.append(leaf)
+	part(&"basil", Vector3(0.16, 0.2, 0.16), Vector3(3.45, 0.88, 2.25), d)
+	label("BASIL", Vector3(3.45, 0.79, 2.18), 8, Color(0.95, 0.9, 0.8), d).rotation_degrees.y = 180.0
 	# Wall calendar above the desk, with crossed-off days.
 	var cal := Node3D.new()
 	cal.position = Vector3(3.62, 1.42, 2.385)
@@ -147,6 +162,40 @@ func _today() -> int:
 
 func ate_today() -> bool:
 	return meal_day == _today()
+
+
+func breakfast_today() -> bool:
+	return meal_day == _today()
+
+
+func dinner_today() -> bool:
+	return dinner_day == _today()
+
+
+func brushed_today() -> bool:
+	return brush_day == _today()
+
+
+func basil_watered_today() -> bool:
+	return basil_day == _today()
+
+
+## Dinner is the LATER meal: after breakfast, from 15:00 or once the day's
+## work is done / the shift is over. "" = may eat dinner now.
+func dinner_refusal() -> String:
+	if not breakfast_today():
+		return "breakfast"
+	if dinner_today():
+		return "Dinner's done. Nothing more until tomorrow."
+	if _dp == null:
+		return ""
+	var late: bool = (_dp.has_method("clock_minutes") and _dp.clock_minutes() >= DINNER_FROM_MIN) or bool(_dp.get("shift_ended")) or float(_dp.get("work_done_at_s")) >= 0.0
+	return "" if late else "Not hungry yet. Dinner is after the shift."
+
+
+## Today's routine for the daily note / tests.
+func routine_status() -> Dictionary:
+	return {"breakfast": breakfast_today(), "drink": drank_today(), "brush": brushed_today(), "dinner": dinner_today(), "basil": basil_watered_today(), "missed_dinner": missed_dinner}
 
 
 func drank_today() -> bool:
@@ -191,9 +240,23 @@ func _on_consumed(kind: String) -> void:
 				_dp.log_event("Drink break" if kind == "water" else "Tea break")
 		"meal":
 			meal_day = _today()
-			say("Meal pack: 'savoury lentil'. It's... fine.")
+			missed_dinner = false
+			say("Breakfast pouch: oats and apricot. Warm enough.")
 			if _dp != null:
-				_dp.log_event("Meal break")
+				_dp.log_event("Breakfast")
+		"dinner":
+			dinner_day = _today()
+			say("Dinner tray: savoury lentil stew. It's... fine.")
+			if _dp != null:
+				_dp.log_event("Dinner")
+		"brush":
+			if _hour() >= DINNER_FROM_MIN and brushed_today():
+				brush_pm_day = _today()
+			else:
+				brush_day = _today()
+			say("Teeth brushed. Minty, and one less thing.")
+			if _brush_holder != null:
+				_brush_holder.visible = true
 	if _dp != null and _dp.has_method("on_routine_changed"):
 		_dp.on_routine_changed()
 	routine_changed.emit()
@@ -222,11 +285,35 @@ func on_part(id: StringName) -> void:
 				_mug_drunk = true
 				sfx(&"click")
 		&"meal":
-			if ate_today():
-				say("Already eaten today. The next pack can wait.")
+			if not ate_today():
+				if _consume("meal", EAT_S):
+					sfx(&"insert")
 				return
-			if _consume("meal", EAT_S):
+			var why: String = dinner_refusal()
+			if why != "":
+				say(why)
+				return
+			if _consume("dinner", EAT_S + 0.6):
 				sfx(&"insert")
+		&"brush":
+			if brushed_today() and (brush_pm_day == _today() or _hour() < DINNER_FROM_MIN):
+				say("Already brushed. Teeth are fine.")
+				return
+			if _consume("brush", BRUSH_S):
+				if _brush_holder != null:
+					_brush_holder.visible = false
+				sfx(&"click")
+		&"basil":
+			if basil_watered_today():
+				say("The soil's still damp. That's enough for today.")
+				return
+			basil_day = _today()
+			basil_dry_days = 0
+			sfx(&"click")
+			say("A little water for the basil.")
+			if _dp != null:
+				_dp.log_event("Watered the basil")
+			routine_changed.emit()
 	_refresh()
 
 
@@ -239,7 +326,12 @@ func part_prompt(id: StringName) -> String:
 	match id:
 		&"water": return "" if drank_today() else "Click: Drink water"
 		&"tea": return "" if tea_day == _today() else ("Heating..." if brewing >= 0.0 else "Click: Make tea")
-		&"meal": return "" if ate_today() else "Click: Eat a meal pack"
+		&"meal":
+			if not ate_today():
+				return "Click: Breakfast pouch"
+			return "Click: Dinner tray" if dinner_refusal() == "" else ""
+		&"brush": return "" if brushed_today() and (brush_pm_day == _today() or _hour() < DINNER_FROM_MIN) else "Click: Brush teeth"
+		&"basil": return "" if basil_watered_today() else "Click: Water the basil"
 		&"mug": return "Click: Drink tea" if tea_day == _today() and not _mug_drunk else ""
 	return ""
 
@@ -281,10 +373,64 @@ func _process(delta: float) -> void:
 		_refresh()
 
 
+func _hour() -> int:
+	return _dp.clock_minutes() if _dp != null and _dp.has_method("clock_minutes") else 8 * 60
+
+
 func _refresh() -> void:
 	if _mug != null:
 		_mug.visible = tea_day == _today() and not _mug_drunk
 		_steam.visible = _mug.visible
+	_refresh_basil()
+
+
+## The basil shows how it has been looked after: green and upright when
+## watered, droopier and paler for every dry day (recovers when watered).
+func basil_health() -> float:
+	return clampf(1.0 - 0.25 * float(basil_dry_days), 0.25, 1.0)
+
+
+func _refresh_basil() -> void:
+	var h: float = basil_health()
+	for i in _leaves.size():
+		var leaf: CSGSphere3D = _leaves[i]
+		leaf.radius = 0.035 * lerpf(0.75, 1.0, h)
+		leaf.position.y = 0.9 + (i % 2) * 0.03 * h - (1.0 - h) * 0.03
+		(leaf.material as StandardMaterial3D).albedo_color = Color(0.25, 0.55, 0.22).lerp(Color(0.55, 0.5, 0.25), 1.0 - h)
+
+
+## New day: the routine resets; a skipped dinner is remembered (mild, the
+## daily note mentions it), the basil dries a little if it was forgotten.
+func on_new_day(prev_day: int) -> void:
+	missed_dinner = meal_day == prev_day and dinner_day != prev_day
+	if basil_day != prev_day:
+		basil_dry_days = mini(basil_dry_days + 1, 3)
+	_refresh()
+
+
+## Round 43: a compact HYGIENE niche on the quarters wall beside the galley:
+## a small recessed basin (water-saving push tap, no running stream), a
+## toothbrush in its holder, toothpaste, a cup and a towel bar.
+func _build_hygiene() -> void:
+	var h := Node3D.new()
+	h.name = "HygieneNiche"
+	h.position = GALLEY + Vector3(-0.72, 0.0, -0.08)
+	add_child(h)
+	box(Vector3(0.5, 0.62, 0.16), Vector3(0, 1.22, -0.04), Color(0.78, 0.8, 0.82), h)       # panel
+	box(Vector3(0.4, 0.06, 0.2), Vector3(0, 0.98, 0.04), Color(0.88, 0.9, 0.92), h)          # basin rim
+	box(Vector3(0.32, 0.03, 0.15), Vector3(0, 0.995, 0.05), Color(0.55, 0.6, 0.65), h)      # basin bowl
+	box(Vector3(0.03, 0.06, 0.05), Vector3(0.12, 1.06, -0.03), Color(0.6, 0.62, 0.65), h)   # push tap
+	box(Vector3(0.36, 0.16, 0.012), Vector3(0, 1.4, 0.045), Color(0.55, 0.65, 0.7), h)      # small mirror
+	label("HYGIENE · WATER SAVER", Vector3(0, 1.52, 0.045), 8, Color(0.15, 0.2, 0.25), h)
+	box(Vector3(0.06, 0.06, 0.06), Vector3(-0.16, 1.1, 0.06), Color(0.35, 0.55, 0.65), h)   # holder cup
+	_brush_holder = Node3D.new()
+	h.add_child(_brush_holder)
+	box(Vector3(0.012, 0.15, 0.012), Vector3(-0.16, 1.19, 0.06), Color(0.2, 0.75, 0.75), _brush_holder)
+	box(Vector3(0.016, 0.025, 0.02), Vector3(-0.16, 1.27, 0.065), Color(0.95, 0.95, 0.95), _brush_holder)
+	box(Vector3(0.03, 0.1, 0.02), Vector3(-0.09, 1.08, 0.06), Color(0.9, 0.35, 0.3), h)     # toothpaste
+	box(Vector3(0.34, 0.012, 0.012), Vector3(0, 0.88, 0.06), Color(0.6, 0.62, 0.65), h)     # towel bar
+	box(Vector3(0.18, 0.14, 0.01), Vector3(0.06, 0.81, 0.068), Color(0.35, 0.45, 0.6), h)   # towel
+	part(&"brush", Vector3(0.44, 0.4, 0.22), Vector3(0, 1.15, 0.06), h)
 
 
 ## Test/tool hook: completes the day's routine without the gesture.
@@ -299,7 +445,8 @@ func eat_and_drink_now() -> void:
 
 
 func state_dict() -> Dictionary:
-	return {"tea_day": tea_day, "drank_day": drank_day, "meal_day": meal_day, "mug_drunk": _mug_drunk}
+	return {"tea_day": tea_day, "drank_day": drank_day, "meal_day": meal_day, "mug_drunk": _mug_drunk,
+		"dinner_day": dinner_day, "brush_day": brush_day, "brush_pm_day": brush_pm_day, "basil_day": basil_day, "basil_dry": basil_dry_days, "missed_dinner": missed_dinner}
 
 
 func load_dict(d: Dictionary) -> void:
@@ -307,6 +454,14 @@ func load_dict(d: Dictionary) -> void:
 	drank_day = int(d.get("drank_day", -1))
 	meal_day = int(d.get("meal_day", -1))
 	_mug_drunk = bool(d.get("mug_drunk", drank_day == tea_day and tea_day != -1))
+	dinner_day = int(d.get("dinner_day", -1))
+	brush_day = int(d.get("brush_day", -1))
+	brush_pm_day = int(d.get("brush_pm_day", -1))
+	basil_day = int(d.get("basil_day", -1))
+	basil_dry_days = clampi(int(d.get("basil_dry", 0)), 0, 3)
+	missed_dinner = bool(d.get("missed_dinner", false))
+	if _brush_holder != null:
+		_brush_holder.visible = true
 	brewing = -1.0
 	_pending = ""
 	_refresh()

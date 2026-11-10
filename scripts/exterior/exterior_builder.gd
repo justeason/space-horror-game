@@ -57,6 +57,7 @@ func _ready() -> void:
 	_build_worksite()
 	if geo != null:
 		_dress_hull(geo)
+		_finish_walls.call_deferred()
 
 
 # ---------------------------------------------------------------- helpers
@@ -293,6 +294,7 @@ func _build_hull(geo: Node) -> void:
 			var sz: Vector3 = Vector3(0.12, s.y + 0.2, s.z - 0.04) if thin_x else Vector3(s.x - 0.04, s.y + 0.2, 0.12)
 			_box(sz, c + off, _module_mat(nm), hull)
 			panel_count += 1
+			_wall_plates.append({"name": nm, "c": c + off, "size": sz, "thin_x": thin_x, "n": (Vector3(sgn, 0, 0) if thin_x else Vector3(0, 0, sgn))})
 
 
 # -------------------------------------------------------------- equipment
@@ -482,6 +484,9 @@ const MODULE_PAINT := {
 	"CommsFloor": ["M-5", Color(0.35, 0.6, 1.0)],
 }
 var dress_count: int = 0
+var _wall_plates: Array = []      # outward hull wall plates (for the R43 finishing pass)
+var finish_count: int = 0
+var hull_lights: int = 0
 
 
 func _dress_hull(geo: Node) -> void:
@@ -608,3 +613,189 @@ func _build_worksite() -> void:
 	ws.add_child(plate)
 	for n in ws.find_children("*", "VisualInstance3D", true, false):
 		(n as VisualInstance3D).layers = 1 | EXTERIOR
+
+
+
+# ======================================================================
+# Round 43 Priority 18: EXTERIOR FINISHING PASS. Every outward hull wall
+# plate (recorded by _build_hull, so inside and outside always agree) gets
+# real spacecraft structure on top of its flat plate:
+#   - STRUCTURAL RIBS (vertical frames every ~1.5 m, slightly raised);
+#   - top / bottom STRINGERS (edge longerons) and a painted module BELT
+#     stripe in the module's identity colour, with the module ID stencilled;
+#   - SMALL HULL LIGHTS (warm, emissive) under the roof edge -- the
+#     shaded side of the station is no longer a black slab;
+#   - a SERVICE HATCH (outlined panel, latch, label) on longer walls;
+#   - CABLE CONDUIT + brackets on the grey machinery modules;
+#   - THERMAL BLANKET quilting patches (white modules) and HAZARD stencils.
+# All visual only (no collision), on the exterior layer, shadows off, and
+# KEPT CLEAR of the observation window, the airlock outer hatch, the
+# exterior cameras and every tether anchor (KEEP_OUT radius), so nothing
+# blocks a window, a camera, a ring or an EVA route.
+# ======================================================================
+const KEEP_OUT_R := 1.0
+
+
+func _keep_outs() -> Array:
+	var out: Array = []
+	var root: Node = get_parent()
+	for path in ["Interactables/WallWatchWindow", "AirlockChamber", "TetherAnchors"]:
+		var n: Node = root.get_node_or_null(path)
+		if n is Node3D:
+			out.append((n as Node3D).global_position)
+		if n != null:
+			for c in n.get_children():
+				if c is Node3D:
+					out.append((c as Node3D).global_position)
+	var net: Node = root.get_node_or_null("CameraNetwork")
+	if net != null and "cams" in net:
+		for id in net.cams:
+			var cam: Node = net.cams[id].get("cam")
+			if cam is Node3D and (cam as Node3D).is_inside_tree():
+				out.append((cam as Node3D).global_position)
+	out.append(Vector3(-4.75, 1.4, -2.75))      # outer hatch
+	return out
+
+
+func _clear_of(p: Vector3, keep: Array, r: float = KEEP_OUT_R) -> bool:
+	for k in keep:
+		if (k as Vector3).distance_to(p) < r:
+			return false
+	return true
+
+
+func _module_paint_for(nm: String) -> Array:
+	for k in [["ControlRoom", "C-1"], ["Living", "H-1"], ["Engineering", "E-2"], ["LifeSupport", "L-3"], ["Storage", "S-4"], ["Comms", "M-5"]]:
+		if nm.find(k[0]) != -1:
+			return [k[1], MODULE_PAINT[k[0] + "Floor"][1]]
+	return ["", Color(0.6, 0.62, 0.65)]
+
+
+func _finish_walls() -> void:
+	var fin := Node3D.new()
+	fin.name = "HullFinish"
+	add_child(fin)
+	var keep: Array = _keep_outs()
+	var rib_m := _m(Color(0.56, 0.58, 0.61), 0.6)
+	var rib_w := _m(Color(0.78, 0.78, 0.76), 0.2)
+	var dark := _m(Color(0.16, 0.17, 0.19), 0.5)
+	var hatch_m := _m(Color(0.68, 0.7, 0.72), 0.5)
+	var lamp_m := _m(Color(1.0, 0.92, 0.75), 0.0, Color(1.0, 0.86, 0.62) * 2.2)
+	var conduit_m := _m(Color(0.3, 0.32, 0.36), 0.6)
+	var yel := _m(Color(0.95, 0.72, 0.1), 0.2)
+	var quilt := _m(Color(0.93, 0.93, 0.9), 0.0)
+	quilt.roughness = 0.9
+	for wp in _wall_plates:
+		var nm: String = wp["name"]
+		var c: Vector3 = wp["c"]
+		var sz: Vector3 = wp["size"]
+		var tx: bool = wp["thin_x"]
+		var n: Vector3 = wp["n"]
+		var length: float = sz.z if tx else sz.x
+		var h: float = sz.y
+		if length < 0.7:
+			continue
+		var along := Vector3(0, 0, 1) if tx else Vector3(1, 0, 0)
+		var face: Vector3 = c + n * 0.06
+		var grey: bool = _module_mat(nm) == _hull_grey
+		var paint: Array = _module_paint_for(nm)
+		var col: Color = paint[1]
+		var y0: float = c.y - h * 0.5
+		var y1: float = c.y + h * 0.5
+		var dims := func(a: float, hh: float, d: float) -> Vector3:
+			return Vector3(d, hh, a) if tx else Vector3(a, hh, d)
+		# Stringers along the top and bottom edges.
+		_box(dims.call(length, 0.1, 0.05), Vector3(face.x, y1 - 0.08, face.z) + n * 0.025, rib_m if grey else rib_w, fin)
+		_box(dims.call(length, 0.1, 0.05), Vector3(face.x, y0 + 0.1, face.z) + n * 0.025, rib_m if grey else rib_w, fin)
+		finish_count += 2
+		# Module belt stripe (identity colour) at 0.55 of the height.
+		var belt_y: float = lerpf(y0, y1, 0.42)
+		if col != Color(0.6, 0.62, 0.65):
+			_box(dims.call(length - 0.1, 0.09, 0.015), Vector3(face.x, belt_y, face.z) + n * 0.008, _m(col.darkened(0.1), 0.2), fin)
+			finish_count += 1
+		# Structural ribs.
+		var bays: int = maxi(int(round(length / 1.5)), 1)
+		for i in range(0, bays + 1):
+			var t: float = -length * 0.5 + length * float(i) / float(bays)
+			t = clampf(t, -length * 0.5 + 0.06, length * 0.5 - 0.06)
+			var rp: Vector3 = Vector3(face.x, c.y, face.z) + along * t + n * 0.03
+			if not _clear_of(rp, keep, 0.7):
+				continue
+			_box(dims.call(0.09, h - 0.05, 0.06), rp, rib_m if grey else rib_w, fin)
+			finish_count += 1
+		# Bays: hull lights, quilting, hatches, conduit.
+		for i in bays:
+			var tm: float = -length * 0.5 + length * (float(i) + 0.5) / float(bays)
+			var bay: Vector3 = Vector3(face.x, c.y, face.z) + along * tm
+			if not _clear_of(bay, keep):
+				continue
+			# Small hull light under the roof edge (every other bay).
+			if i % 2 == 0:
+				_box(dims.call(0.16, 0.05, 0.05), Vector3(bay.x, y1 - 0.22, bay.z) + n * 0.03, dark, fin)
+				_box(dims.call(0.12, 0.025, 0.02), Vector3(bay.x, y1 - 0.25, bay.z) + n * 0.055, lamp_m, fin)
+				finish_count += 2
+				# A real (exterior-layer-only) pool of light from every other
+				# lamp on longer walls: the shaded hull reads as a hull.
+				if i % 4 == 0 and length >= 2.0:
+					var hlt := OmniLight3D.new()
+					hlt.light_color = Color(1.0, 0.88, 0.7)
+					hlt.light_energy = 0.9
+					hlt.omni_range = 2.6
+					hlt.light_cull_mask = EXTERIOR
+					hlt.shadow_enabled = false
+					hlt.position = Vector3(bay.x, y1 - 0.35, bay.z) + n * 0.45
+					fin.add_child(hlt)
+					hull_lights += 1
+			if not grey and i % 2 == 1:
+				# A raised thermal-blanket patch with stitching.
+				var qp: Vector3 = Vector3(bay.x, lerpf(y0, y1, 0.7), bay.z) + n * 0.012
+				_box(dims.call(minf(length / bays - 0.35, 1.0), 0.55, 0.02), qp, quilt, fin)
+				for q in 3:
+					_box(dims.call(minf(length / bays - 0.4, 0.95), 0.008, 0.024), qp + Vector3(0, -0.18 + q * 0.18, 0), _m(Color(0.75, 0.75, 0.72), 0.0), fin)
+				finish_count += 4
+		# One service hatch on longer walls, in the bay nearest a quarter-length.
+		if length >= 2.6:
+			var hp: Vector3 = Vector3(face.x, lerpf(y0, y1, 0.3), face.z) + along * (-length * 0.25) + n * 0.02
+			if _clear_of(hp, keep, 1.1):
+				_box(dims.call(0.62, 0.52, 0.02), hp, dark, fin)
+				_box(dims.call(0.56, 0.46, 0.03), hp + n * 0.005, hatch_m, fin)
+				_box(dims.call(0.14, 0.03, 0.04), hp + n * 0.02 + Vector3(0, -0.14, 0), yel, fin)
+				var hl := Label3D.new()
+				hl.text = "SERVICE ACCESS %s" % (paint[0] if paint[0] != "" else "")
+				hl.font_size = 28
+				hl.pixel_size = 0.0035
+				hl.modulate = Color(0.12, 0.13, 0.15)
+				hl.outline_size = 0
+				hl.position = hp + n * 0.025 + Vector3(0, 0.15, 0)
+				hl.rotation_degrees.y = 90.0 * n.x if tx else (0.0 if n.z > 0 else 180.0)
+				hl.layers = 1 | EXTERIOR
+				fin.add_child(hl)
+				finish_count += 4
+		# Conduit with brackets on machinery modules.
+		if grey and length >= 1.5:
+			var cy: float = lerpf(y0, y1, 0.62)
+			var cp: Vector3 = Vector3(face.x, cy, face.z) + n * 0.09
+			if _clear_of(cp, keep, 0.9):
+				_cyl(0.035, length - 0.3, cp, conduit_m, Vector3(90, 0, 0) if tx else Vector3(0, 0, 90), fin)
+				for b in range(0, int(length / 0.7)):
+					var bp: Vector3 = cp + along * (-length * 0.5 + 0.35 + b * 0.7) - n * 0.04
+					_box(dims.call(0.04, 0.09, 0.09), bp, rib_m, fin)
+				finish_count += 1 + int(length / 0.7)
+		# Stencilled module ID beside the belt.
+		if paint[0] != "" and length >= 2.0:
+			var lp: Vector3 = Vector3(face.x, belt_y + 0.32, face.z) + along * (length * 0.28) + n * 0.02
+			if _clear_of(lp, keep):
+				var l := Label3D.new()
+				l.text = "%s" % paint[0]
+				l.font_size = 120
+				l.pixel_size = 0.003
+				l.modulate = col.darkened(0.25)
+				l.outline_size = 0
+				l.position = lp
+				l.rotation_degrees.y = 90.0 * n.x if tx else (0.0 if n.z > 0 else 180.0)
+				l.layers = 1 | EXTERIOR
+				fin.add_child(l)
+				finish_count += 1
+	for g in fin.find_children("*", "GeometryInstance3D", true, false):
+		(g as GeometryInstance3D).layers = 1 | EXTERIOR
+		(g as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

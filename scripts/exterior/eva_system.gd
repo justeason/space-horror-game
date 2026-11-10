@@ -151,6 +151,14 @@ func _build_locker() -> void:
 		rig.head_mesh.visible = false       # an EMPTY suit (the helmet is closed)
 	if rig.watch_mount != null:
 		rig.watch_mount.visible = false
+	# Round 43 Priority 6: ROOT CAUSE of the "headless" stored suit -- the
+	# rig puts the helmet (like the wearer's head) on the MIRROR-ONLY layer,
+	# which the first-person camera never renders. The STOWED suit is an
+	# ordinary object: every mesh goes on the normal world layer.
+	for v in rig.find_children("*", "VisualInstance3D", true, false):
+		var vi: VisualInstance3D = v
+		if vi.layers & 4:
+			vi.layers = 1
 	# Hanging pose: arms a little away from the torso, elbows soft.
 	rig.set_local("LeftUpperArm", Quaternion(Vector3(0, 0, 1), -0.22))
 	rig.set_local("RightUpperArm", Quaternion(Vector3(0, 0, 1), 0.22))

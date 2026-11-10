@@ -2210,7 +2210,7 @@ day_plan_path = NodePath("../../DayPlan")
 tracer_view_path = NodePath("../../Player/HUD/CircuitTracerView")
 
 [node name="SignalCalibrationStation" parent="Interactables" instance=ExtResource("29_signalstation")]
-position = Vector3(2.0, 1.6, 8.15)
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 2.0, 1.6, 8.15)
 day_plan_path = NodePath("../../DayPlan")
 signal_view_path = NodePath("../../Player/HUD/SignalCalibrationView")
 

@@ -60,6 +60,9 @@ const EVENTS := {
 	&"hatch_handle": {"name": "Outer hatch handle turns", "phase": 2, "late": true, "chance": 0.45, "cooldown_days": 5, "max_plays": 2, "enabled": true, "implemented": true,
 		"needs": "Inside the station, away from the airlock. A knock sounds at the airlock; on INT-07 (chamber camera) the outer hatch's dogging lever turns. Going to the airlock ends it.",
 		"variants": ["normal", "abnormal"]},
+	&"note_extra_item": {"name": "Daily note: an item nobody issued", "phase": 2, "late": false, "chance": 0.4, "cooldown_days": 5, "max_plays": 2, "enabled": true, "implemented": true,
+		"needs": "Open TODAY'S NOTE on the laptop. One extra checklist line is shown (presentation only); it is gone the next time the note is opened. The note's History (archive) shows it was never issued.",
+		"variants": ["normal", "abnormal"]},
 	&"blind_spot_object": {"name": "Object in a camera blind spot", "phase": 2, "late": true, "chance": 0.4, "cooldown_days": 4, "max_plays": 2, "enabled": false, "implemented": false,
 		"needs": "NOT IMPLEMENTED (future round).", "variants": []},
 	&"radio_contact": {"name": "Unknown radio contact", "phase": 3, "late": false, "chance": 1.0, "cooldown_days": 99, "max_plays": 1, "enabled": false, "implemented": false,
@@ -125,6 +128,20 @@ var _hatch_saved_layers: Array = []
 var _hatch_sound: AudioStreamPlayer3D
 var _hatch_seen_since: float = -1.0
 var _pending_investigation: Dictionary = {}   # id -> seconds left to go and check
+## Round 43 Priority 21: the INVESTIGATION framework. Evidence the
+## technician gathered (observations of an anomaly, physical checks, station
+## records that contradict what was seen), linked by event id. Optional:
+## nothing points at it, nothing requires it; it only feeds the story
+## milestones (a record contradiction counts as an investigation).
+var evidence: Array = []           # [{event, day, kind: observation|check|contradiction, text, ref}]
+## record id -> the events it can contradict (what the record shows).
+const RECORD_LINKS := {
+	"note_archive": {"events": ["note_extra_item"], "text": "The note archive shows one revision, no edits -- the extra line was never issued."},
+	"environment_log": {"events": ["wrong_reading"], "text": "The workstation log shows normal cabin pressure all day."},
+}
+const NOTE_LINES := {"normal": "Check the corridor feed before bed.", "abnormal": "Leave the corridor feed on tonight. It helps."}
+var _note_overlay: Dictionary = {}
+var _note_shown: bool = false
 
 
 func _ready() -> void:
@@ -250,7 +267,81 @@ func _investigated(id: String) -> void:
 	if not investigations.has(id):
 		investigations.append(id)
 	history.append({"id": id, "day": day(), "event": "investigated"})
+	_add_evidence(id, "check", "Checked in person: nothing out of place.", "")
 	_check_milestones()
+
+
+# ------------------------------------------------------- investigation
+func _add_evidence(event_id: String, kind: String, text: String, ref: String) -> void:
+	for e in evidence:
+		if e["event"] == event_id and e["kind"] == kind and e["ref"] == ref and int(e["day"]) == day():
+			return
+	evidence.append({"event": event_id, "day": day(), "kind": kind, "text": text, "ref": ref})
+
+
+## An anomaly was noticed (seen) -- an open question.
+func observe(event_id: String, text: String) -> void:
+	_add_evidence(event_id, "observation", text, "")
+
+
+## "none" | "observed" | "checked" | "contradicted"
+func investigation_state(event_id: String) -> String:
+	var st := "none"
+	for e in evidence:
+		if e["event"] != event_id:
+			continue
+		match String(e["kind"]):
+			"contradiction": return "contradicted"
+			"check": st = "checked"
+			"observation":
+				if st == "none":
+					st = "observed"
+	return st
+
+
+## A station / personal RECORD was consulted. If it covers an anomaly the
+## technician has observed, the record contradicts the experience: that is
+## evidence, and counts as an investigation.
+func on_record_checked(record_id: String) -> void:
+	var link: Dictionary = RECORD_LINKS.get(record_id, {})
+	for ev in Array(link.get("events", [])):
+		if investigation_state(String(ev)) in ["observed", "checked"] or (active == StringName(ev) and not active_dev):
+			_add_evidence(String(ev), "contradiction", String(link["text"]), record_id)
+			if not investigations.has(String(ev)):
+				investigations.append(String(ev))
+				history.append({"id": String(ev), "day": day(), "event": "investigated"})
+			_check_milestones()
+
+
+func evidence_for(event_id: String) -> Array:
+	return evidence.filter(func(e): return e["event"] == event_id)
+
+
+# ---------------------------------------------------- laptop presentation
+## Round 43 Priority 22: PRESENTATION-ONLY overlays for laptop documents.
+## The laptop asks at display time; nothing here ever writes the player's
+## own data or the documents themselves.
+func laptop_overlays(doc_id: String) -> Array:
+	if doc_id == "daily_note" and not _note_overlay.is_empty():
+		return [_note_overlay]
+	return []
+
+
+## The laptop opened a document. TODAY'S NOTE: an armed note anomaly starts
+## on this opening; the NEXT opening finds the note normal again.
+func on_document_opened(doc_id: String) -> void:
+	if doc_id != "daily_note":
+		return
+	if active == &"note_extra_item":
+		if _note_shown:
+			stop(true)          # opened again: the line is simply not there
+		else:
+			_note_shown = true  # (a developer-started preview: show it now)
+		return
+	if active == &"" and is_armed(&"note_extra_item") and not _emergency():
+		var variant: String = "abnormal" if phase() >= 3 else "normal"
+		if _start(&"note_extra_item", variant):
+			_note_shown = true
 
 
 # ------------------------------------------------------------- arming
@@ -491,6 +582,9 @@ func _start(id: StringName, variant: String = "normal", dev: bool = false) -> bo
 			if not _hatch_begin():
 				_abort_start()
 				return false
+		&"note_extra_item":
+			_note_overlay = {"kind": "extra_item", "text": NOTE_LINES.get(variant, NOTE_LINES["normal"]), "event": "note_extra_item"}
+			_note_shown = false
 	return true
 
 
@@ -534,6 +628,9 @@ func _update_active(delta: float) -> void:
 				_investigated("wrong_reading")
 			if _active_t >= READING_MAX_S or (_away_s >= READING_AWAY_S and _on_screen_s > 0.5):
 				stop(_on_screen_s >= READING_GAZE_S)
+		&"note_extra_item":
+			if _active_t >= 900.0:
+				stop(true)
 		&"hatch_handle":
 			_hatch_animate()
 			if _feed_on_screen("EXT-02") or _feed_on_screen("INT-07"):
@@ -572,6 +669,10 @@ func stop(seen: bool = false) -> void:
 			_hatch_end()
 			if seen and not dev:
 				_pending_investigation["hatch_handle"] = 120.0
+		&"note_extra_item":
+			_note_overlay = {}
+	if seen and not dev:
+		observe(String(id), EVENTS[id]["name"])
 	if not dev:
 		var st: Dictionary = state[id]
 		st["plays"] = int(st["plays"]) + 1
@@ -840,7 +941,7 @@ func state_dict() -> Dictionary:
 	for id in state:
 		ev[String(id)] = state[id].duplicate()
 	return {"events": ev, "feed_days": feed_days.duplicate(true), "armed_for_day": armed_for_day,
-		"story": {"version": 2, "phase": story_phase, "milestones": milestones.duplicate(), "duties": duty_kinds.duplicate(), "investigations": investigations.duplicate()}}
+		"story": {"version": 2, "phase": story_phase, "milestones": milestones.duplicate(), "duties": duty_kinds.duplicate(), "investigations": investigations.duplicate(), "evidence": evidence.duplicate(true)}}
 
 
 func load_dict(d: Dictionary) -> void:
@@ -886,4 +987,8 @@ func load_dict(d: Dictionary) -> void:
 		milestones = Array(sd.get("milestones", [])).map(func(x): return String(x))
 		duty_kinds = Array(sd.get("duties", [])).map(func(x): return String(x))
 		investigations = Array(sd.get("investigations", [])).map(func(x): return String(x))
+	evidence = []
+	for e in Array(sd.get("evidence", [])):
+		if e is Dictionary:
+			evidence.append({"event": String(e.get("event", "")), "day": int(e.get("day", 0)), "kind": String(e.get("kind", "")), "text": String(e.get("text", "")), "ref": String(e.get("ref", ""))})
 	_check_milestones()

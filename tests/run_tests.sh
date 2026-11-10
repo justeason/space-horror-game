@@ -173,6 +173,9 @@ TESTS=(
   test_r42_maintenance
   test_r42_laptop
   test_r42_watch_shift
+  test_r43_clock_laptop
+  test_r43_holdout
+  test_r43_station
 )
 
 if [ "$#" -gt 0 ]; then
