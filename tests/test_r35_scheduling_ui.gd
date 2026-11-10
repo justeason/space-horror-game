@@ -113,7 +113,9 @@ func _init() -> void:
 	# ---- Wristwatch: one objective. ----
 	main2.get_node("Player/Wristwatch")._refresh_text()
 	var face: Label3D = main2.get_node("Player/LookPivot/PitchPivot/Camera3D/FirstPersonWatchRig/ArmGroup/WatchAssembly/WatchFaceText")
-	_check("wristwatch shows ONE objective + destination + time ('%s')" % face.text.replace("\n", " / "), face.text.split("\n").size() == 2 and face.text.find(" · ") != -1)
+	# Round 42: line 1 is the station CLOCK (day + time), then ONE objective
+	# and its destination -- never a work percentage.
+	_check("wristwatch shows the clock + ONE objective + destination ('%s')" % face.text.replace("\n", " / "), face.text.split("\n").size() == 3 and face.text.begins_with("DAY ") and face.text.split("\n")[0].find(":") != -1 and face.text.find(" · ") != -1 and face.text.find("%") == -1)
 	_restore_cfg()
 	print("")
 	if _ok: print("ALL TESTS PASSED")

@@ -117,6 +117,10 @@ func repaired() -> bool:
 
 func on_part(id: StringName) -> void:
 	if not at_site("outer_" + wing):
+		var here_w: String = site_wing_here("outer_")
+		if here_w != "" and here_w != wing:
+			say("This outer panel is fine — the work order is for the %s wing (ring %s)." % [wing_word(wing), RING[wing]])
+			return
 		say("Grab the outer handhold first (tether on %s)." % RING[wing] if outside() else "The outer panel is at the wing tip.")
 		return
 	var s := String(id)
@@ -184,7 +188,7 @@ func order_done() -> bool:
 
 func order_next() -> Dictionary:
 	if repaired():
-		return {"action": "Return along the truss, press IN", "short": "AIRLOCK IN", "room": &"airlock"}
+		return {"action": "Return along the truss, press IN>>", "short": "AIRLOCK IN", "room": &"airlock"}
 	var step: Dictionary
 	if not at_site("outer_" + wing):
 		step = {"action": "Out to %s (outer edge), grab the handhold" % RING[wing], "short": "TO OUTER %s" % wing, "room": &"airlock"}

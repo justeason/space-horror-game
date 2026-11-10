@@ -97,6 +97,8 @@ func _ready() -> void:
 	# Round 30: this collider is a hover/click volume, not a physical
 	# surface -- carry_system.gd's placement solver ignores the group.
 	add_to_group(&"placement_proxy")
+	add_to_group(&"r35_equipment")      # Round 42: SaveGame persists the tuning
+	add_to_group(&"signal_station")
 	if _world_diorama != null:
 		_world_diorama.sync_full_state(_frequency, _gain, 0.0, 0.0, false)
 
@@ -112,11 +114,17 @@ func _ready() -> void:
 func _ensure_profile() -> void:
 	if _profile_index != -1:
 		return
-	_apply_profile(randi() % _PROFILES.size())
+	# Round 42: DETERMINISTIC per day (no re-roll on reopen or reload).
+	_apply_profile(absi(hash([_day(), "m02"])) % _PROFILES.size())
+
+
+func _day() -> int:
+	return int(_day_plan.day_number) if _day_plan != null and "day_number" in _day_plan else 1
 
 
 func _apply_profile(index: int) -> void:
 	_profile_index = index
+	_profile_day = _day()
 	var p: Dictionary = _PROFILES[index]
 	_target_freq = p["target_freq"]
 	_target_gain = p["target_gain"]
@@ -135,7 +143,7 @@ func _apply_profile(index: int) -> void:
 ## comment). Mirrors electrical_panel.gd's debug_force_fault_role()/
 ## debug_force_config_label() contract exactly.
 func debug_force_profile(label: String) -> void:
-	if _profile_index != -1:
+	if _profile_index != -1 and _touched:
 		return
 	for i in _PROFILES.size():
 		if _PROFILES[i].get("label", "") == label:
@@ -249,6 +257,9 @@ func nudge_frequency(direction: int) -> Dictionary:
 	_ensure_profile()
 	if is_complete():
 		return {"ok": false}
+	if not receiver_powered():
+		return {"ok": false, "message": "Receiver unpowered (breaker B-04)."}
+	_touched = true
 	_frequency = clampf(_frequency + direction * _FREQ_STEP, _FREQ_MIN, _FREQ_MAX)
 	_sync_world_diorama()
 	return {"ok": true, "frequency": _frequency}
@@ -258,6 +269,9 @@ func nudge_gain(direction: int) -> Dictionary:
 	_ensure_profile()
 	if is_complete():
 		return {"ok": false}
+	if not receiver_powered():
+		return {"ok": false, "message": "Receiver unpowered (breaker B-04)."}
+	_touched = true
 	_gain = clampf(_gain + direction * _GAIN_STEP, _GAIN_MIN, _GAIN_MAX)
 	_sync_world_diorama()
 	return {"ok": true, "gain": _gain}
@@ -290,3 +304,89 @@ func _sync_world_diorama() -> void:
 	if _world_diorama == null:
 		return
 	_world_diorama.sync_full_state(_frequency, _gain, signal_quality(), noise_level(), is_complete())
+	if _world_diorama.has_method("set_readout_text") and not is_complete():
+		_world_diorama.set_readout_text(physical_readout())
+
+
+# ======================================================================
+# Round 42 Priority 20: ONE AUTHORITATIVE COMMUNICATIONS STATE.
+# This station owns frequency / gain / the day's receiver profile; the
+# physical console twin (WorldDiorama), the focused tuning view and the
+# workstation all read it -- nothing keeps its own copy:
+#   - opening the focused view never resets it; closing keeps it; the
+#     physical dials, needle, bars AND a numeric readout always show it
+#     (readable without entering the minigame; numbers hidden on HARD,
+#     like the focused view);
+#   - LINK = receiver tuning x antenna feed (antenna_mast.gd: loose /
+#     corroded) x power: breaker B-04 off = receiver dark, dials refuse;
+#   - the day's profile is deterministic (hash of the day), re-armed only
+#     when a NEW day's signal check is pending; saved with the values.
+# ======================================================================
+var _touched: bool = false
+var _profile_day: int = -1
+var _sync_t: float = 0.0
+
+
+func _antenna() -> Node:
+	return get_tree().get_first_node_in_group(&"antenna") if is_inside_tree() else null
+
+
+func receiver_powered() -> bool:
+	var b: Node = get_node_or_null(^"../../Equipment/BreakerPanel")
+	return b == null or not b.has_method("zone_powered") or b.zone_powered(&"communications")
+
+
+func antenna_factor() -> float:
+	var a: Node = _antenna()
+	if a == null or not "feed" in a:
+		return 1.0
+	return {"ok": 1.0, "corroded": 0.55, "loose": 0.35}.get(String(a.feed), 1.0)
+
+
+## 0..1 end-to-end link: what the station actually hears.
+func link_quality() -> float:
+	if not receiver_powered():
+		return 0.0
+	var pb: Node = get_tree().get_first_node_in_group(&"comms_patch_bay") if is_inside_tree() else null
+	return signal_quality() * antenna_factor() * (pb.link_factor() if pb != null else 1.0)
+
+
+func physical_readout() -> String:
+	if not receiver_powered():
+		return "RX OFF  B-04"
+	var link: int = roundi(link_quality() * 100.0)
+	if not show_numeric_readout():
+		return "LINK %d%%" % link
+	return "F %.0f  G %.2f\nLINK %d%%%s" % [_frequency, _gain, link, "  ANT" if antenna_factor() < 1.0 else ""]
+
+
+func _process(delta: float) -> void:
+	_sync_t += delta
+	if _sync_t < 0.25:
+		return
+	_sync_t = 0.0
+	# A new day with the signal check pending: today's receiver profile.
+	if _profile_index != -1 and _profile_day != -1 and _profile_day != _day() and not is_complete():
+		_profile_index = -1
+		_touched = false
+		_sustained_time = 0.0
+	if _profile_index == -1 and _day_plan != null:
+		_ensure_profile()
+	if _profile_index != -1:
+		_sync_world_diorama()
+
+
+func state_dict() -> Dictionary:
+	return {"profile": _profile_index, "day": _profile_day, "freq": _frequency, "gain": _gain, "touched": _touched}
+
+
+func load_dict(d: Dictionary) -> void:
+	var idx: int = int(d.get("profile", -1))
+	if idx >= 0 and idx < _PROFILES.size():
+		_apply_profile(idx)
+		_frequency = clampf(float(d.get("freq", _frequency)), _FREQ_MIN, _FREQ_MAX)
+		_gain = clampf(float(d.get("gain", _gain)), _GAIN_MIN, _GAIN_MAX)
+		_profile_day = int(d.get("day", _day()))
+		_touched = bool(d.get("touched", false))
+	_sustained_time = 0.0
+	_sync_world_diorama()

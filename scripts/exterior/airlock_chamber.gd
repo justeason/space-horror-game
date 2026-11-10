@@ -57,6 +57,14 @@ var _screens: Array = []           # Label3D
 var _big: Label3D
 var _t: float = 0.0
 var _step_t: float = 0.0
+var _handles: Array = []           # Round 42: dogging-handle pivots (inner hatch first)
+
+
+## Round 42: the OUTER hatch's two handle assemblies (exterior face,
+## chamber face). Purely visual nodes: turning them changes nothing about
+## the real pressure / latch state.
+func outer_handles() -> Array:
+	return _handles.slice(2, 4)
 
 
 func _ready() -> void:
@@ -174,15 +182,55 @@ func _door(name: String, hinge: Vector3, extend_sign: float, face_col: Color, po
 		rim.material_override = _mat(face_col.darkened(0.25), 0.6)
 		rim.position = c + Vector3(0, 0, zf * 0.04)
 		body.add_child(rim)
+		# Round 42: the dogging wheel is a HANDLE assembly (rim + two spokes
+		# + a crank knob) on its own pivot, so a twist of the handle reads
+		# clearly (hatch-handle anomaly, story_events.gd).
+		var hp := Node3D.new()
+		hp.name = "Handle%s" % ("Out" if zf < 0.0 else "In")
+		hp.position = c + Vector3(0, -0.15, zf * 0.065)
+		body.add_child(hp)
+		var wmat := _mat(Color(0.75, 0.76, 0.78), 0.8)
 		var wheel := MeshInstance3D.new()
 		var tm := TorusMesh.new()
 		tm.inner_radius = 0.1
 		tm.outer_radius = 0.13
 		wheel.mesh = tm
 		wheel.rotation_degrees.x = 90.0
-		wheel.material_override = _mat(Color(0.75, 0.76, 0.78), 0.8)
-		wheel.position = c + Vector3(0, -0.15, zf * 0.065)
-		body.add_child(wheel)
+		wheel.material_override = wmat
+		hp.add_child(wheel)
+		for a in [0.0, 90.0]:
+			var sp := MeshInstance3D.new()
+			var sbm := BoxMesh.new()
+			sbm.size = Vector3(0.23, 0.022, 0.018)
+			sp.mesh = sbm
+			sp.material_override = wmat
+			sp.rotation_degrees.z = a
+			hp.add_child(sp)
+		var knob := MeshInstance3D.new()
+		var km := CylinderMesh.new()
+		km.top_radius = 0.016
+		km.bottom_radius = 0.016
+		km.height = 0.05
+		knob.mesh = km
+		knob.rotation_degrees.x = 90.0
+		knob.position = Vector3(0.115, 0, zf * 0.025)
+		knob.material_override = _mat(Color(0.12, 0.12, 0.13), 0.3)
+		hp.add_child(knob)
+		# A yellow dogging LEVER across the wheel: its angle is the latch
+		# position, readable at a glance (and on camera).
+		var lever := MeshInstance3D.new()
+		var lbm := BoxMesh.new()
+		lbm.size = Vector3(0.34, 0.035, 0.022)
+		lever.mesh = lbm
+		lever.position = Vector3(0, 0, zf * 0.02)
+		lever.material_override = _mat(Color(0.95, 0.75, 0.12), 0.3)
+		hp.add_child(lever)
+		# The outer hatch's exterior face is part of the sunlit exterior.
+		if zf < 0.0 and not porthole:
+			for v in [hp] + hp.find_children("*", "VisualInstance3D", true, false):
+				if v is VisualInstance3D:
+					(v as VisualInstance3D).layers = 1 | (1 << 11)
+		_handles.append(hp)
 		if porthole:
 			var glass := MeshInstance3D.new()
 			var cyl := CylinderMesh.new()
@@ -257,8 +305,11 @@ func _build_panels() -> void:
 		var scr := _label("", Vector3(0, 0.05, 0.006), 0.0, 13, Color(0.55, 0.95, 0.75), root)
 		_screens.append(scr)
 		if p[0] == &"chamber":
-			_button(root, &"exit", Vector3(-0.08, -0.12, 0.0), "OUT >>", Color(0.75, 0.2, 0.15))
-			_button(root, &"enter", Vector3(0.08, -0.12, 0.0), "<< IN", Color(0.2, 0.55, 0.3))
+			# Round 42 Priority 17: from the console viewpoint (facing the
+			# east wall) the OUTER hatch is to the LEFT and the station to the
+			# RIGHT -- the arrows point where each sequence takes you.
+			_button(root, &"exit", Vector3(-0.08, -0.12, 0.0), "OUT<<", Color(0.75, 0.2, 0.15))
+			_button(root, &"enter", Vector3(0.08, -0.12, 0.0), "IN>>", Color(0.2, 0.55, 0.3))
 		else:
 			_button(root, p[0], Vector3(0, -0.12, 0.0), "OPEN" if p[0] == &"outside" else "CYCLE", Color(0.75, 0.2, 0.15) if p[0] == &"outside" else Color(0.2, 0.55, 0.3))
 		if p[0] == &"outside":
@@ -295,9 +346,9 @@ func part_prompt(id: StringName) -> String:
 	match id:
 		&"exit":
 			var why: String = exit_blocker()
-			return "Click: OUT — seal inner, vent, open outer" if why == "" else "OUT: %s" % why
+			return "Click: OUT<< — seal inner, vent, open outer" if why == "" else "OUT<<: %s" % why
 		&"enter":
-			return "Click: IN — seal outer, pressurize, open inner" if not (inner_open and psi >= 14.5) else ""
+			return "Click: IN>> — seal outer, pressurize, open inner" if not (inner_open and psi >= 14.5) else ""
 		&"station":
 			return "Click: open the inner hatch" if not inner_open else ""
 		&"outside":
@@ -595,9 +646,11 @@ func _refresh() -> void:
 		_beacon_mat.emission = col
 	var txt: String = "%s\n%4.1f psi" % [state_word(), psi]
 	if sequence != "":
-		txt = "%s\n%4.1f psi" % [step_text(), psi]
+		txt = "%s %s\n%4.1f psi" % ["OUT<<" if sequence == "out" else "IN>>", step_text(), psi]
 	if waiting != "":
 		txt = "%s\n%s" % [waiting.to_upper(), step_text()]
+	# Round 42: hatch states at a glance (inner / outer).
+	txt += "\nIN %s · OUT %s" % ["OPEN" if inner_open else "SHUT", "OPEN" if outer_open else "SHUT"]
 	_refresh_console()
 	for s in _screens:
 		(s as Label3D).text = txt

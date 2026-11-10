@@ -36,7 +36,7 @@ func _camera_tab() -> void:
 	shell.show_page(shell.Page.CAMERAS)
 	await process_frame
 	var p: Control = shell._pages[shell.Page.CAMERAS]
-	_check("8 curated cameras listed", shell.cam_buttons.size() == 8)
+	_check("7 curated cameras listed (Round 42: EXT-01 retired)", shell.cam_buttons.size() == 7)
 	_check("two separated groups (INTERIOR / EXTERIOR headers)", p.get_node_or_null("GroupINTERIOR") != null and p.get_node_or_null("GroupEXTERIOR") != null)
 	var fit_ok := true
 	var bad: Array = []

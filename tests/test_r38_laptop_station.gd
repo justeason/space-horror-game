@@ -45,7 +45,8 @@ func _laptop() -> void:
 	_check("Files: the six top folders", scr._files_box.get_child_count() == 2 and scr._files_box.get_child(1).get_child_count() == 6)
 	scr.open_entry({"kind": "dir", "target": "Documents"})
 	await process_frame
-	_check("open Documents/ (3 files + ..)", scr.folder == "Documents" and scr._files_box.get_child(1).get_child_count() == 4)
+	# Round 42: + the previous technician's handover note (a story document).
+	_check("open Documents/ (4 files + ..)", scr.folder == "Documents" and scr._files_box.get_child(1).get_child_count() == 5)
 	var doc: Dictionary = scr.Files.list("Documents")[0]
 	scr.open_entry({"kind": "txt", "rec": doc})
 	_check("open a text file: '%s'" % scr.open_file, scr.current_view() == &"file" and scr._report.text.find("ROTATION SUMMARY") != -1)
@@ -107,7 +108,7 @@ func _cameras_tab() -> void:
 	await create_timer(1.6).timeout
 	await _click(screen, shell.tab_buttons[1])
 	_check("CAMERAS tab by click", shell.page == shell.Page.CAMERAS)
-	_check("Round 41: the 8 curated cameras listed as buttons", shell.cam_buttons.size() == 8)
+	_check("Round 42: the 7 curated cameras listed as buttons (EXT-01 retired)", shell.cam_buttons.size() == 7 and not shell.cam_buttons.has("EXT-01"))
 	await _click(screen, shell.cam_buttons["EXT-03"])
 	_check("click EXT-03: selected, its LIVE feed shown", shell.selected_cam == "EXT-03" and shell._feed.texture == net.feed("EXT-03") and shell._cam_info.text.find("OBSERVATION") != -1)
 	_check("only the shown camera renders", net.is_rendering("EXT-03") and not net.is_rendering("EXT-02"))
@@ -195,7 +196,10 @@ func _quarters() -> void:
 func _click(screen: SubViewport, c: Control) -> void:
 	screen.shell.refresh()
 	await process_frame
-	var p: Vector2 = c.get_global_rect().get_center()
+	# Round 42: the monitor renders at 2x its 640x400 layout; a real click
+	# arrives in RENDER pixels (uv * size), so map layout units through the
+	# viewport's stretch transform.
+	var p: Vector2 = screen.get_final_transform() * c.get_global_rect().get_center()
 	for pressed in [true, false]:
 		var ev := InputEventMouseButton.new()
 		ev.button_index = MOUSE_BUTTON_LEFT

@@ -167,6 +167,12 @@ TESTS=(
   test_r41_cargo_drop
   test_r41_cameras_suit
   test_r40_eva_clarity
+  test_r42_eva_airlock
+  test_r42_story_dev
+  test_r42_cameras_live
+  test_r42_maintenance
+  test_r42_laptop
+  test_r42_watch_shift
 )
 
 if [ "$#" -gt 0 ]; then

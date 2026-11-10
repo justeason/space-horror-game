@@ -139,8 +139,64 @@ func _build_section_hardware(i: int) -> void:
 	_hw.append(hw)
 
 
+# ======================================================================
+# Round 42 Priority 18: the PRESSURE-HOLD test is a CLOSED-HATCH test of
+# the outer hatch seal, driven by the airlock's AUTHORITATIVE state
+# (airlock_chamber.gd) -- no separate fake seal state:
+#   cannot start: HATCH OPEN (outer hatch open), CYCLING (a sequence is
+#   running), LOW PRESSURE (the chamber is not at station pressure -- a
+#   hold test needs the full 14.7 psi across the seal), SECURE HATCH
+#   (inspection mode);
+#   running: aborts the moment any of those becomes true;
+#   PASS / FAIL describe THAT closure: opening the outer hatch again
+#   clears the result (a new closure has not been tested).
+# ======================================================================
+var last_block: String = ""
+
+
+func _airlock() -> Node:
+	return get_tree().get_first_node_in_group(&"airlock") if is_inside_tree() else null
+
+
+## Why the hold test cannot run now ("" = it can).
+func test_blocker() -> String:
+	if inspection_mode:
+		return "SECURE HATCH"
+	var a: Node = _airlock()
+	if a == null:
+		return ""
+	if a.outer_open:
+		return "HATCH OPEN"
+	if a.sequence != "":
+		return "CYCLING"
+	if a.psi < 14.5:
+		return "LOW PRESSURE"
+	return ""
+
+
+var _idle_t: float = 0.0
+
+
 func _process(delta: float) -> void:
+	_idle_t += delta
+	if _idle_t >= 0.5 and test_state != "running":
+		_idle_t = 0.0
+		_refresh()
+	var a: Node = _airlock()
+	if a != null and a.outer_open and test_state in ["pass", "fail"]:
+		test_state = ""
+		if _dp != null:
+			_dp.log_event("Hatch seal hold result cleared (outer hatch opened)")
+		_refresh()
 	if test_state == "running":
+		var why: String = test_blocker()
+		if why != "":
+			test_state = ""
+			last_block = why
+			sfx(&"fail")
+			say("Pressure-hold test ABORTED — %s." % why.to_lower())
+			_refresh()
+			return
 		_test_t += delta
 		if _test_t >= TEST_S:
 			test_state = "pass" if leak_kpa() == 0.0 else "fail"
@@ -182,10 +238,14 @@ func on_part(id: StringName) -> void:
 			test_state = ""
 		sfx(&"latch")
 	elif s == "test":
-		if inspection_mode:
-			say("Secure the hatch before the pressure-hold test.")
+		var why: String = test_blocker()
+		if why != "":
+			last_block = why
+			say({"SECURE HATCH": "Secure the hatch before the pressure-hold test.", "HATCH OPEN": "Outer hatch OPEN — close it before a pressure-hold test.", "CYCLING": "Airlock cycling — wait for it to finish.", "LOW PRESSURE": "Chamber not at station pressure — pressurise it first."}.get(why, why))
 			sfx(&"fail")
+			_refresh()
 			return
+		last_block = ""
 		test_state = "running"
 		_test_t = 0.0
 		sfx(&"hiss")
@@ -227,7 +287,8 @@ func part_prompt(id: StringName) -> String:
 	if s == "mode":
 		return "Click: %s hatch" % ("Secure" if inspection_mode else "Inspect (unlock)")
 	if s == "test":
-		return "Click: Run pressure-hold test" if not inspection_mode else "Pressure test (secure hatch first)"
+		var why: String = test_blocker()
+		return "Click: Run pressure-hold test" if why == "" else "Pressure test: %s" % why
 	if s.begins_with("s"):
 		var i: int = int(s.substr(1))
 		if not inspection_mode:
@@ -265,7 +326,9 @@ func _refresh() -> void:
 		_lever.rotation_degrees.z = 40.0 if inspection_mode else 0.0
 		set_lamp(_mode_lamp, Color(1.0, 0.65, 0.1) if inspection_mode else Color(0.3, 0.9, 0.4), true)
 	if _readout != null:
-		var t: String = {"": "HOLD TEST: —", "running": "HOLD TEST: RUNNING...", "pass": "HOLD TEST: PASS", "fail": "HOLD TEST: FAIL"}.get(test_state, "")
+		var blk: String = test_blocker() if is_inside_tree() else ""
+		var idle: String = "HOLD TEST: %s" % (blk if blk != "" else "READY")
+		var t: String = {"": idle, "running": "HOLD TEST: RUNNING...", "pass": "HOLD TEST: PASS", "fail": "HOLD TEST: FAIL"}.get(test_state, "")
 		_readout.text = "%s\nLEAK %.1f kPa/min" % [t, leak_kpa() * 0.6] if test_state in ["pass", "fail"] else t
 		_readout.modulate = Color(0.55, 0.95, 0.75) if test_state == "pass" else (Color(1.0, 0.4, 0.3) if test_state == "fail" else Color(0.85, 0.85, 0.8))
 
@@ -320,7 +383,11 @@ func order_next() -> Dictionary:
 		return {"action": "Secure the hatch", "short": "SECURE HATCH", "room": r}
 	if test_state == "running":
 		return {"action": "Pressure test running", "short": "TESTING", "room": r}
-	return {"action": "Run pressure-hold test", "short": "HOLD TEST", "room": r}
+	match test_blocker():
+		"HATCH OPEN": return {"action": "Close the outer hatch (airlock IN>>)", "short": "SEAL FIRST", "room": r}
+		"CYCLING": return {"action": "Wait for the airlock cycle", "short": "CYCLING", "room": r}
+		"LOW PRESSURE": return {"action": "Pressurise the chamber", "short": "PRESSURIZE", "room": r}
+	return {"action": "Run pressure-hold test", "short": "PRESSURE HOLD", "room": r}
 
 
 func order_progress() -> String:

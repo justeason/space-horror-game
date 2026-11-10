@@ -1071,6 +1071,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		if _state in [State.SITTING, State.LAPTOP, State.EDITING] and handle_click(false, event.position):
 			get_viewport().set_input_as_handled()
 		return
+	# Round 42: key RELEASES reach the laptop too while it is in focused use,
+	# so a held-key laptop game (Holdout: W A S D) stops moving on release.
+	# They never reach the technician's own movement.
+	if event is InputEventKey and not event.pressed and _state == State.EDITING:
+		_laptop_view.forward_key_to_screen(event)
+		get_viewport().set_input_as_handled()
+		return
 	if not (event is InputEventKey and event.pressed):
 		return
 

@@ -63,7 +63,9 @@ func _no_false_outside() -> void:
 	al.outer_open = true
 	al.settle()
 	for i in 6: await physics_frame
-	_check("chamber open to space, standing inside: zone CHAMBER, gravity on", eva.zone == "chamber" and not eva.outside and not fb.zero_g)
+	# Round 42: an open / depressurised chamber keeps the suit in EVA mode
+	# (mag boots released) -- still inside (zone CHAMBER), but floating.
+	_check("chamber open to space, inside: zone CHAMBER, still FLOATING (boots released)", eva.zone == "chamber" and not eva.outside and fb.zero_g and eva.float_mode)
 	al.reset_default()
 
 
@@ -82,9 +84,11 @@ func _sequence() -> void:
 	_check("through the OPEN outer hatch -> zone OUTSIDE (zero-g, tether A1)", eva.zone == "outside" and eva.outside and fb.zero_g and eva.anchor_index == 0)
 	fb.sync_to_eye_position(Vector3(-4.8, 1.6, -1.6))
 	for i in 6: await physics_frame
-	_check("back into the chamber -> zone CHAMBER (gravity, unclipped)", eva.zone == "chamber" and not eva.outside and not fb.zero_g and eva.anchor_index == -1)
+	_check("back into the chamber -> zone CHAMBER (still floating: outer hatch open, unclipped)", eva.zone == "chamber" and not eva.outside and fb.zero_g and eva.anchor_index == -1)
 	al.begin_cycle_in()
 	await _until(func(): return al.sequence == "", 10.0)
+	for i in 4: await physics_frame
+	_check("IN>> done (sealed + pressurised): boots engaged, station movement", not fb.zero_g and not eva.float_mode)
 	fb.sync_to_eye_position(Vector3(-4.8, 1.6, 0.8))
 	for i in 4: await physics_frame
 	var zones: Array = eva.eva_log.filter(func(e): return String(e["event"]).begins_with("zone_")).map(func(e): return String(e["event"]).substr(5))

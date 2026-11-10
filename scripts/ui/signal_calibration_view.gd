@@ -25,6 +25,8 @@ var _last_sync_quality: float = -1.0
 
 
 func _ready() -> void:
+	# Round 42: render the 3D view at real screen resolution (hidpi_viewport.gd).
+	preload("res://scripts/ui/hidpi_viewport.gd").attach(self)
 	visible = false
 	_diorama.freq_nudge.connect(_on_freq_nudge)
 	_diorama.gain_nudge.connect(_on_gain_nudge)
@@ -128,7 +130,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _sync_diorama() -> void:
 	_diorama.sync_full_state(_station.frequency(), _station.gain(), _station.signal_quality(), _station.noise_level(), _done)
 	if _station.show_numeric_readout():
-		_diorama.set_readout_text("F:%.0f  G:%.2f  Q:%.0f%%" % [_station.frequency(), _station.gain(), _station.signal_quality() * 100.0])
+		_diorama.set_readout_text("F:%.0f  G:%.2f  Q:%.0f%%" % [_station.frequency(), _station.gain(), _station.signal_quality() * 100.0] + ("\nLINK %d%%" % roundi(_station.link_quality() * 100.0) if _station.has_method("link_quality") else ""))
 	else:
 		_diorama.set_readout_text("")
 

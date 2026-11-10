@@ -26,13 +26,12 @@ var _ok := true
 ## sweep today"). Stored as sorted node_id pairs so direction doesn't
 ## matter. Any edge in this set that passes is fine (an improvement, not
 ## a failure); any edge NOT in this set that fails is a new regression.
-var _known_failures: Array[Array] = [
-	["comms_a", "comms_window"],
-	["comms_a", "comms_alcove"],
-	["junction_node_1", "comms_tunnel_elbow"],
-	["engineering_tunnel_1", "engineering_a"],
-	["engineering_b", "storage_elbow_e"],
-]
+## Round 42: the five historical diagonal links (comms_a-comms_window,
+## comms_a-comms_alcove, junction_node_1-comms_tunnel_elbow,
+## engineering_tunnel_1-engineering_a, engineering_b-storage_elbow_e) were
+## RE-AUTHORED with corner waypoints that follow the real doorways; the
+## known-failure baseline is now EMPTY -- any blocked edge is a regression.
+var _known_failures: Array[Array] = []
 
 
 func _init() -> void:

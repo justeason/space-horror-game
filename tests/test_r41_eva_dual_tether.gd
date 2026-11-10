@@ -287,7 +287,7 @@ func _route(ids: Array, what: String) -> void:
 func _back_inside() -> void:
 	fb.sync_to_eye_position(Vector3(-4.8, 1.6, -1.6))
 	for i in 6: await physics_frame
-	_check("back in the chamber: both tethers stowed, gravity", not eva.outside and eva.tether_state() == "NONE" and not fb.zero_g)
+	_check("back in the chamber: both tethers stowed, still floating (outer hatch open)", not eva.outside and eva.tether_state() == "NONE" and fb.zero_g)
 	_check("re-entry: left hand reaches for the hatch frame", eva._hatch_reach_t >= 0.0 or eva.eva_log.any(func(e): return e["event"] == "zone_chamber"))
 	al.begin_cycle_in()
 	await _until(func(): return al.sequence == "", 10.0)

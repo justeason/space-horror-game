@@ -35,6 +35,8 @@ var _station: Node = null
 
 
 func _ready() -> void:
+	# Round 42: render the 3D view at real screen resolution (hidpi_viewport.gd).
+	preload("res://scripts/ui/hidpi_viewport.gd").attach(self)
 	visible = false
 	_diorama.test_point_clicked.connect(_on_test_point_clicked)
 	_diorama.segment_clicked.connect(_on_segment_clicked)

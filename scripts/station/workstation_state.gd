@@ -181,6 +181,12 @@ func end_use() -> void:
 		return
 	_transitioning = true
 	_in_use = false
+	if _base_fov > 0.0:
+		set_inspect_zoom(false)
+		var sh: Node = _screen.get("shell") if _screen != null else null
+		if sh != null and bool(sh.get("cam_inspect")):
+			sh.cam_inspect = false
+			sh._layout_cameras()
 	if DisplayServer.get_name() != "headless":
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_interaction_controller.interactions_enabled = true
@@ -299,6 +305,36 @@ func _unhandled_input(event: InputEvent) -> void:
 	var vp: Viewport = get_viewport()
 	if vp != null:
 		vp.set_input_as_handled()
+
+
+## Round 42 Priority 8 (option D): while a camera feed is INSPECTED the
+## seated view leans in on the monitor (a narrower field of view -- the
+## seat and the aim do not move, so clicks still map through the same
+## camera ray). Restored on leaving the mode or getting up.
+var _base_fov: float = -1.0
+var _fov_tween: Tween
+const INSPECT_FOV_SCALE := 0.7
+
+
+func set_inspect_zoom(on: bool) -> void:
+	var cam: Camera3D = _interaction_controller as Camera3D
+	if cam == null:
+		return
+	if _base_fov < 0.0:
+		_base_fov = cam.fov
+	if _fov_tween != null and _fov_tween.is_valid():
+		_fov_tween.kill()
+	var goal: float = _base_fov * (INSPECT_FOV_SCALE if on and _in_use else 1.0)
+	if not is_inside_tree() or DisplayServer.get_name() == "headless":
+		cam.fov = goal
+		return
+	_fov_tween = create_tween()
+	_fov_tween.tween_property(cam, "fov", goal, 0.35).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+
+func inspect_zoomed() -> bool:
+	var cam: Camera3D = _interaction_controller as Camera3D
+	return cam != null and _base_fov > 0.0 and cam.fov < _base_fov - 1.0
 
 
 func _kill_tween() -> void:

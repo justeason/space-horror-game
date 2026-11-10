@@ -24,13 +24,14 @@ const EXTERIOR := 1 << 11         # visual layer 12 (sunlit exterior)
 ## original scene cameras, exterior?, intentional blind spot note.
 const CAMERAS := [
 	["INT-01", "CONTROL ROOM", &"control_room", "CameraControlRoom", null, false, "under the camera, the console's west side"],
-	["INT-02", "CORRIDOR → CONTROL", &"main_junction", "CameraCorridor", null, false, "the Control Room corners beside the doorway"],
+	["INT-02", "CORRIDOR → CONTROL", &"main_junction", "CameraCorridor", null, false, "the Engineering and Comms side openings of the Junction"],
 	["INT-03", "JUNCTION", &"main_junction", "CameraCorridorEnd", null, false, "the Comms tunnel mouth"],
 	["INT-04", "ENGINEERING", &"engineering", "CamEngineering", [Vector3(-2.78, 2.95, 6.72), Vector3(-4.6, 0.9, 3.7)], false, "the breaker-panel alcove right below the camera"],
 	["INT-05", "LIFE SUPPORT", &"life_support", "CamLifeSupport", [Vector3(-1.48, 2.95, 11.82), Vector3(-4.1, 0.9, 10.0)], false, "the doorway behind the camera"],
 	["INT-06", "STORAGE", &"storage", "CamStorage", [Vector3(-5.55, 2.95, 7.05), Vector3(-7.2, 0.7, 8.9)], false, "the near cabinet face"],
 	["INT-07", "AIRLOCK CHAMBER", &"airlock", "CamAirlock", [Vector3(-4.47, 2.42, -0.62), Vector3(-4.95, 0.7, -2.5)], false, "right under the camera, by the inner hatch"],
 	["INT-08", "COMMS", &"communications", "CamComms", [Vector3(3.22, 2.95, 8.12), Vector3(1.4, 1.0, 6.3)], false, "the alcove behind the camera"],
+	# Round 42: RETIRED (not built) -- the id stays reserved, never reused.
 	["EXT-01", "HULL OVERVIEW", &"", "CamExtHull", [Vector3(9.0, 10.5, -19.0), Vector3(-3.0, 0.5, -2.5)], true, "the south faces of the modules"],
 	["EXT-02", "AIRLOCK HATCH", &"airlock", "CamExtAirlock", [Vector3(-3.45, 3.05, -3.75), Vector3(-4.8, 0.9, -2.75)], true, "directly beneath the camera mount"],
 	["EXT-03", "OBSERVATION", &"control_room", "CamExtObservation", [Vector3(-1.62, 3.25, 2.92), Vector3(-3.6, 1.0, 0.2)], true, "the walkway behind the antenna mast"],
@@ -46,10 +47,22 @@ const CAMERAS := [
 ## outside, and the courtyard also seen through the observation port.
 ## Round 41: + EXT-01 (the whole vehicle with both solar wings) and
 ## EXT-05 (the solar truss route). Still only the displayed feed renders.
-const CURATED := ["INT-02", "INT-04", "INT-05", "INT-07", "EXT-01", "EXT-02", "EXT-03", "EXT-05"]
+## Round 42: EXT-01 (hull overview) retired from surveillance -- 7 feeds.
+## Remaining ids are NOT renumbered (events / tasks refer to them).
+const CURATED := ["INT-02", "INT-04", "INT-05", "INT-07", "EXT-02", "EXT-03", "EXT-05"]
+const RETIRED := ["EXT-01"]
+## Round 42 Priority 8: feed resolutions. Only a DEMANDED feed renders;
+## a feed shown for close inspection (seated at the workstation) renders
+## at HI, any other displayed feed at LO. 16:9 throughout.
+const FEED_HI := Vector2i(1280, 720)
+const FEED_LO := Vector2i(640, 360)
 
 var cams: Dictionary = {}        # id -> {vp: SubViewport, label, room, exterior, blind, pos}
 var _demand: Dictionary = {}     # requester -> camera id
+var _hi: Dictionary = {}         # requester -> wants HI resolution
+## Round 42 Priority 7/10: frames actually rendered per camera while it is
+## demanded (tests / tools prove a displayed feed is LIVE, not a held frame).
+var frames: Dictionary = {}      # id -> int
 var _t: float = 0.0
 
 
@@ -78,10 +91,10 @@ func _ready() -> void:
 			cam.look_at_from_position(c[4][0], c[4][1], Vector3.UP)
 		if vp == null:
 			continue
-		vp.size = Vector2i(384, 288)   # Round 38: only displayed feeds render, so afford more detail
+		vp.size = FEED_LO              # Round 42: 16:9; HI while inspected (see _apply)
 		var cam3: Camera3D = vp.get_node("Camera3D")
 		cam3.cull_mask = cam3.cull_mask & ~DIRECT_ONLY
-		_build_housing(cam3, bool(c[5]))
+		_build_housing(cam3, bool(c[5]), 0.24 if c[0] == "INT-02" else 0.12)
 		cams[c[0]] = {"vp": vp, "label": c[1], "room": c[2], "exterior": c[5], "blind": c[6], "cam": cam3}
 	# The player's eyes never see CAMERA_ONLY objects.
 	var pc: Camera3D = root.get_node_or_null("Player/LookPivot/PitchPivot/Camera3D")
@@ -93,11 +106,35 @@ func _ready() -> void:
 			n.cull_mask = n.cull_mask & ~CAMERA_ONLY
 	for id in cams:
 		(cams[id]["vp"] as SubViewport).render_target_update_mode = SubViewport.UPDATE_ONCE
+		frames[id] = 0
+	# Round 42: the legacy scene cameras that are NOT in the curated network
+	# (INT-01 control room, INT-03) used to render every frame for nothing
+	# (surveillance_camera.gd defaults to UPDATE_ALWAYS); they only render
+	# when the hidden legacy console asks for them.
+	if surv != null:
+		for vp in surv.get_children():
+			if vp is SubViewport and not _is_network_vp(vp):
+				(vp as SubViewport).render_target_update_mode = SubViewport.UPDATE_DISABLED
+
+
+func _is_network_vp(vp: Node) -> bool:
+	for id in cams:
+		if cams[id]["vp"] == vp:
+			return true
+	return false
+
+
+## Engine frames each camera spent LIVE (UPDATE_ALWAYS) -- counted in
+## _process so it also works in headless runs (no frame_post_draw there).
+func _count_frames() -> void:
+	for id in cams:
+		if (cams[id]["vp"] as SubViewport).render_target_update_mode == SubViewport.UPDATE_ALWAYS:
+			frames[id] = int(frames.get(id, 0)) + 1
 
 
 ## A small physical camera body at the mount (bracket, body, lens ring,
 ## status LED) -- on a layer the camera itself does not render.
-func _build_housing(cam: Camera3D, exterior: bool) -> void:
+func _build_housing(cam: Camera3D, exterior: bool, arm_len: float = 0.12) -> void:
 	var h := Node3D.new()
 	h.name = "Housing"
 	cam.add_child(h)
@@ -129,8 +166,10 @@ func _build_housing(cam: Camera3D, exterior: bool) -> void:
 	led.material = lm
 	h.add_child(led)
 	var arm := CSGBox3D.new()
-	arm.size = Vector3(0.025, 0.12, 0.025)
-	arm.position = Vector3(0, 0.08, 0.14)
+	# Round 42: the drop arm reaches the mount (INT-02 hangs from the Life
+	# Support bend ceiling, 0.18 m above the lens).
+	arm.size = Vector3(0.025, arm_len, 0.025)
+	arm.position = Vector3(0, 0.02 + arm_len * 0.5, 0.14)
 	arm.material = mat.call(Color(0.3, 0.31, 0.33), 0.6)
 	h.add_child(arm)
 	for n in h.find_children("*", "GeometryInstance3D", true, false) + [h]:
@@ -148,7 +187,24 @@ func ids() -> Array:
 
 
 func feed(id: String) -> Texture2D:
+	if offline.has(id):
+		return null                 # NO SIGNAL (developer test of surveillance loss)
 	return (cams[id]["vp"] as SubViewport).get_texture() if cams.has(id) else null
+
+
+## Round 42 developer layer: take a feed offline / bring all back ("").
+var offline: Dictionary = {}
+
+
+func dev_set_offline(id: String, off: bool) -> void:
+	if not OS.is_debug_build():
+		return
+	if id == "":
+		offline = {}
+	elif off:
+		offline[id] = true
+	else:
+		offline.erase(id)
 
 
 func info(id: String) -> Dictionary:
@@ -160,12 +216,23 @@ func camera(id: String) -> Camera3D:
 
 
 ## A display asks for a camera (requester = any stable key); "" releases.
-func request(requester: String, id: String) -> void:
+## `hi`: the feed is being inspected closely (full resolution).
+func request(requester: String, id: String, hi: bool = false) -> void:
 	if id == "":
 		_demand.erase(requester)
+		_hi.erase(requester)
 	else:
 		_demand[requester] = id
+		_hi[requester] = hi
 	_apply()
+
+
+func demanded() -> Dictionary:
+	return _demand.duplicate()
+
+
+func feed_size(id: String) -> Vector2i:
+	return (cams[id]["vp"] as SubViewport).size if cams.has(id) else Vector2i.ZERO
 
 
 func is_rendering(id: String) -> bool:
@@ -175,12 +242,16 @@ func is_rendering(id: String) -> bool:
 func _apply() -> void:
 	var want: Dictionary = {}
 	for r in _demand:
-		want[_demand[r]] = true
+		want[_demand[r]] = bool(want.get(_demand[r], false)) or bool(_hi.get(r, false))
 	for id in cams:
 		var vp: SubViewport = cams[id]["vp"]
 		var mode: int = SubViewport.UPDATE_ALWAYS if want.has(id) else SubViewport.UPDATE_DISABLED
 		if vp.render_target_update_mode != mode:
 			vp.render_target_update_mode = mode
+		if want.has(id):
+			var sz: Vector2i = FEED_HI if bool(want[id]) else FEED_LO
+			if vp.size != sz:
+				vp.size = sz
 
 
 ## Can camera `id` see world point p (in its frustum, nothing solid in
@@ -200,6 +271,7 @@ func sees(id: String, p: Vector3, tolerance: float = 0.3) -> bool:
 
 
 func _process(delta: float) -> void:
+	_count_frames()
 	_t += delta
 	if _t < 0.25:
 		return

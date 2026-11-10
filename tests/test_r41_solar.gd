@@ -62,7 +62,7 @@ func _geometry() -> void:
 	_check("collision: ONE static body (truss + 4 blanket boxes), no per-section bodies", sa.find_children("*", "CollisionObject3D", true, false).size() == 1 and sa.get_node("ArrayCollision").get_child_count() == 5)
 	_check("wings attach to the hull (truss struts reach the Control Room north face)", sa.find_children("*", "MeshInstance3D", true, false).any(func(m): return absf((m as Node3D).global_position.z + 1.35) < 0.05))
 	var net: Node = main.get_node("CameraNetwork")
-	_check("EXT-01 (hull overview) sees both wings", net.sees("EXT-01", Vector3(-16.0, 1.12, -6.4), 0.6) and net.sees("EXT-01", Vector3(12.0, 1.12, -6.4), 0.6))
+	_check("Round 42: EXT-01 retired; EXT-05 (solar truss) still watches the left wing route", not net.ids().has("EXT-01") and net.sees("EXT-05", Vector3(-11.3, 1.62, -4.88), 0.6))
 	_check("EXT-05 (solar truss) sees the left wing and the mid hinge", net.sees("EXT-05", Vector3(-12.0, 1.12, -4.0), 0.6) and net.sees("EXT-05", Vector3(-15.35, 1.45, -5.2), 0.6))
 	var lay_ok := true
 	for v in sa.find_children("*", "VisualInstance3D", true, false):

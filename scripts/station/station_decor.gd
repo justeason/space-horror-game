@@ -85,8 +85,13 @@ func _cyl(r: float, length: float, pos: Vector3, along_x: bool, mat: Material) -
 	decor_count += 1
 
 
+## Round 42 Priority 21: the accent strips are a dim GUIDE glow, not a
+## light source (playtest: "too bright"). Emission was col x 1.6.
+const STRIP_GLOW := 0.55
+
+
 func _strip(size: Vector3, pos: Vector3, col: Color, zone: StringName) -> void:
-	var m := _m(col * 0.4, 0.0, col * 1.6)
+	var m := _m(col * 0.25, 0.0, col * STRIP_GLOW)
 	m.emission_energy_multiplier = 1.0
 	var mi := _box(size, pos, m)
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -391,7 +396,7 @@ func _process(delta: float) -> void:
 	var br: Node = get_parent().get_node_or_null("Equipment/BreakerPanel")
 	for s in strips:
 		var on: bool = s["zone"] == &"" or br == null or br.zone_powered(s["zone"])
-		(s["mat"] as StandardMaterial3D).emission = (s["color"] as Color) * (1.6 if on else 0.0)
+		(s["mat"] as StandardMaterial3D).emission = (s["color"] as Color) * (STRIP_GLOW if on else 0.0)
 
 
 func strip_lit(zone: StringName) -> bool:

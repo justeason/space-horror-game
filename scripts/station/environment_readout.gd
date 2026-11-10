@@ -24,6 +24,36 @@ extends Node3D
 
 var _label: Label3D
 var _t := 0.0
+## Round 42 Priority 12: a PRESENTATION-ONLY override (story event
+## "wrong_reading"): {line prefix -> replacement text}. text() always
+## returns the true, model-derived reading; shown_text() is what the
+## physical panel displays. override_source names who set it, so a test
+## can tell a deliberate anomaly from an accidental desync.
+var display_override: Dictionary = {}
+var override_source: String = ""
+
+
+func set_display_override(o: Dictionary, source: String) -> void:
+	display_override = o.duplicate()
+	override_source = source if not o.is_empty() else ""
+	_update()
+
+
+func clear_display_override() -> void:
+	set_display_override({}, "")
+
+
+func shown_text() -> String:
+	if display_override.is_empty():
+		return text()
+	var out: Array = []
+	for line in text().split("\n"):
+		var rep: String = line
+		for k in display_override:
+			if line.begins_with(String(k)):
+				rep = String(display_override[k])
+		out.append(rep)
+	return "\n".join(out)
 
 
 func _ready() -> void:
@@ -66,7 +96,8 @@ func _process(delta: float) -> void:
 
 
 func _update() -> void:
-	_label.text = text()
+	if _label != null:
+		_label.text = shown_text()
 
 
 func text() -> String:

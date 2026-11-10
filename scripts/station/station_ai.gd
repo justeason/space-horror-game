@@ -92,13 +92,14 @@ const LINES := {
 	&"env_pressure": [Prio.SAFETY, "Cabin pressure is falling. Inspect the airlock hatch seal.", "舱内气压正在下降，请检查气闸舱门密封。"],
 	&"env_o2": [Prio.SAFETY, "Oxygen below nominal. Restore Life Support airflow.", "氧气低于正常值，请恢复生命维持气流。"],
 	&"repeat_none": [Prio.INFO, "No active instruction.", "当前没有指令。"],
-	&"eva_suit": [Prio.INSTRUCT, "Suit on. Step into the airlock chamber and press OUT.", "宇航服已穿好。进入气闸舱后按“出舱”。"],
+	&"eva_suit": [Prio.INSTRUCT, "Suit on. Step into the airlock chamber and press OUT<<.", "宇航服已穿好。进入气闸舱后按“出舱”。"],
 	&"eva_outside": [Prio.INSTRUCT, "Tether A is on the hatch ring. W thrusts toward your aim. S brakes.", "安全绳 A 已扣在舱口挂环。按 W 朝准星方向推进，按 S 制动。"],
 	&"tether_switch": [Prio.INFO, "Both tethers secure. Now release the old one: R.", "两条安全绳都已扣好。现在按 R 解开旧的那条。"],
 	&"tether_intro": [Prio.INSTRUCT, "Tether ring. Click it to clip your free tether. Keep one secured at all times.", "安全绳挂环。点击它扣上空闲的安全绳，始终保持一条扣着。"],
 	&"eva_repair": [Prio.INSTRUCT, "Work position. Hands free. W pushes off.", "作业位已固定，双手可用。按 W 蹬离。"],
 	# Round 41: dual tethers, aim-and-push movement, solar array work.
 	&"eva_aim": [Prio.INSTRUCT, "Aim at your destination. Your tethers limit how far you travel.", "瞄准目的地。安全绳会限制你的移动范围。"],
+	&"handover_note": [Prio.INFO, "There's a handover note from the previous technician in your laptop Documents.", "上一位技术员在你笔记本电脑的文档里留了交接说明。"],
 	&"solar_intro": [Prio.INSTRUCT, "Solar truss. Follow the rings. Clip the next ring before you release the last.", "太阳能桁架。沿挂环前进：先扣下一个挂环，再解开上一个。"],
 	&"coupler_live": [Prio.SAFETY, "That coupler is live. Isolate the string first.", "该耦合器带电。请先隔离该组串。"],
 	&"eva_interlock": [Prio.SAFETY, "Airlock interlock. Check the suit, the cargo port and the hatch seal.", "气闸联锁：请检查宇航服、货运口和舱门密封。"],
@@ -221,6 +222,7 @@ var _light: ColorRect
 
 func _ready() -> void:
 	add_to_group(&"station_ai")
+	add_to_group(&"assistant_hooks")
 	_dp = get_node_or_null(day_plan_path)
 	_speech = Speech.new()
 	_speech.name = "Speech"
@@ -346,6 +348,12 @@ func say_key(key: StringName, args: Array = [], prio: int = -1) -> bool:
 		# Non-safety lines keep their order (a lesson's lines in sequence).
 		_queue.append(item)
 	return true
+
+
+## Round 42: an ordinary admin reminder from the story director (never an
+## anomaly explanation -- the assistant stays helpful and reliable).
+func handover_note_waiting() -> void:
+	say_key(&"handover_note")
 
 
 ## Equipment hooks (interlocks, wrong part, ...).

@@ -54,6 +54,11 @@ func _ready() -> void:
 			collider.collision_layer = 0
 			collider.collision_mask = 0
 		_camera.queue_free()
+		# Round 42: the physical console's numeric readout must be legible
+		# from the room (the twin is built at 0.3 scale): ~25 mm lines.
+		_readout.pixel_size = 0.0045
+		_readout.outline_size = 8
+		_readout.position.y += 0.08
 		for light_name in ["KeyLight", "FillLight"]:
 			var light: Node = get_node_or_null(light_name)
 			if light != null:
@@ -160,3 +165,7 @@ func sync_full_state(frequency: float, gain: float, quality: float, noise: float
 	if complete:
 		_readout.text = "SIGNAL LOCKED"
 		_readout.modulate = Color(0.4, 0.95, 0.55, 1)
+	elif _readout.text == "SIGNAL LOCKED":
+		# Round 42: a new day's check un-locks the twin too (was stuck).
+		_readout.text = ""
+		_readout.modulate = Color(0.55, 0.95, 0.75, 1)

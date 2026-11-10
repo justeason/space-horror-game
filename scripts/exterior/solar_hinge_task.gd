@@ -77,7 +77,16 @@ func _build(w: String) -> void:
 	_hw[w] = root
 	_parts[w] = {"latch": latch, "bolt": bolt, "bracket": bracket, "flag": flag}
 	var x: float = POS[w].x
-	_worksite.call_deferred("hinge_" + w, self, Vector3(x - 0.35, Graph.RAIL_Y, Graph.RAIL_Z + 0.06), Vector3(x, 2.1, -4.5), POS[w] + Vector3(0, 0.15, 0), RING[w], "HINGE " + w)
+	_worksite.call_deferred("hinge_" + w, self, Vector3(x - 0.35, Graph.RAIL_Y, Graph.RAIL_Z + 0.06), _stance(w), POS[w] + Vector3(0, 0.15, 0), RING[w], "HINGE " + w)
+	_tags[w] = service_tag(root, Vector3(-0.2, 0.12, -0.12))
+	_ext_layers(_tags[w])
+
+
+var _tags: Dictionary = {}
+
+
+func _stance(w: String) -> Vector3:
+	return Vector3(POS[w].x, 2.1, -4.5)
 
 
 func wing_factor(w: String) -> float:
@@ -94,7 +103,15 @@ func restricted() -> bool:
 
 func on_part(id: StringName) -> void:
 	if not at_site("hinge_" + wing):
-		say("Grab the hinge handhold first (tether on %s)." % RING[wing] if outside() else "The hinge is outside, mid-wing.")
+		var here: String = site_wing_here("hinge_")
+		if here != "" and here != wing:
+			# Round 42 (playtest: "asks for L3 at the R3 hinge"): BOTH wings
+			# carry identical hinge hardware; this one is healthy.
+			if id == &"flag":
+				sfx(&"click")
+			say("H-%s3 lock GREEN — this hinge is fine. The restricted section is on the %s wing: hinge H-%s3, ring %s." % [here, wing_word(wing), wing, RING[wing]])
+			return
+		say("Grab the hinge handhold first (tether on %s)." % " / ".join(valid_rings(RING[wing], _stance(wing))) if outside() else "The hinge is outside, mid-wing.")
 		return
 	match id:
 		&"flag":
@@ -155,6 +172,9 @@ func part_prompt(id: StringName) -> String:
 	if not outside():
 		return ""
 	if not at_site("hinge_" + wing):
+		var here: String = site_wing_here("hinge_")
+		if here != "" and here != wing:
+			return "H-%s3 healthy — fault is on wing %s (ring %s)" % [here, wing, RING[wing]]
 		return "Grab the handhold to work"
 	match id:
 		&"flag": return "Click: inspect the lock indicator"
@@ -199,6 +219,8 @@ func section_tilt() -> float:
 
 func _refresh() -> void:
 	for w in ["L", "R"]:
+		if _tags.has(w):
+			(_tags[w] as Node3D).visible = w == wing and request_day != -1 and not repaired()
 		var p: Dictionary = _parts.get(w, {})
 		if p.is_empty():
 			continue
@@ -235,7 +257,7 @@ func order_next() -> Dictionary:
 		return {"action": "Return to the airlock", "short": "AIRLOCK IN", "room": &"airlock"}
 	var step: Dictionary
 	if not at_site("hinge_" + wing):
-		step = {"action": "Clip to %s, grab the hinge handhold" % RING[wing], "short": "TO HINGE %s" % wing, "room": &"airlock"}
+		step = {"action": "%s wing: clip to %s, grab the hinge handhold (orange SERVICE tag)" % [wing_word(wing), RING[wing]], "short": "TO HINGE %s" % wing, "room": &"airlock"}
 	elif not inspected:
 		step = {"action": "Inspect the lock indicator", "short": "INSPECT", "room": &"airlock"}
 	elif variant != "ok":

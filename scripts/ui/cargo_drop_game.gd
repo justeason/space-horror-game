@@ -121,8 +121,54 @@ func _ready() -> void:
 		b.pressed.connect(func(): action(id))
 		add_child(b)
 		buttons[id] = b
+	_build_over_panel()
 	_build_sounds()
 	restart()
+
+
+var _over: PanelContainer
+var _over_text: Label
+
+
+func _build_over_panel() -> void:
+	_over = PanelContainer.new()
+	_over.name = "GameOver"
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.02, 0.03, 0.04, 0.92)
+	sb.border_color = Color(0.95, 0.55, 0.15)
+	sb.set_border_width_all(2)
+	sb.set_content_margin_all(8)
+	_over.add_theme_stylebox_override("panel", sb)
+	_over.position = Vector2(14, 40)
+	_over.size = Vector2(COLS * CELL + 120, 112)
+	add_child(_over)
+	var v := VBoxContainer.new()
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	_over.add_child(v)
+	var t := Label.new()
+	t.text = "GAME OVER"
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.add_theme_font_size_override("font_size", 18)
+	t.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
+	v.add_child(t)
+	_over_text = Label.new()
+	_over_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_over_text.add_theme_font_size_override("font_size", 11)
+	v.add_child(_over_text)
+	var h := HBoxContainer.new()
+	h.alignment = BoxContainer.ALIGNMENT_CENTER
+	h.add_theme_constant_override("separation", 8)
+	v.add_child(h)
+	for spec in [["over_restart", "RESTART", "restart"], ["over_exit", "DESKTOP", "exit"]]:
+		var b := Button.new()
+		b.text = spec[1]
+		b.focus_mode = Control.FOCUS_NONE
+		b.add_theme_font_size_override("font_size", 11)
+		var act: String = spec[2]
+		b.pressed.connect(func(): action(act))
+		h.add_child(b)
+		buttons[spec[0]] = b
+	_over.visible = false
 
 
 func _build_sounds() -> void:
@@ -166,6 +212,7 @@ func restart(p_seed: int = -1) -> void:
 	lines = 0
 	level = 1
 	game_over = false
+	over_reason = ""
 	paused = false
 	seed = p_seed if p_seed >= 0 else int(Time.get_ticks_usec() % 1000000)
 	bag_index = 0
@@ -208,9 +255,22 @@ func _spawn() -> void:
 	var w: int = _extent(piece).x
 	piece_pos = Vector2i((COLS - w) / 2, 0)
 	if not _fits(piece, piece_pos):
-		game_over = true
-		best = maxi(best, score)
-		score_changed.emit(best)
+		_end_game("NO ROOM TO LOAD")
+
+
+## Round 42 Priority 22: a real GAME OVER: no more spawning or falling,
+## a clear screen with the final / best score, RESTART and DESKTOP.
+var over_reason: String = ""
+
+
+func _end_game(reason: String) -> void:
+	game_over = true
+	paused = false
+	over_reason = reason
+	best = maxi(best, score)
+	score_changed.emit(best)
+	_play("lock")
+	_refresh()
 
 
 static func _extent(cells: Array) -> Vector2i:
@@ -263,6 +323,10 @@ func action(id: String) -> void:
 
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed:
+		if game_over and event.keycode in [KEY_ENTER, KEY_KP_ENTER]:
+			action("restart")
+			accept_event()
+			return
 		var map := {KEY_LEFT: "left", KEY_A: "left", KEY_RIGHT: "right", KEY_D: "right", KEY_UP: "rotate", KEY_W: "rotate", KEY_DOWN: "down", KEY_S: "down", KEY_SPACE: "drop", KEY_R: "restart", KEY_P: "pause"}
 		if map.has(event.keycode):
 			action(map[event.keycode])
@@ -324,10 +388,18 @@ func ghost_pos() -> Vector2i:
 func _lock() -> void:
 	if game_over:
 		return
+	var locked_out := false
 	for c in piece:
 		var p: Vector2i = c + piece_pos
 		if p.y >= 0:
 			grid[p.y][p.x] = piece_color
+		else:
+			locked_out = true
+	# Round 42 Priority 22: a load that settles (partly) ABOVE the bay is a
+	# top-out -- game over, not a silently clipped piece.
+	if locked_out:
+		_end_game("BAY FULL")
+		return
 	var cleared := 0
 	var r := ROWS - 1
 	while r >= 0:
@@ -358,7 +430,11 @@ func _lock() -> void:
 
 # ---------------------------------------------------------------- views
 func _refresh() -> void:
-	var status: String = "BAY FULL — Restart" if game_over else ("PAUSED" if paused else "Fill a row to ship it.")
+	var status: String = "GAME OVER" if game_over else ("PAUSED" if paused else "Fill a row to ship it.")
+	if _over != null:
+		_over.visible = game_over
+		if game_over:
+			_over_text.text = "%s\nFinal score %d   ·   Best %d\nRows %d   ·   Level %d" % [over_reason, score, best, lines, level]
 	_info.text = "CARGO DROP\nScore %d   Best %d\nRows %d   Level %d\n%s" % [score, best, lines, level, status]
 	_board.queue_redraw()
 	if _next != null:

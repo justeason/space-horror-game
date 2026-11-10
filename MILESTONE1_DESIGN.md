@@ -10047,3 +10047,127 @@ When the shift ends, a warm glow comes on over the bunk: a wordless "go to bed" 
   graph was not re-authored this round (other tests depend on it).
 - Outside, the sun also lights the mirror/camera-only helmet layer (the
   helmet rendered black on cameras before).
+
+# Round 42 — Story-driven horror + developer test panel, live surveillance, airlock / EVA corrections, Junction & Comms work, laptop games, station clock
+
+## A. Surveillance
+- **INT-02 relocated** to the Life Support approach: hung from the Life
+  Support bend ceiling at (-0.35, 2.42, 9.50), fov 40, looking down the
+  Life Support tunnel, Junction A and the corridor to the Control Room
+  seat (verified with physics rays: Junction A, corridor, doorway, seat;
+  Engineering not visible). Drop arm reaches the ceiling. Blind spots: the
+  Engineering and Comms side openings of the Junction.
+- **Stale feed root cause**: the workstation's Cameras page only requested
+  its feed while the technician was SEATED; standing up released it, the
+  SubViewport went UPDATE_DISABLED and the monitor kept showing the last
+  frame (technician seated). Now the monitor feed renders whenever the
+  monitor can be seen (Control Room / corridor / Junction A), at HI
+  1280x720 while seated, LO 640x360 otherwise; nobody near = not rendering;
+  returning = fresh frames. The legacy cameras outside the network
+  (INT-01, INT-03) no longer render every frame for nothing. Only one
+  technician rig exists (+ the stowed suit garment); no proxies.
+- **Resolution**: camera feeds 16:9 (1280x720 inspected); the workstation
+  UI renders at 2x (1280x800 for its 640x400 layout via size_2d_override);
+  INSPECT mode gives the feed the whole monitor and narrows the seated
+  field of view (x0.7) so the player leans in; prev / next / back.
+- **EXT-01 retired** (`RETIRED`), ids not renumbered; 7 curated feeds.
+- Developer layer can take a feed offline ("NO SIGNAL").
+
+## B. Story phases (narrative, not calendar)
+- `story_events.gd`: phase 1 -> 2 needs intro_complete (day >= 2),
+  station_familiar (>= 3 duty kinds closed + feeds used on 2 days) AND the
+  deliberately read handover note (laptop Documents; the assistant points
+  at it once familiar). Late phase 2: two DIFFERENT anomalies SEEN. Phase 3:
+  three seen + two physical INVESTIGATIONS (turn round during the
+  presence, go to the airlock after the handle, compare the wall panel
+  with the workstation). Round 41 saves migrate (played flags kept;
+  anything played -> phase 2, `migrated_r41`).
+- Registry: corridor_presence, window_mismatch, wrong_reading (phase 2),
+  hatch_handle (late 2); unavailable: blind_spot_object, radio_contact,
+  laptop_inconsistency (listed, never triggerable). Abnormal variants
+  only in phase 3.
+
+## C. Developer panel (debug builds only)
+- `scripts/dev/dev_panel.gd`, built by StoryEvents only when
+  `OS.is_debug_build()`; F8; unlock code `justeason` once per session
+  (convenience, not security). Tabs STORY / EVENTS / STATION / PLAYER /
+  SESSION: trigger (preview, not counted), trigger+count, arm, cancel,
+  reset, seen, enable, variants, phase override (never saved); station
+  faults through each device's own API with snapshot / restore; safe
+  teleports (refused while suited / seated); restore-all.
+- Release builds: no panel instance, no F8 handler, every `dev_*` call
+  refuses. (Exported release presets should also exclude scripts/dev/.)
+
+## D. New anomalies
+- hatch_handle: knock at the airlock; on EXT-02 / INT-07 a CAMERA_ONLY copy
+  of the outer hatch's dogging handle turns (32 deg, abnormal 70 deg)
+  while the real handles are DIRECT_ONLY for the duration; real hatch,
+  pressure and latch state are never touched. Going to the airlock ends it.
+- wrong_reading: the Control Room ENVIRONMENT wall panel shows a
+  contradictory cabin pressure (abnormal: impossible zeros) through a
+  tagged presentation override (`override_source = story:wrong_reading`);
+  `text()` / EnvironmentModel / workstation keep the truth; expires; never
+  saved.
+- corridor_presence spots moved onto the new approach (Junction A,
+  corridor, doorway; abnormal: behind the stool).
+
+## E. EVA / airlock
+- Stowed suit = a second technician_rig.gd with the suit on, head hidden,
+  hanging pose, on a yoke with restraint straps, umbilical and status lamp;
+  hidden while worn (empty yoke + open straps + IN USE lamp).
+- Float model: mag boots released when the chamber vents (or the outer
+  hatch is open / pressure below station); engaged only when sealed and
+  pressurised, followed by a bounded settle (no snap). Pressure is not
+  gravity: walking is the boots on the deck.
+- Console: OUT<< (left, toward the outer hatch) / IN>> (right); screens
+  show IN/OUT hatch states and the cycle.
+- Hatch seal hold test: refused HATCH OPEN / CYCLING / LOW PRESSURE /
+  SECURE HATCH; aborts if the hatch opens; PASS cleared when the outer
+  hatch opens again.
+- Solar hinge "L3 at R3" root cause: both wings carry identical hinge
+  hardware; working the healthy wing's hinge gave a misleading "tether on
+  L3". Rings are now derived from the worksite (same wing, <= 3.5 m: L3/L4,
+  R3/R4), the healthy hinge explains where the fault is, and an orange
+  SERVICE tag marks the faulted hinge. Coupler / clean tasks got the same
+  wrong-wing message.
+
+## F. Maintenance
+- Electrical (and every focused 3D view) blur root cause: canvas_items
+  stretch rendered the SubViewport in canvas units, then magnified it.
+  `hidpi_viewport.gd` renders at the real screen scale and remaps mouse
+  input; inert at scale 1.
+- Comms: ONE authoritative tuning state; deterministic daily profile,
+  saved; physical console shows F / G / LINK; LINK = tuning x antenna feed
+  x patch bay x B-04 power; the "SIGNAL LOCKED" twin no longer sticks.
+- New orders: patch_bay (day 12), emerg_lights (14), junction_panel (15),
+  backup_rx (16) — physical, seeded, saved, auto-closing.
+- Ceiling LED strips 1.6 -> 0.55 glow; room lights dimmed (task lights kept);
+  ambient 0.25 -> 0.2.
+- Navigation: the five historical diagonal links re-authored with corner
+  waypoints; the known-failure baseline is now empty.
+
+## G. Laptop / clock / orbit
+- Personal Log cropping root cause: the editing menu bar's minimum width
+  (560 px > 456 px) widened the page; title clips, clock compact, runtime
+  fit guard.
+- Cargo Drop: spawn-blocked or lock-out = GAME OVER panel (final / best,
+  RESTART / DESKTOP).
+- HOLDOUT survival game (WASD via the laptop's own input, auto-fire,
+  walker / runner / brute, waves, credits, 7 upgrades, save of wallet /
+  ranks / best only).
+- Station clock 08:00-16:00 over shift_duration_s, continuous overtime;
+  the watch shows DAY + time first; emergencies below it. No bunk push /
+  tiredness while suited or in EVA.
+- Orbital cycle (360 s orbit, 70 s eclipse, 12 s penumbra): the phase is
+  DERIVED from the saved shift clock (each shift starts at sunrise) plus a
+  saved constant offset, so a load reproduces the same sunlight exactly;
+  one sun for window and cameras; generation x sun; an eclipse costs ~34 %
+  of the reserve. Interior lights spill onto the near exterior hull (a
+  pre-existing light-layer issue), so the close courtyard seen through the
+  port changes less in eclipse than wide exterior feeds.
+- INT-02 aims at floor level by the seat (8-10 deg down-tilt).
+
+## H. Limitations
+- English-only camera / developer UI. Suit donning has no animation (the
+  state change is immediate). Holdout runs are not saved mid-run (by
+  design). The orbit timing is compressed for play.

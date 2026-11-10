@@ -535,6 +535,12 @@ func _build_watch() -> void:
 func set_watch_text(text: String) -> void:
 	if watch_label != null:
 		watch_label.text = text
+		# Round 42: the face now carries a clock line + task lines; shrink
+		# the type for long lines so the text stays INSIDE the 48 mm dial.
+		var longest: int = 1
+		for l in text.split("\n"):
+			longest = maxi(longest, l.length())
+		watch_label.font_size = clampi(int(0.042 / (float(longest) * 0.6 * watch_label.pixel_size)), 18, 32)
 
 
 func watch_face_node() -> Node3D:

@@ -3,7 +3,8 @@ extends SceneTree
 ## controlled anomalies, plus the re-aimed corridor camera.
 ##  - INT-02 now looks FROM the Junction TOWARD the Control Room and sees
 ##    the seated workstation position through the doorway;
-##  - phases / gating: days 1-6 never arm anything; arming is
+##  - phases / gating (Round 42: story-driven, not days): phase 1 never
+##    arms anything; arming is
 ##    deterministic (a reload re-derives the same day), one event per day,
 ##    cooldowns and max plays respected; future beats registered disabled;
 ##  - corridor_presence: only after watching INT-02 (familiar from an
@@ -47,7 +48,9 @@ func _corridor_camera() -> void:
 	var cam: Camera3D = net.camera("INT-02")
 	var p: Vector3 = cam.global_position
 	var fwd: Vector3 = -cam.global_basis.z
-	_check("INT-02 is mounted in the Junction (z %.2f), under its ceiling" % p.z, p.z > 3.6 and p.z < 5.5 and p.y < 2.6 and absf(p.x) < 1.0)
+	# Round 42: relocated to the Life Support approach (bend ceiling), far
+	# behind the seated technician, looking down the Junction + corridor.
+	_check("INT-02 is mounted on the Life Support approach (z %.2f), under its ceiling" % p.z, p.z > 8.3 and p.z < 9.9 and p.y < 2.6 and absf(p.x) < 1.0)
 	_check("INT-02 looks toward the Control Room (forward z %.2f)" % fwd.z, fwd.z < -0.9)
 	_check("sees the Control Room doorway", net.sees("INT-02", Vector3(0.0, 1.2, 2.1), 0.3))
 	_check("sees the seated operator position (stool / head height)", net.sees("INT-02", Vector3(0.0, 1.15, -0.25), 0.4))
@@ -55,16 +58,20 @@ func _corridor_camera() -> void:
 
 
 func _gating() -> void:
-	_check("phases: day 3 -> 1, day 8 -> 2, day 14 -> 3", se.phase_for_day(3) == 1 and se.phase_for_day(8) == 2 and se.phase_for_day(14) == 3)
+	# Round 42: phases are NARRATIVE (story_events.gd milestones), never the
+	# calendar: twenty uneventful days stay in phase 1 and arm nothing.
+	se.story_phase = 1
+	se.milestones = []
 	var early := 0
-	for d in range(1, 7):
+	for d in range(1, 21):
 		dp.day_number = d
 		se.armed_for_day = -1
 		se._arm_today()
 		for id in se.state:
 			if se.is_armed(id):
 				early += 1
-	_check("days 1-6: nothing ever armed (%d)" % early, early == 0)
+	_check("phase 1 for days 1-20: nothing ever armed (%d), phase still %d" % [early, se.phase()], early == 0 and se.phase() == 1)
+	se.story_phase = 2
 	var a1: Array = []
 	var a2: Array = []
 	for run in [a1, a2]:
@@ -78,14 +85,16 @@ func _gating() -> void:
 			run.append(armed)
 	_check("deterministic arming (same days -> same events)", a1 == a2)
 	_check("at most one event armed per day", a1.all(func(x): return x.size() <= 1))
-	_check("both implemented anomalies get armed on some later day", a1.any(func(x): return x.has(&"corridor_presence")) and a1.any(func(x): return x.has(&"window_mismatch")))
-	var dormant: Array = se.EVENTS.keys().filter(func(k): return not se.EVENTS[k]["enabled"])
-	_check("future beats registered but disabled %s" % str(dormant), dormant.size() >= 5 and a1.all(func(x): return x.all(func(id): return se.EVENTS[id]["enabled"])))
+	_check("early phase-2 anomalies get armed on some later day", a1.any(func(x): return x.has(&"corridor_presence")) and a1.any(func(x): return x.has(&"window_mismatch")))
+	_check("late-phase-2 beats (hatch handle) never arm in EARLY phase 2", not a1.any(func(x): return x.has(&"hatch_handle")))
+	var dormant: Array = se.EVENTS.keys().filter(func(k): return not se.EVENTS[k]["implemented"])
+	_check("future beats registered but unavailable %s" % str(dormant), dormant.size() >= 3 and a1.all(func(x): return x.all(func(id): return se.EVENTS[id]["implemented"])))
 	for id in se.state:
 		se.state[id] = {"plays": 0, "last_day": -99, "armed_day": -1, "seen": false}
 
 
 func _presence() -> void:
+	se.story_phase = 2
 	dp.day_number = 8
 	dp.shift_elapsed_s = 200.0
 	se.feed_days = {"INT-02": [7]}

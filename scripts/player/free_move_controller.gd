@@ -48,6 +48,20 @@ var zero_g: bool = false
 @export var zg_turn_rate: float = 2.2    # how fast thrust re-aims the motion (1/s)
 var thrusting: bool = false
 var braking: bool = false
+## Round 42: boots re-engaging after EVA mode -- a gentle, bounded descent
+## to the deck (no gravity drop, no camera snap), then normal walking.
+var settling: bool = false
+@export var settle_speed: float = 0.7    # m/s max downward while settling
+
+
+func _settle_step(delta: float) -> void:
+	velocity.x = move_toward(velocity.x, 0.0, 2.0 * delta)
+	velocity.z = move_toward(velocity.z, 0.0, 2.0 * delta)
+	velocity.y = move_toward(velocity.y, -settle_speed, 1.6 * delta)
+	move_and_slide()
+	if is_on_floor():
+		velocity = Vector3.ZERO
+		settling = false
 var work_locked: bool = false            # stabilised at an EVA worksite
 var thrust_blocked: bool = false         # set by eva_system (focused panel etc.)
 
@@ -154,7 +168,11 @@ func _physics_process(delta: float) -> void:
 		wish_dir = wish_dir.normalized()
 
 	if zero_g:
+		settling = false
 		_zero_g_step(delta, input_dir)
+		return
+	if settling:
+		_settle_step(delta)
 		return
 	var target_velocity: Vector3 = wish_dir * move_speed * speed_scale
 	velocity.x = move_toward(velocity.x, target_velocity.x, acceleration * delta)

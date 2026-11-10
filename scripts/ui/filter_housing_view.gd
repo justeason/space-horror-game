@@ -23,6 +23,8 @@ var _last_stage: int = -1
 
 
 func _ready() -> void:
+	# Round 42: render the 3D view at real screen resolution (hidpi_viewport.gd).
+	preload("res://scripts/ui/hidpi_viewport.gd").attach(self)
 	visible = false
 	_diorama.valve_clicked.connect(_on_valve_clicked)
 	_diorama.latch_clicked.connect(_on_latch_clicked)

@@ -43,6 +43,8 @@ var _sequence_warning_text: String = ""
 
 
 func _ready() -> void:
+	# Round 42: render the 3D view at real screen resolution (hidpi_viewport.gd).
+	preload("res://scripts/ui/hidpi_viewport.gd").attach(self)
 	visible = false
 	_schematic.visible = false
 	_diorama.valve_clicked.connect(_on_valve_clicked)

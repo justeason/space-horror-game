@@ -236,9 +236,9 @@ func order_next() -> Dictionary:
 			return {"action": "Service antenna A1 feed box", "short": "FIX FEED A1", "room": &"airlock"}
 		if not suited:
 			return {"action": "Put on the EVA suit (airlock)", "short": "SUIT UP", "room": &"airlock"}
-		return {"action": "Airlock chamber: press OUT", "short": "AIRLOCK OUT", "room": &"airlock"}
+		return {"action": "Airlock chamber: press OUT<<", "short": "AIRLOCK OUT", "room": &"airlock"}
 	if outside:
-		return {"action": "Float back into the chamber, press IN", "short": "AIRLOCK IN", "room": &"airlock"}
+		return {"action": "Float back into the chamber, press IN>>", "short": "AIRLOCK IN", "room": &"airlock"}
 	return {"action": "Verify the comms link", "short": "VERIFY LINK", "room": &"communications"}
 
 

@@ -88,7 +88,7 @@ func _init() -> void:
 	var px: Variant = ws.screen_pixel_at(wp)
 	_check("seated cursor -> monitor mapping round-trips (%s)" % str(px), px != null and (px as Vector2).distance_to(target_uv * Vector2(screen.size)) < 2.0)
 	var b_sys: Button = shell.tab_buttons[0]
-	var c_uv: Vector2 = b_sys.get_global_rect().get_center() / Vector2(screen.size)
+	var c_uv: Vector2 = (screen.get_final_transform() * b_sys.get_global_rect().get_center()) / Vector2(screen.size)
 	var wp2: Vector2 = cam.unproject_position(console.screen_point(c_uv))
 	shell.show_page(shell.Page.SYSTEM)
 	var ev := InputEventMouseButton.new()
@@ -127,7 +127,10 @@ func _open(t: StringName, seed: int) -> void:
 func _click(c: Control) -> void:
 	shell.refresh()
 	await process_frame
-	var p: Vector2 = c.get_global_rect().get_center()
+	# Round 42: the monitor renders at 2x its 640x400 layout; a real click
+	# arrives in RENDER pixels (uv * size), so map layout units through the
+	# viewport's stretch transform.
+	var p: Vector2 = screen.get_final_transform() * c.get_global_rect().get_center()
 	for pressed in [true, false]:
 		var ev := InputEventMouseButton.new()
 		ev.button_index = MOUSE_BUTTON_LEFT

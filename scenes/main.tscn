@@ -68,13 +68,18 @@
 [ext_resource type="Script" path="res://scripts/exterior/solar_hinge_task.gd" id="82_hinge"]
 [ext_resource type="Script" path="res://scripts/exterior/solar_clean_task.gd" id="83_clean"]
 [ext_resource type="Script" path="res://scripts/story/story_events.gd" id="84_story"]
+[ext_resource type="Script" path="res://scripts/station/junction_emergency_lights.gd" id="85_jem"]
+[ext_resource type="Script" path="res://scripts/station/junction_distribution.gd" id="86_jdp"]
+[ext_resource type="Script" path="res://scripts/station/comms_patch_bay.gd" id="87_patch"]
+[ext_resource type="Script" path="res://scripts/station/comms_backup_receiver.gd" id="88_rxb"]
+[ext_resource type="Script" path="res://scripts/exterior/orbital_cycle.gd" id="89_orbit"]
 
 [sub_resource type="Environment" id="Environment_main"]
 background_mode = 1
 background_color = Color(0.01, 0.01, 0.015, 1)
 ambient_light_source = 2
 ambient_light_color = Color(0.25, 0.3, 0.35, 1)
-ambient_light_energy = 0.25
+ambient_light_energy = 0.2
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wall"]
 albedo_color = Color(0.45, 0.47, 0.5, 1)
@@ -2085,8 +2090,8 @@ transform = Transform3D(-0.70710677, 0.28760624, -0.6459742, 0, 0.9135455, 0.406
 camera_id = &"cam_corridor"
 
 [node name="Camera3D" parent="Surveillance/CameraCorridor" index="0"]
-transform = Transform3D(0.998777, -0.0142348, 0.047351, 0, 0.957662, 0.287894, -0.0494444, -0.287542, 0.956491, 0.3, 2.47, 5.25)
-fov = 64.0
+transform = Transform3D(0.99935, 0.006221, -0.035518, 0, 0.985006, 0.172518, 0.036059, -0.172406, 0.984366, -0.35, 2.42, 9.5)
+fov = 40.0
 
 [node name="CameraCorridorEnd" parent="Surveillance" instance=ExtResource("5_cam")]
 camera_id = &"cam_corridor_end"
@@ -2308,7 +2313,7 @@ script = ExtResource("38_lamps")
 [node name="Light_ControlRoom" type="OmniLight3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.8, -0.5)
 light_color = Color(0.95, 0.95, 1, 1)
-light_energy = 1.4
+light_energy = 1.0
 omni_range = 5.0
 
 [node name="Light_ConsoleTask" type="OmniLight3D" parent="Lights"]
@@ -2320,19 +2325,19 @@ omni_range = 1.6
 [node name="Light_Doorway" type="OmniLight3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, 2.1)
 light_color = Color(0.85, 0.9, 1, 1)
-light_energy = 0.8
+light_energy = 0.6
 omni_range = 3.0
 
 [node name="Light_Corridor" type="OmniLight3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 2.65)
 light_color = Color(0.8, 0.88, 1, 1)
-light_energy = 1.0
+light_energy = 0.75
 omni_range = 3.0
 
 [node name="Light_Living" type="OmniLight3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.7, 2.7, 0.5)
 light_color = Color(1, 0.92, 0.8, 1)
-light_energy = 1.1
+light_energy = 0.9
 omni_range = 3.6
 
 [node name="Light_LivingBed" type="OmniLight3D" parent="Lights"]
@@ -2344,43 +2349,43 @@ omni_range = 1.4
 [node name="Light_JunctionNode1" type="OmniLight3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 4.5)
 light_color = Color(0.8, 0.88, 1, 1)
-light_energy = 0.9
+light_energy = 0.7
 omni_range = 2.8
 
 [node name="Light_CommsTunnelA" type="OmniLight3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.8, 2.4, 4.5)
 light_color = Color(0.8, 0.88, 1, 1)
-light_energy = 0.9
+light_energy = 0.65
 omni_range = 2.6
 
 [node name="Light_CommsTunnelB" type="OmniLight3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.0, 2.4, 5.2)
 light_color = Color(0.8, 0.88, 1, 1)
-light_energy = 0.9
+light_energy = 0.65
 omni_range = 2.6
 
 [node name="Light_Comms" type="OmniLight3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.0, 2.9, 7.1)
 light_color = Color(0.85, 0.95, 0.9, 1)
-light_energy = 1.1
+light_energy = 0.85
 omni_range = 3.2
 
 [node name="Light_JunctionNode2" type="OmniLight3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 6.4)
 light_color = Color(0.8, 0.88, 1, 1)
-light_energy = 0.9
+light_energy = 0.7
 omni_range = 2.8
 
 [node name="Light_EngineeringTunnel" type="OmniLight3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.0, 2.4, 6.06)
 light_color = Color(0.8, 0.88, 1, 1)
-light_energy = 0.9
+light_energy = 0.7
 omni_range = 2.6
 
 [node name="Light_JunctionEngineeringDoorway" type="OmniLight3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.4, 2.1, 6.13)
 light_color = Color(0.8, 0.88, 1, 1)
-light_energy = 1.1
+light_energy = 0.85
 omni_range = 2.0
 
 [node name="Light_Engineering" type="OmniLight3D" parent="Lights"]
@@ -2404,25 +2409,25 @@ omni_range = 2.6
 [node name="Light_Storage" type="OmniLight3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.5, 2.9, 8.0)
 light_color = Color(0.85, 0.85, 0.8, 1)
-light_energy = 0.9
+light_energy = 0.75
 omni_range = 2.8
 
 [node name="Light_LifeSupportTunnel" type="OmniLight3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4, 2.4, 7.8)
 light_color = Color(0.8, 0.88, 1, 1)
-light_energy = 0.9
+light_energy = 0.7
 omni_range = 2.4
 
 [node name="Light_LifeSupportBend" type="OmniLight3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.9, 2.4, 9.1)
 light_color = Color(0.8, 0.88, 1, 1)
-light_energy = 0.9
+light_energy = 0.7
 omni_range = 3.0
 
 [node name="Light_LifeSupport" type="OmniLight3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.9, 2.9, 10.8)
 light_color = Color(0.85, 0.95, 0.9, 1)
-light_energy = 1.1
+light_energy = 0.95
 omni_range = 3.2
 
 [node name="MovementNodes" type="Node3D" parent="."]
@@ -2501,7 +2506,7 @@ neighbors = [NodePath("../ControlRoomFrontLeft"), NodePath("../ControlRoomFrontR
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 1.6, 4.5)
 script = ExtResource("2_node")
 node_id = "junction_node_1"
-neighbors = [NodePath("../Doorway"), NodePath("../CommsTunnelElbow"), NodePath("../JunctionNode2")]
+neighbors = [NodePath("../Doorway"), NodePath("../CommsTunnelMouth"), NodePath("../JunctionNode2")]
 region = &"main_junction"
 
 [node name="JunctionNode2" type="Node3D" parent="MovementNodes"]
@@ -2515,46 +2520,45 @@ region = &"main_junction"
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 2.0, 1.6, 4.8)
 script = ExtResource("2_node")
 node_id = "comms_tunnel_elbow"
-neighbors = [NodePath("../JunctionNode1"), NodePath("../CommsA")]
+neighbors = [NodePath("../CommsTunnelMouth"), NodePath("../CommsA")]
 
 [node name="CommsA" type="Node3D" parent="MovementNodes"]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 2.0, 1.6, 6.4)
 script = ExtResource("2_node")
 node_id = "comms_a"
-neighbors = [NodePath("../CommsTunnelElbow"), NodePath("../CommsAlcove")]
+neighbors = [NodePath("../CommsTunnelElbow"), NodePath("../CommsAlcoveMouth"), NodePath("../CommsWindowApproach")]
 region = &"communications"
 
 [node name="CommsWindow" type="Node3D" parent="MovementNodes"]
-transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 1.1, 1.6, 7.5)
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 1.05, 1.6, 7.8)
 script = ExtResource("2_node")
 node_id = "comms_window"
-neighbors = []
-region = &"communications"
+neighbors = [NodePath("../CommsNookEntry")]
 
 [node name="CommsAlcove" type="Node3D" parent="MovementNodes"]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 4.1, 1.6, 7.1)
 script = ExtResource("2_node")
 node_id = "comms_alcove"
-neighbors = [NodePath("../CommsA")]
+neighbors = [NodePath("../CommsAlcoveMouth")]
 
 [node name="EngineeringTunnel1" type="Node3D" parent="MovementNodes"]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -2.0, 1.6, 6.06)
 script = ExtResource("2_node")
 node_id = "engineering_tunnel_1"
-neighbors = [NodePath("../JunctionNode2"), NodePath("../EngineeringA")]
+neighbors = [NodePath("../JunctionNode2"), NodePath("../EngineeringTunnelMouth")]
 
 [node name="EngineeringA" type="Node3D" parent="MovementNodes"]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -3.6, 1.6, 5.2)
 script = ExtResource("2_node")
 node_id = "engineering_a"
-neighbors = [NodePath("../EngineeringTunnel1")]
+neighbors = [NodePath("../EngineeringTunnelMouth")]
 region = &"engineering"
 
 [node name="EngineeringB" type="Node3D" parent="MovementNodes"]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -4.9, 1.6, 4.6)
 script = ExtResource("2_node")
 node_id = "engineering_b"
-neighbors = [NodePath("../StorageElbowE"), NodePath("../AirlockTunnel1")]
+neighbors = [NodePath("../EngineeringWestDoor"), NodePath("../AirlockTunnel1")]
 region = &"engineering"
 
 [node name="AirlockTunnel1" type="Node3D" parent="MovementNodes"]
@@ -2573,7 +2577,49 @@ neighbors = [NodePath("../AirlockTunnel1")]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -6.75, 1.6, 5.15)
 script = ExtResource("2_node")
 node_id = "storage_elbow_e"
-neighbors = [NodePath("../EngineeringB"), NodePath("../StorageA")]
+neighbors = [NodePath("../StorageConnectorMid"), NodePath("../StorageA")]
+
+[node name="CommsTunnelMouth" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 1.2, 1.6, 4.45)
+script = ExtResource("2_node")
+node_id = "comms_tunnel_mouth"
+neighbors = [NodePath("../JunctionNode1"), NodePath("../CommsTunnelElbow")]
+
+[node name="CommsAlcoveMouth" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 3.1, 1.6, 7.1)
+script = ExtResource("2_node")
+node_id = "comms_alcove_mouth"
+neighbors = [NodePath("../CommsA"), NodePath("../CommsAlcove")]
+
+[node name="CommsWindowApproach" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 2.1, 1.6, 7.45)
+script = ExtResource("2_node")
+node_id = "comms_window_approach"
+neighbors = [NodePath("../CommsA"), NodePath("../CommsNookEntry")]
+
+[node name="EngineeringTunnelMouth" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -3.15, 1.6, 6.06)
+script = ExtResource("2_node")
+node_id = "engineering_tunnel_mouth"
+neighbors = [NodePath("../EngineeringTunnel1"), NodePath("../EngineeringA")]
+
+[node name="EngineeringWestDoor" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -5.4, 1.6, 4.8)
+script = ExtResource("2_node")
+node_id = "engineering_west_door"
+neighbors = [NodePath("../EngineeringB"), NodePath("../StorageConnectorMid")]
+
+[node name="StorageConnectorMid" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -6.6, 1.6, 4.8)
+script = ExtResource("2_node")
+node_id = "storage_connector_mid"
+neighbors = [NodePath("../EngineeringWestDoor"), NodePath("../StorageElbowE")]
+
+[node name="CommsNookEntry" type="Node3D" parent="MovementNodes"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 1.3, 1.6, 7.8)
+script = ExtResource("2_node")
+node_id = "comms_nook_entry"
+neighbors = [NodePath("../CommsWindowApproach"), NodePath("../CommsWindow")]
 
 [node name="StorageA" type="Node3D" parent="MovementNodes"]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -7.0, 1.6, 7.4)
@@ -2830,6 +2876,25 @@ script = ExtResource("80_solar")
 
 [node name="SolarCoupler" type="Node3D" parent="Equipment"]
 script = ExtResource("81_coupler")
+
+[node name="OrbitalCycle" type="Node" parent="Equipment"]
+script = ExtResource("89_orbit")
+
+[node name="JunctionEmergencyLights" type="Node3D" parent="Equipment"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 1.285, 0, 6.4)
+script = ExtResource("85_jem")
+
+[node name="JunctionDistribution" type="Node3D" parent="Equipment"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -0.885, 0, 4.55)
+script = ExtResource("86_jdp")
+
+[node name="CommsPatchBay" type="Node3D" parent="Equipment"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 3.285, 0, 6.25)
+script = ExtResource("87_patch")
+
+[node name="CommsBackupReceiver" type="Node3D" parent="Equipment"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 3.285, 0, 7.95)
+script = ExtResource("88_rxb")
 
 [node name="SolarHinge" type="Node3D" parent="Equipment"]
 script = ExtResource("82_hinge")

@@ -64,7 +64,52 @@ func _worksite(id: String, parent: Node3D, hold_pos: Vector3, stance: Vector3, l
 	box(Vector3(0.03, 0.08, 0.03), hold_pos + Vector3(0.16, -0.05, 0), Color(0.5, 0.5, 0.52), parent)
 	var e: Node = _eva()
 	if e != null:
-		e.register_worksite(id, stance, look, [ring_id], parent, hold_pos, label_text)
+		e.register_worksite(id, stance, look, valid_rings(ring_id, stance), parent, hold_pos, label_text)
+
+
+## Round 42 Priority 15: the rings a technician may be tethered to while
+## working a worksite are DERIVED from the worksite's real position: the
+## task's named ring plus any other ring of the SAME wing / truss side
+## within WORK_RING_R of the stance (a 5.5 m tether reaches comfortably).
+## Never a ring of the other wing.
+const WORK_RING_R := 3.5
+
+
+static func valid_rings(ring_id: String, stance: Vector3) -> Array:
+	var out: Array = [ring_id]
+	var side: String = ring_id.left(1)
+	for a in Graph.ANCHORS:
+		var id: String = a[1]
+		if id == ring_id or id.left(1) != side:
+			continue
+		if (a[0] as Vector3).distance_to(stance) <= WORK_RING_R:
+			out.append(id)
+	return out
+
+
+## Which wing's `prefix` worksite the technician is holding ("" = none).
+func site_wing_here(prefix: String) -> String:
+	for w in ["L", "R"]:
+		if at_site(prefix + w):
+			return w
+	return ""
+
+
+static func wing_word(w: String) -> String:
+	return "LEFT (west)" if w == "L" else "RIGHT (east)"
+
+
+## A small orange SERVICE tag on the faulted wing's hardware (the correct
+## worksite is obvious from the truss); hidden while healthy.
+func service_tag(parent: Node3D, pos: Vector3) -> Node3D:
+	var t := Node3D.new()
+	t.name = "ServiceTag"
+	t.position = pos
+	parent.add_child(t)
+	box(Vector3(0.012, 0.18, 0.012), Vector3(0, 0.09, 0), Color(0.6, 0.6, 0.62), t)
+	box(Vector3(0.1, 0.06, 0.006), Vector3(0.05, 0.15, 0), Color(1.0, 0.45, 0.05), t)
+	label("SERVICE", Vector3(0.05, 0.15, 0.006), 10, Color(0.1, 0.05, 0.0), t)
+	return t
 
 
 ## The common "suit up -> airlock -> route -> work -> back -> verify" next
@@ -74,7 +119,7 @@ func _route_step(work_step: Dictionary, ring: String) -> Dictionary:
 		return work_step
 	if not suited():
 		return {"action": "Put on the EVA suit (airlock)", "short": "SUIT UP", "room": &"airlock"}
-	return {"action": "Airlock: press OUT, follow the truss to %s" % ring, "short": "AIRLOCK OUT", "room": &"airlock"}
+	return {"action": "Airlock: press OUT<<, follow the truss to %s" % ring, "short": "AIRLOCK OUT", "room": &"airlock"}
 
 
 ## Power panel SOLAR check (Engineering): the VERIFY OUTPUT step.

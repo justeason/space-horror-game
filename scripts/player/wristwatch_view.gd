@@ -122,23 +122,23 @@ func _refresh_text() -> void:
 	if stn != null:
 		var e: Dictionary = stn.emergency()
 		if not e.is_empty():
-			_watch_rig.set_watch_text("! %s
-%s %s" % [String(e["title"]).replace("POWER ", "PWR "), String(stn.ROOM_NAMES.get(StringName(e["room"]), "")).left(8), stn.clock(float(e["seconds"]))])
+			# Round 42: the countdown sits UNDER the real clock, never replaces it.
+			_watch_rig.set_watch_text("%s\n! %s\n%s %s" % [_clock_line(), String(e["title"]).replace("POWER ", "PWR "), String(stn.ROOM_NAMES.get(StringName(e["room"]), "")).left(8), stn.clock(float(e["seconds"]))])
 			return
 	# Round 34 Priority 11: on workdays (and while a cargo duty is open) the
 	# watch shows the ONE next action, where, and the shift clock -- all
 	# event-driven from DayPlan.guidance(); it advances by itself.
 	# Round 39 Priority 7: after the shift, the watch points to the bunk.
 	if "shift_ended" in _day_plan and _day_plan.shift_ended:
-		_watch_rig.set_watch_text("SHIFT OVER\nBUNK · REST")
+		_watch_rig.set_watch_text("%s\nSHIFT OVER\nBUNK · REST" % _clock_line())
 		return
 	if _day_plan.has_method("guidance") and (_day_plan.workday != 0 or _day_plan.cargo_duty == "open"):
 		var g: Dictionary = _day_plan.guidance()
-		var clock: String = "REST" if _day_plan.shift_ended else ("WRAP UP" if _day_plan.is_wrapping_up() else "%d%%" % int(round(_day_plan.shift_progress() * 100.0)))
+		var room_txt: String = String(g.get("room", "")).replace("_", " ").to_upper().replace("CONTROL ROOM", "CTRL RM").replace("LIFE SUPPORT", "LIFE SUP")
 		if g.is_empty():
-			_watch_rig.set_watch_text("ALL CLEAR\n%s" % clock)
+			_watch_rig.set_watch_text("%s\nALL CLEAR\n%s" % [_clock_line(), "WRAP UP" if _day_plan.is_wrapping_up() else "ENDS %s" % _day_plan.shift_end_text()])
 		else:
-			_watch_rig.set_watch_text("%s\n%s · %s" % [g["short"], String(g["room"]).replace("_", " ").to_upper().replace("CONTROL ROOM", "CTRL RM").replace("LIFE SUPPORT", "LIFE SUP"), clock])
+			_watch_rig.set_watch_text("%s\n%s\n%s · %s" % [_clock_line(), g["short"], room_txt, "WRAP UP" if _day_plan.is_wrapping_up() else "ON SHIFT"])
 		return
 	var room: StringName = _day_plan.get_outstanding_task_room()
 	if room == &"":
@@ -146,9 +146,9 @@ func _refresh_text() -> void:
 		# glanceable thing worth showing when no order is open.
 		var port: Node = _day_plan.cargo_port() if _day_plan.has_method("cargo_port") else null
 		if port != null and port.is_busy() and port.state != port.PortState.RECEIVED:
-			_watch_rig.set_watch_text("CARGO %s\nAIRLOCK" % ("READY" if port.state == port.PortState.ARRIVED else "OPEN"))
+			_watch_rig.set_watch_text("%s\nCARGO %s\nAIRLOCK" % [_clock_line(), "READY" if port.state == port.PortState.ARRIVED else "OPEN"])
 			return
-		_watch_rig.set_watch_text("ALL CLEAR")
+		_watch_rig.set_watch_text("%s\nALL CLEAR" % _clock_line())
 		return
 	# Round 20 Priority 5: if a part is already known to be required
 	# (diagnosed, but not yet in hand) for the STILL-OPEN electrical
@@ -163,14 +163,22 @@ func _refresh_text() -> void:
 	# head back and verify it at the Control Room.
 	if _day_plan.required_component_id != &"" and not _day_plan.is_task_done(&"e05") and not _has_required_part():
 		var pn: String = preload("res://scripts/station/part_names.gd").short(_day_plan.required_component_id)
-		_watch_rig.set_watch_text("GET PART\nSTORAGE" if pn == "16GA" else "GET PART %s\nSTORAGE" % pn)
+		_watch_rig.set_watch_text("%s\n%s" % [_clock_line(), "GET PART\nSTORAGE" if pn == "16GA" else "GET PART %s\nSTORAGE" % pn])
 		return
 	var action: String
 	if room == &"control_room":
 		action = "CHECK IN" if not _day_plan.is_task_done(&"c01") else "VERIFY REPAIR"
 	else:
 		action = "TASK: %s" % String(_day_plan.assignment_task_id).to_upper() if _day_plan.assignment_task_id != &"" else "IN PROGRESS"
-	_watch_rig.set_watch_text("%s\n%s" % [action, String(room).replace("_", " ").to_upper()])
+	_watch_rig.set_watch_text("%s\n%s\n%s" % [_clock_line(), action, String(room).replace("_", " ").to_upper()])
+
+
+## Round 42 Priority 31: the watch is a WATCH -- the first line is always
+## the day and the station time (never the work percentage).
+func _clock_line() -> String:
+	if _day_plan == null or not _day_plan.has_method("clock_text_hhmm"):
+		return ""
+	return "DAY %02d  %s" % [int(_day_plan.day_number), _day_plan.clock_text_hhmm()]
 
 
 func _has_required_part() -> bool:

@@ -63,6 +63,8 @@ var _replace_phase: StringName = &"damaged" # or &"awaiting_replacement"
 
 
 func _ready() -> void:
+	# Round 42: render the 3D view at real screen resolution (hidpi_viewport.gd).
+	preload("res://scripts/ui/hidpi_viewport.gd").attach(self)
 	visible = false
 	_diorama.wire_clicked.connect(_on_wire_clicked)
 	_diorama.replacement_clicked.connect(_on_replacement_clicked)

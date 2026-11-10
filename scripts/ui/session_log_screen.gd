@@ -94,9 +94,18 @@ func _build_app_bar() -> void:
 	_app_title.add_theme_font_size_override("font_size", 13)
 	_app_title.add_theme_color_override("font_color", Color(0.75, 0.95, 0.8))
 	_app_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# Round 42 Priority 23 (Personal Log cropped on the right): ROOT CAUSE --
+	# while editing, the menu bar's MINIMUM width (title + Save + Save&Back
+	# + Close + the long shift-status clock = 560 px) exceeded the 456 px
+	# content width, so the VBox -- and the TextEdit inside it -- grew past
+	# the screen's right edge. The title now clips (never forces width) and
+	# the clock is compact; _fit_bar() guarantees the fit at runtime.
+	_app_title.clip_text = true
+	_app_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_bar.add_child(_app_title)
 	_bar.move_child(_app_title, 0)
 	var brand := Label.new()
+	_brand = brand
 	brand.text = "◆ driftwood"
 	brand.add_theme_font_size_override("font_size", 12)
 	brand.add_theme_color_override("font_color", Color(0.95, 0.8, 0.55))
@@ -198,6 +207,14 @@ func _build_app_bar() -> void:
 	vbox.move_child(_game, vbox.get_children().find(_files_box) + 1)
 	_game.exited.connect(func(): open_app(&"home"))
 	_game.score_changed.connect(func(b): game_best = maxi(game_best, b))
+	# Round 42: HOLDOUT (survival game), a second Entertainment app.
+	holdout = preload("res://scripts/ui/holdout_game.gd").new()
+	holdout.name = "Holdout"
+	holdout.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	holdout.visible = false
+	vbox.add_child(holdout)
+	vbox.move_child(holdout, vbox.get_children().find(_game) + 1)
+	holdout.exited.connect(func(): open_app(&"home"))
 	# Clicking the visible log text (Personal Log app, zoomed out) zooms in.
 	_entry_field.gui_input.connect(_on_entry_input)
 	_entry_field.tooltip_text = ""
@@ -213,10 +230,12 @@ const APPS := [
 	[&"files", "Files", Color(0.75, 0.75, 0.8)],
 	[&"report", "Shift Report", Color(0.6, 0.85, 0.9)],
 	[&"game", "Cargo Drop", Color(0.95, 0.6, 0.25)],
+	[&"holdout", "Holdout", Color(0.55, 0.85, 0.4)],
 ]
-const APP_TITLES := {&"home": "DESKTOP", &"log": "PERSONAL LOG", &"messages": "MESSAGES", &"schedule": "SCHEDULE", &"photos": "PHOTOS", &"files": "FILES", &"file": "FILES", &"report": "SHIFT REPORT", &"game": "CARGO DROP"}
+const APP_TITLES := {&"home": "DESKTOP", &"log": "PERSONAL LOG", &"messages": "MESSAGES", &"schedule": "SCHEDULE", &"photos": "PHOTOS", &"files": "FILES", &"file": "FILES", &"report": "SHIFT REPORT", &"game": "CARGO DROP", &"holdout": "HOLDOUT"}
 const Files = preload("res://scripts/ui/laptop_files.gd")
 var _app_title: Label
+var _brand: Label
 var _desktop: GridContainer
 var _home: HBoxContainer
 var _clock: Label
@@ -228,6 +247,7 @@ var _photo: TextureRect
 var _photo_caption: Label
 var _files_box: VBoxContainer
 var _game: Control
+var holdout: Control
 var _zoomed: bool = false
 var _pending_app: StringName = &""
 var photo_index: int = 0
@@ -292,6 +312,21 @@ func open_app(id: StringName) -> void:
 	_show_view(id)
 
 
+## Round 42: the menu bar must never be wider than the screen content
+## (that pushed the whole page -- the log editor too -- off the right edge).
+func _fit_bar() -> void:
+	if _bar == null or _brand == null:
+		return
+	var avail: float = float(size.x) - 24.0
+	_brand.visible = true
+	if _bar.get_combined_minimum_size().x > avail:
+		_brand.visible = false
+
+
+func content_width() -> float:
+	return ($Control/VBox as Control).size.x
+
+
 func _show_view(v: StringName) -> void:
 	_view = v
 	var text_view: bool = v in [&"report", &"messages", &"schedule", &"file"]
@@ -304,6 +339,7 @@ func _show_view(v: StringName) -> void:
 	_photo_box.visible = v == &"photos"
 	_files_box.visible = v == &"files"
 	_game.visible = v == &"game"
+	holdout.visible = v == &"holdout"
 	_subtitle.visible = false
 	_status.visible = false
 	_refresh_note()
@@ -325,6 +361,7 @@ func _show_view(v: StringName) -> void:
 	_buttons[&"back"].visible = _zoomed
 	_buttons[&"close"].visible = true
 	_app_title.text = APP_TITLES.get(v, "")
+	_fit_bar()
 	match v:
 		&"messages":
 			_report.text = "\n".join(messages_lines())
@@ -353,6 +390,9 @@ func _show_view(v: StringName) -> void:
 		&"game":
 			if _zoomed:
 				_game.grab_focus()
+		&"holdout":
+			if _zoomed:
+				holdout.grab_focus()
 
 
 func _build_file_list() -> void:
@@ -405,6 +445,11 @@ func open_entry(e: Dictionary) -> void:
 			_view = &"file"
 			_show_view(&"file")
 			_report.text = "%s\n\n%s" % [open_file, e["rec"]["text"]]
+			# Round 42: a few documents are NARRATIVE discoveries (read on
+			# purpose by the technician) -- the story director decides what
+			# that means; the laptop never explains it.
+			if String(e["rec"].get("story", "")) != "" and is_inside_tree():
+				get_tree().call_group(&"story_events", &"on_story_discovery", String(e["rec"]["story"]))
 		"img":
 			var ph: Array = Files.list("Photos")
 			for i in ph.size():
@@ -416,7 +461,7 @@ func open_entry(e: Dictionary) -> void:
 		"log":
 			_show_view(&"log")
 		"app":
-			_show_view(&"game")
+			_show_view(StringName(e["rec"].get("app", "game")))
 
 
 # ======================================================================
@@ -670,7 +715,11 @@ func _refresh_note() -> void:
 func _refresh_clock() -> void:
 	if _clock == null or _day_plan == null:
 		return
-	if _day_plan.has_method("shift_status_text"):
+	# Round 42: a compact computer clock (day + station time); the long
+	# shift status made the menu bar wider than the screen.
+	if _day_plan.has_method("clock_text_hhmm"):
+		_clock.text = "D%d  %s" % [_day_plan.day_number, _day_plan.clock_text_hhmm()]
+	elif _day_plan.has_method("shift_status_text"):
 		_clock.text = _day_plan.shift_status_text()
 	else:
 		_clock.text = "DAY %d" % _day_plan.day_number
@@ -731,4 +780,11 @@ static func _app_icon(id: StringName, c: Color) -> ImageTexture:
 			for p in [[7, 13], [13, 13], [13, 7], [19, 13]]:
 				img.fill_rect(Rect2i(p[0], p[1], 5, 5), Color(0.9, 0.55, 0.2))
 				img.fill_rect(Rect2i(p[0], p[1], 5, 1), Color(1.0, 0.8, 0.5))
+		&"holdout":
+			# A survivor (blue) among three shamblers (green).
+			img.fill_rect(Rect2i(4, 4, 22, 18), Color(0.1, 0.12, 0.08))
+			for zp in [[7, 7], [20, 8], [9, 17]]:
+				img.fill_rect(Rect2i(zp[0], zp[1], 4, 4), Color(0.45, 0.75, 0.35))
+			img.fill_rect(Rect2i(14, 12, 4, 4), Color(0.55, 0.8, 1.0))
+			img.fill_rect(Rect2i(18, 13, 3, 1), Color(1.0, 0.92, 0.45))
 	return ImageTexture.create_from_image(img)

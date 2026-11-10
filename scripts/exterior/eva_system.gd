@@ -46,6 +46,11 @@ var suited: bool = false          # saved
 var outside: bool = false
 var eva_log: Array = []           # [{event, t}]
 var _locker_suit: Node3D
+var locker_rig: Node3D
+var _locker_straps: Node3D
+var _locker_open: Node3D
+var _locker_lamp: StandardMaterial3D
+var _locker_status: Label3D
 var _visor: CanvasLayer
 var _visor_label: Label
 var _t: float = 0.0
@@ -126,23 +131,77 @@ func _build_locker() -> void:
 	lbl.pixel_size = 0.0012
 	lbl.position = Vector3(0, 1.88, 0.06)
 	root.add_child(lbl)
+	# Round 42 Priority 14: the STOWED suit is the real worn suit -- the
+	# same technician_rig.gd garment, helmet, pack and harness meshes --
+	# hung on a shoulder yoke, held by two restraint straps, on its service
+	# umbilical, with a status lamp. Not a second simplified model; and
+	# never shown in two places (hidden while worn: the empty yoke, open
+	# straps and an amber IN USE lamp remain).
 	_locker_suit = Node3D.new()
+	_locker_suit.name = "StowedSuit"
 	root.add_child(_locker_suit)
-	var white := _mat(Color(0.88, 0.88, 0.86), 0.1)
-	_csg(Vector3(0.42, 0.55, 0.26), Vector3(0, 1.25, 0.15), white, _locker_suit)
-	var helmet := CSGSphere3D.new()
-	helmet.radius = 0.16
-	helmet.position = Vector3(0, 1.67, 0.17)
-	helmet.material = white
-	_locker_suit.add_child(helmet)
-	var visor := CSGSphere3D.new()
-	visor.radius = 0.12
-	visor.position = Vector3(0, 1.67, 0.27)
-	visor.material = _mat(Color(0.75, 0.55, 0.15), 0.9)
-	_locker_suit.add_child(visor)
-	for s in [-1, 1]:
-		_csg(Vector3(0.12, 0.5, 0.14), Vector3(s * 0.28, 1.2, 0.15), white, _locker_suit)
-		_csg(Vector3(0.15, 0.62, 0.16), Vector3(s * 0.11, 0.66, 0.15), white, _locker_suit)
+	var rig: Node3D = preload("res://scripts/character/technician_rig.gd").new()
+	rig.name = "SuitRig"
+	rig.position = Vector3(0, 0.04, 0.36)
+	rig.rotation_degrees.y = 180.0          # front faces out of the locker
+	_locker_suit.add_child(rig)
+	rig.build()
+	rig.set_eva_suit(true)
+	if rig.head_mesh != null:
+		rig.head_mesh.visible = false       # an EMPTY suit (the helmet is closed)
+	if rig.watch_mount != null:
+		rig.watch_mount.visible = false
+	# Hanging pose: arms a little away from the torso, elbows soft.
+	rig.set_local("LeftUpperArm", Quaternion(Vector3(0, 0, 1), -0.22))
+	rig.set_local("RightUpperArm", Quaternion(Vector3(0, 0, 1), 0.22))
+	rig.set_local("LeftLowerArm", Quaternion(Vector3(1, 0, 0), -0.25))
+	rig.set_local("RightLowerArm", Quaternion(Vector3(1, 0, 0), -0.25))
+	rig.apply_to_skeleton()
+	locker_rig = rig
+	var metal := _mat(Color(0.62, 0.63, 0.66), 0.8)
+	var strapm := _mat(Color(0.12, 0.13, 0.15), 0.1)
+	# Shoulder yoke (always there) on two stand-offs from the backplate.
+	_csg(Vector3(0.5, 0.045, 0.06), Vector3(0, 1.47, 0.2), metal, root)
+	for sx in [-0.2, 0.2]:
+		_csg(Vector3(0.035, 0.035, 0.22), Vector3(sx, 1.47, 0.09), metal, root)
+	# Side rails the straps buckle to.
+	for sx in [-0.33, 0.33]:
+		_csg(Vector3(0.03, 1.6, 0.03), Vector3(sx, 0.95, 0.12), metal, root)
+	# Restraint straps across the suit (chest + thighs) with buckles.
+	_locker_straps = Node3D.new()
+	_locker_suit.add_child(_locker_straps)
+	for sy in [1.16, 0.72]:
+		_csg(Vector3(0.66, 0.045, 0.012), Vector3(0, sy, 0.6 if sy > 1.0 else 0.52), strapm, _locker_straps)
+		_csg(Vector3(0.05, 0.06, 0.02), Vector3(0.0, sy, 0.61 if sy > 1.0 else 0.53), metal, _locker_straps)
+	# Open straps hanging from the rails (shown while the suit is out).
+	_locker_open = Node3D.new()
+	root.add_child(_locker_open)
+	for sx in [-0.33, 0.33]:
+		for sy in [1.16, 0.72]:
+			_csg(Vector3(0.012, 0.22, 0.04), Vector3(sx + (0.03 if sx < 0 else -0.03), sy - 0.1, 0.14), strapm, _locker_open)
+	_locker_open.visible = false
+	# Service umbilical: wall port -> the suit's chest connector.
+	_csg(Vector3(0.06, 0.06, 0.05), Vector3(0.24, 1.02, 0.03), metal, root)
+	var hose := CSGCylinder3D.new()
+	hose.radius = 0.014
+	hose.height = 0.42
+	hose.material = _mat(Color(0.2, 0.22, 0.26), 0.2)
+	hose.position = Vector3(0.17, 1.08, 0.24)
+	hose.rotation_degrees = Vector3(65.0, 0.0, 25.0)
+	_locker_suit.add_child(hose)
+	# Status lamp + label on the header.
+	var lamp := CSGSphere3D.new()
+	lamp.radius = 0.018
+	lamp.position = Vector3(0.28, 1.88, 0.07)
+	_locker_lamp = _mat(Color(0.3, 0.95, 0.45), 0.0, Color(0.3, 0.95, 0.45))
+	lamp.material = _locker_lamp
+	root.add_child(lamp)
+	_locker_status = Label3D.new()
+	_locker_status.font_size = 14
+	_locker_status.pixel_size = 0.001
+	_locker_status.position = Vector3(0.28, 1.83, 0.07)
+	_locker_status.text = "SUIT READY"
+	root.add_child(_locker_status)
 	_click(root, &"locker", Vector3(0.7, 1.9, 0.1), Vector3(0, 1.0, 0.08))
 
 
@@ -330,7 +389,7 @@ func on_part(id: StringName) -> void:
 				return
 			set_suited(not suited)
 			_sfx(&"latch")
-			_say("EVA suit %s." % ("on — step into the airlock chamber and press OUT" if suited else "stowed"))
+			_say("EVA suit %s." % ("on — step into the airlock chamber and press OUT<<" if suited else "stowed"))
 			eva_log.append({"event": "suit_on" if suited else "suit_off", "t": _t})
 			if suited:
 				_ai(&"eva_suit")
@@ -520,11 +579,58 @@ func _process(delta: float) -> void:
 var _r_was_down: bool = false
 
 
+# ------------------------------------------------------------ float mode
+## Round 42 Priority 16: EVA MOVEMENT vs STATION MOVEMENT.
+## Air pressure does not make gravity. Walking in the pressurised station
+## is the suit's / overalls' MAGNETIC BOOTS on the deck plating (the
+## station's established movement mode). In the airlock the suit RELEASES
+## its boots for EVA as soon as the chamber starts to vent (the procedure
+## stage where the technician must hold on and float out), and only
+## re-engages them when the outer hatch is SEALED and the chamber is back
+## at station pressure -- then the technician settles gently onto the deck
+## (no snap, no teleport). The mode follows the explicit zone + the
+## airlock's real hatch / pressure state, never a floor ray.
+##   outside                                   -> floating
+##   chamber, outer hatch open                 -> floating
+##   chamber, venting / vacuum / repressurising -> floating
+##   chamber, outer sealed + full pressure     -> boots engage, settle, walk
+var float_mode: bool = false
+
+
+func wants_float() -> bool:
+	if zone == "outside" or outside:
+		return true
+	if zone != "chamber" or not suited:
+		return false
+	var a: Node = _airlock()
+	return a != null and (a.outer_open or a.psi < a.STATION_PSI - 0.25)
+
+
+func _set_float(on: bool) -> void:
+	if on == float_mode:
+		return
+	float_mode = on
+	var fb: Node = _n("FreeMoveBody")
+	if fb != null and "zero_g" in fb:
+		fb.zero_g = on
+		if not on and "settling" in fb:
+			fb.settling = true
+	var body: Node = _n("Player/PlayerBody")
+	if body != null and body.has_method("set_floating"):
+		body.set_floating(on)
+	eva_log.append({"event": "boots_released" if on else "boots_engaged", "zone": zone, "t": _t})
+	if suited and is_inside_tree():
+		_say("MAG BOOTS RELEASED — EVA mode." if on else "MAG BOOTS ENGAGED — station mode.")
+		_sfx(&"click")
+
+
 func _physics_process(delta: float) -> void:
 	var fb: CharacterBody3D = _n("FreeMoveBody") as CharacterBody3D
 	if fb == null:
 		return
 	_update_zone(fb.global_position)
+	if wants_float() != float_mode:
+		_set_float(wants_float())
 	if "thrust_blocked" in fb:
 		var f: Node = _n("FocusedInteractionState")
 		fb.thrust_blocked = f != null and f.has_method("is_active") and f.is_active()
@@ -635,14 +741,14 @@ func _set_outside(out: bool) -> void:
 	outside = out
 	var fb: Node = _n("FreeMoveBody")
 	if fb != null and "zero_g" in fb:
-		fb.zero_g = out
+		# Round 42: floating is NOT tied to "outside" any more -- it is the
+		# suit's EVA mode (_update_float_mode()); crossing the hatch only
+		# damps the drift and frees a worksite lock.
 		if out:
+			_set_float(true)
 			fb.velocity = fb.velocity * 0.3
 		if "work_locked" in fb:
 			fb.work_locked = false
-	var body: Node = _n("Player/PlayerBody")
-	if body != null and body.has_method("set_floating"):
-		body.set_floating(out)
 	work_site = ""
 	if out:
 		# Tether A was clipped to the hatch ring before the outer hatch
@@ -1274,7 +1380,8 @@ func zone_word() -> String:
 		return "RETURN" if to_hatch < 1.6 else "OUTSIDE"
 	if zone == "chamber":
 		var a: Node = _airlock()
-		return "CHAMBER" if a == null else ("CHAMBER · VAC" if a.is_vacuum() else "CHAMBER")
+		var w: String = "CHAMBER" if a == null else ("CHAMBER · VAC" if a.is_vacuum() else "CHAMBER")
+		return w + (" · BOOTS OFF" if float_mode else "")
 	return "STATION"
 
 
@@ -1334,6 +1441,13 @@ func show_hint() -> void:
 func _refresh() -> void:
 	if _locker_suit != null:
 		_locker_suit.visible = not suited
+		if _locker_open != null:
+			_locker_open.visible = suited
+		if _locker_lamp != null:
+			var c: Color = Color(1.0, 0.65, 0.15) if suited else Color(0.3, 0.95, 0.45)
+			_locker_lamp.albedo_color = c
+			_locker_lamp.emission = c
+			_locker_status.text = "SUIT IN USE" if suited else "SUIT READY"
 
 
 func _exit_tree() -> void:
@@ -1355,6 +1469,7 @@ func load_dict(d: Dictionary) -> void:
 	if outside:
 		_set_outside(false)
 	zone = "station"
+	_set_float(false)
 	work_site = ""
 	tethers = [_new_tether(), _new_tether()]
 	var al: Node = _airlock()

@@ -262,7 +262,13 @@ var _cam_blind: Label           # line 2: blind spot
 var _plan: Control
 var _cam_page: Control
 const CAM_LIST_W := 178.0
-const FEED_RECT := Rect2(194, 2, 438, 282)
+## Round 42 Priority 8: the feed is 16:9 (matches the 1280x720 / 640x360
+## camera renders) and as wide as the page allows beside the list; an
+## INSPECT mode gives the feed the whole monitor (and the seated view
+## leans in -- workstation_state.set_inspect_zoom()).
+const FEED_RECT := Rect2(192, 2, 442, 249)
+const INSPECT_RECT := Rect2(4, 2, 632, 312)
+var cam_inspect: bool = false
 
 
 func _net() -> Node:
@@ -305,18 +311,75 @@ func _build_cameras() -> void:
 	# Corner tags on the feed (small, outlined, never over the list).
 	_feed_tag = _feed_corner_label(p, Vector2(FEED_RECT.position.x + 52, FEED_RECT.position.y + 6), HORIZONTAL_ALIGNMENT_LEFT)
 	_feed_clock = _feed_corner_label(p, Vector2(FEED_RECT.end.x - 52 - 110, FEED_RECT.position.y + 6), HORIZONTAL_ALIGNMENT_RIGHT)
-	_cam_info = _lbl("", Vector2(196, 288), Vector2(340, 18), p, 12, Color(0.88, 0.95, 0.92))
+	_cam_info = _lbl("", Vector2(196, 256), Vector2(344, 18), p, 12, Color(0.88, 0.95, 0.92))
 	_cam_info.autowrap_mode = TextServer.AUTOWRAP_OFF
-	_cam_blind = _lbl("", Vector2(196, 310), Vector2(340, 18), p, 10, Color(0.62, 0.72, 0.7))
+	_cam_blind = _lbl("", Vector2(196, 278), Vector2(344, 18), p, 10, Color(0.62, 0.72, 0.7))
 	_cam_blind.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_plan = Control.new()
-	_plan.position = Vector2(548, 288)
+	_plan.position = Vector2(548, 256)
 	_plan.size = Vector2(84, 46)
 	_plan.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_plan.draw.connect(_draw_plan)
 	p.add_child(_plan)
 	action_buttons["back_to_map"] = _btn("< MAP", Vector2(8, 306), Vector2(CAM_LIST_W, 26), p, func(): show_page(Page.OPS), 11)
+	action_buttons["inspect"] = _btn("⤢ INSPECT", Vector2(192, 306), Vector2(110, 26), p, toggle_inspect, 11)
+	action_buttons["cam_prev"] = _btn("◀", Vector2(4, 316), Vector2(40, 22), p, func(): step_camera(-1), 11)
+	action_buttons["cam_next"] = _btn("▶", Vector2(48, 316), Vector2(40, 22), p, func(): step_camera(1), 11)
+	action_buttons["inspect_back"] = _btn("✕ BACK", Vector2(560, 316), Vector2(76, 22), p, toggle_inspect, 11)
+	_inspect_line = _lbl("", Vector2(96, 318), Vector2(456, 18), p, 11, Color(0.88, 0.95, 0.92))
+	_inspect_line.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_build_cam_buttons()
+	_layout_cameras()
+
+
+var _inspect_line: Label
+
+
+func toggle_inspect() -> void:
+	cam_inspect = not cam_inspect
+	_layout_cameras()
+	var ws: Node = dp.get_parent().get_node_or_null("WorkstationState") if dp != null and dp.get_parent() != null else null
+	if ws != null and ws.has_method("set_inspect_zoom"):
+		ws.set_inspect_zoom(cam_inspect and page == Page.CAMERAS)
+	refresh()
+
+
+func step_camera(d: int) -> void:
+	var net: Node = _net()
+	if net == null:
+		return
+	var ids: Array = net.ids()
+	if ids.is_empty():
+		return
+	var i: int = maxi(ids.find(selected_cam), 0)
+	select_camera(ids[posmod(i + d, ids.size())])
+
+
+## Normal: list | feed | info lines. Inspect: the feed fills the monitor,
+## one compact line + prev / next / back underneath.
+func _layout_cameras() -> void:
+	if _feed == null:
+		return
+	var r: Rect2 = INSPECT_RECT if cam_inspect else FEED_RECT
+	_feed_frame.position = r.position
+	_feed_frame.size = r.size
+	_feed.position = r.position + Vector2(1, 1)
+	_feed.size = r.size - Vector2(2, 2)
+	_feed_tag.position = Vector2(r.position.x + 8, r.position.y + 6)
+	_feed_clock.position = Vector2(r.end.x - 8 - 110, r.position.y + 6)
+	for id in cam_buttons:
+		(cam_buttons[id] as Button).visible = not cam_inspect
+	for n in _cam_page.get_children():
+		if String(n.name).begins_with("Group") or n is ColorRect:
+			(n as CanvasItem).visible = not cam_inspect
+	_cam_info.visible = not cam_inspect
+	_cam_blind.visible = not cam_inspect
+	_plan.visible = not cam_inspect
+	action_buttons["back_to_map"].visible = not cam_inspect
+	action_buttons["inspect"].visible = not cam_inspect
+	for k in ["cam_prev", "cam_next", "inspect_back"]:
+		action_buttons[k].visible = cam_inspect
+	_inspect_line.visible = cam_inspect
 
 
 func _feed_corner_label(p: Control, pos: Vector2, align: int) -> Label:
@@ -399,15 +462,18 @@ func _refresh_cameras() -> void:
 		get_tree().call_group(&"story_events", &"on_feed_viewed", selected_cam)
 	var inf: Dictionary = net.info(selected_cam)
 	_feed.texture = net.feed(selected_cam)
-	var tsec: int = int(dp.shift_elapsed_s)
-	_feed_tag.text = "● REC  %s" % selected_cam
-	_feed_clock.text = "%02d:%02d" % [tsec / 60, tsec % 60]
+	_feed_tag.text = ("● REC  %s" % selected_cam) if _feed.texture != null else ("NO SIGNAL  %s" % selected_cam)
+	_feed_clock.text = "D%02d  %s" % [dp.day_number, dp.clock_text_hhmm()]
 	var line1: String = "%s · %s" % [selected_cam, String(inf.get("label", ""))]
 	var line2: String = "Blind spot: %s" % String(inf.get("blind", "-"))
 	_cam_info.text = line1
 	_cam_info.add_theme_font_size_override("font_size", fit_font_size(line1, _cam_info.size.x, 12, 9))
 	_cam_blind.text = line2
 	_cam_blind.add_theme_font_size_override("font_size", fit_font_size(line2, _cam_blind.size.x, 10, 8))
+	if _inspect_line != null:
+		var l3: String = "%s · %s · %s" % [selected_cam, String(inf.get("label", "")), "LIVE %dx%d" % [net.feed_size(selected_cam).x, net.feed_size(selected_cam).y] if net.is_rendering(selected_cam) else "NO SIGNAL"]
+		_inspect_line.text = l3
+		_inspect_line.add_theme_font_size_override("font_size", fit_font_size(l3, _inspect_line.size.x, 11, 8))
 	_plan.queue_redraw()
 
 
@@ -533,6 +599,12 @@ func _refresh_ops() -> void:
 		if top.is_empty() or int(d["severity"]) > int(top["severity"]):
 			top = d
 	_footer.text = ("NEXT: %s · %s" % [top["action"], preload("res://scripts/station/station_status.gd").ROOM_NAMES.get(StringName(top["room"]), "")]) if not top.is_empty() else "All assignments complete."
+	# Round 42: the station's TRUE cabin environment (EnvironmentModel),
+	# always on the Operations page -- the reference a technician compares
+	# the physical wall readouts against.
+	var env: Node = dp.get_parent().get_node_or_null("EnvironmentModel")
+	if env != null:
+		_footer.text += "\nCABIN %.1f kPa · O2 %.1f kPa (live sensors)" % [env.pressure_kpa, env.o2_kpa]
 
 
 func _duty_details(d: Dictionary) -> Array:
@@ -643,6 +715,12 @@ func _refresh_system() -> void:
 
 # ------------------------------------------------------------- common
 func show_page(p: int) -> void:
+	if p != Page.CAMERAS and cam_inspect:
+		cam_inspect = false
+		_layout_cameras()
+		var ws: Node = dp.get_parent().get_node_or_null("WorkstationState") if dp != null and dp.get_parent() != null else null
+		if ws != null and ws.has_method("set_inspect_zoom"):
+			ws.set_inspect_zoom(false)
 	page = p
 	_slots_dirty = true
 	for i in _pages.size():
@@ -659,21 +737,41 @@ func refresh() -> void:
 	_emerg.visible = not e.is_empty()
 	if _emerg.visible:
 		_emerg.text = "! %s   %s" % [st.emergency_line(), String(e.get("action", ""))]
-	_title.text = "DAY %d · %s" % [dp.day_number, "SHIFT ENDED · REST" if dp.shift_ended else ("WORK DONE · WRAP UP" if dp.is_wrapping_up() else "SHIFT %d%%" % int(round(dp.shift_progress() * 100.0)))]
+	# Round 42: station TIME in the header; work progress stays a separate
+	# quantity (WORK nn%).
+	_title.text = "DAY %d · %s · %s" % [dp.day_number, dp.clock_text_hhmm(), "REST" if dp.shift_ended else ("WRAP UP" if dp.is_wrapping_up() else "WORK %d%%" % int(round(dp.shift_progress() * 100.0)))]
+	_title.add_theme_font_size_override("font_size", fit_font_size(_title.text, 192.0, 14, 9))
 	match page:
 		Page.OPS: _refresh_ops()
 		Page.CAMERAS: _refresh_cameras()
 		Page.RECORDS: _refresh_records()
 		Page.SYSTEM: _refresh_system()
-	# Only the camera actually on screen renders.
+	# Only the camera actually on screen renders -- Round 42 Priority 7
+	# (stale-feed bug): the monitor's Cameras page is VISIBLE to anyone in
+	# the Control Room / corridor / Junction A, seated or not, so it keeps
+	# its feed live whenever the player could see the monitor (it used to
+	# stop rendering the moment the technician stood up, freezing the last
+	# frame -- the technician still seated -- on the monitor). Seated: HI
+	# resolution (close inspection); standing: LO.
 	var net: Node = _net()
 	if net != null:
 		var ws: Node = dp.get_parent().get_node_or_null("WorkstationState")
-		var shown: bool = page == Page.CAMERAS and ws != null and ws.is_in_use()
-		net.request("workstation", selected_cam if shown else "")
+		var seated: bool = ws != null and ws.is_in_use()
+		var shown: bool = page == Page.CAMERAS and (seated or monitor_visible_to_player())
+		net.request("workstation", selected_cam if shown else "", shown and seated)
 
 
 var _rt: float = 0.0
+
+
+## The player's eye is somewhere the monitor can be seen from (the Control
+## Room, the corridor or Junction A, looking back through the doorway).
+func monitor_visible_to_player() -> bool:
+	var pc: Node3D = dp.get_parent().get_node_or_null("Player/LookPivot/PitchPivot/Camera3D") if dp != null and dp.get_parent() != null else null
+	if pc == null:
+		return false
+	var p: Vector3 = pc.global_position
+	return absf(p.x) < 1.6 and p.z > -1.4 and p.z < 5.6 and p.y < 3.0
 
 
 func _process(delta: float) -> void:

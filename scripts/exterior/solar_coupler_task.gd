@@ -113,6 +113,10 @@ func repaired() -> bool:
 # -------------------------------------------------------------- interaction
 func on_part(id: StringName) -> void:
 	if not at_site("coupler_" + wing):
+		var here_w: String = site_wing_here("coupler_")
+		if here_w != "" and here_w != wing:
+			say("This coupler is fine — the work order is for the %s wing (ring %s)." % [wing_word(wing), RING[wing]])
+			return
 		if outside():
 			say("Grab the coupler handhold first (tether on %s)." % RING[wing])
 		else:
@@ -271,7 +275,7 @@ func order_next() -> Dictionary:
 			step = {"action": "Run the continuity test", "short": "TEST", "room": &"airlock"}
 		return _route_step(step, RING[wing])
 	if outside():
-		return {"action": "Return along the truss, press IN", "short": "AIRLOCK IN", "room": &"airlock"}
+		return {"action": "Return along the truss, press IN>>", "short": "AIRLOCK IN", "room": &"airlock"}
 	return {"action": "Power panel: press SOLAR to verify output", "short": "VERIFY OUTPUT", "room": &"engineering"}
 
 

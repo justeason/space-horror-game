@@ -59,7 +59,7 @@ func _init() -> void:
 	var watch: Node = main.get_node("Player/Wristwatch")
 	watch._refresh_text()
 	var face: Label3D = main.get_node("Player/LookPivot/PitchPivot/Camera3D/FirstPersonWatchRig/ArmGroup/WatchAssembly/WatchFaceText")
-	_check("wristwatch: order closed + shipment waiting -> the cargo duty's next step 'CARGO ID / AIRLOCK' (got '%s')" % face.text.replace("\n", " / "), dp.get_outstanding_task_room() == &"" and face.text.begins_with("CARGO ID\nAIRLOCK · "))
+	_check("wristwatch: order closed + shipment waiting -> the cargo duty's next step 'CARGO ID / AIRLOCK' (got '%s')" % face.text.replace("\n", " / "), dp.get_outstanding_task_room() == &"" and face.text.split("\n", true, 1)[-1].begins_with("CARGO ID\nAIRLOCK · ") and face.text.begins_with("DAY "))
 
 	# ---- Receiving procedure. ----
 	port.interact()

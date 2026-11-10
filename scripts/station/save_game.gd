@@ -392,7 +392,8 @@ func collect_state() -> Dictionary:
 	d["player"] = {"pos": _enc(fb.global_position), "yaw": player.rotation.y + lp.rotation.y, "pitch": lp.get_node("PitchPivot").rotation.x}
 	var lv: Node = player.get_node_or_null("LaptopView")
 	d["laptop"] = {"entry": lv._saved_entry if lv != null else "", "read": lv._log_screen.read_messages.keys() if lv != null and "read_messages" in lv._log_screen else [], "game_best": lv._log_screen.game_best if lv != null and "game_best" in lv._log_screen else 0,
-		"cargo_drop": _enc(lv._log_screen._game.state_dict()) if lv != null and lv._log_screen.get("_game") != null else {}}
+		"cargo_drop": _enc(lv._log_screen._game.state_dict()) if lv != null and lv._log_screen.get("_game") != null else {},
+		"holdout": lv._log_screen.holdout.state_dict() if lv != null and lv._log_screen.get("holdout") != null else {}}
 	return d
 
 
@@ -617,6 +618,9 @@ func apply_state(data: Dictionary) -> Dictionary:
 			var cd: Dictionary = _dec(data.get("laptop", {}).get("cargo_drop", {}))
 			if not cd.is_empty() and not lv._log_screen._game.load_state(cd):
 				lv._log_screen._game.restart()
+		# Round 42: Holdout's own wallet / upgrades / best (never an active run).
+		if lv._log_screen.get("holdout") != null:
+			lv._log_screen.holdout.load_state(data.get("laptop", {}).get("holdout", {}))
 	if held != null:
 		held.visible = true
 		carry.pick_up(held)

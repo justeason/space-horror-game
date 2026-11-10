@@ -96,8 +96,18 @@ var _workday_status: String = ""
 var _selected_room_index: int = 1
 
 
+## Round 42 Priority 8: the monitor UI is laid out in 640 x 400 units but
+## RENDERED at 2x (1280 x 800): text and the camera feed stay sharp on the
+## physical screen. Input arriving in render pixels (uv * size) is mapped
+## back through the stretch transform by the viewport itself.
+const RENDER_SCALE := 2
+
+
 func _ready() -> void:
 	render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	size_2d_override = Vector2i(640, 400)
+	size_2d_override_stretch = true
+	size = Vector2i(640 * RENDER_SCALE, 400 * RENDER_SCALE)
 	if _day_plan.has_signal(&"day_started"):
 		_day_plan.day_started.connect(func(_d): show_section(_current_section))
 	if _day_plan.has_signal(&"task_completed"):

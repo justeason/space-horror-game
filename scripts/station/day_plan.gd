@@ -93,6 +93,8 @@ var m02_status: TaskStatus = TaskStatus.PENDING
 
 signal assignment_changed(task_id: StringName)
 signal task_completed(task_id: StringName)
+## Round 42: a work order closed (its equipment reports the fault fixed).
+signal order_closed(type: StringName)
 ## Round 33: emitted after the new day's state is set up (sleep -> wake),
 ## so screens (workstation, laptop) can show which day it is.
 signal day_started(day: int)
@@ -127,6 +129,11 @@ func _process(delta: float) -> void:
 			_end_shift()
 		else:
 			_poll_work_complete()
+	elif _eva_active():
+		# Round 42 Priority 32: never push the technician to bed while they
+		# are suited / outside / cycling the airlock -- the post-shift grace
+		# period (and tiredness) only runs once they are safely back inside.
+		pass
 	else:
 		awake_after_shift_s += delta
 		# Gentle reminders once the grace period is over (then every 90 s).
@@ -199,13 +206,47 @@ func wrap_up_remaining_s() -> float:
 	return maxf(WRAP_UP_S - (shift_elapsed_s - work_done_at_s), 0.0) if is_wrapping_up() else 0.0
 
 
-## One compact status for the laptop clock / workstation header / watch.
+## One compact status for the laptop clock / workstation header.
+## Round 42: the clock is STATION TIME; work progress is a separate
+## quantity (shown as WORK nn% where it is useful, never as the time).
 func shift_status_text() -> String:
 	if shift_ended:
-		return "DAY %d · REST" % day_number
+		return "DAY %d · %s · REST" % [day_number, clock_text_hhmm()]
 	if is_wrapping_up():
-		return "DAY %d · WRAP UP" % day_number
-	return "DAY %d · %d%%" % [day_number, int(round(shift_progress() * 100.0))]
+		return "DAY %d · %s · WRAP UP" % [day_number, clock_text_hhmm()]
+	return "DAY %d · %s · WORK %d%%" % [day_number, clock_text_hhmm(), int(round(shift_progress() * 100.0))]
+
+
+# ======================================================================
+# Round 42 Priority 31: the in-world STATION CLOCK. Four separate
+# quantities, never mixed up:
+#   A. clock time   -- 08:00 at wake-up, the nominal shift runs to 16:00;
+#                      game time advances at shift_duration_s() real
+#                      seconds per 8 station hours (configurable, ~10 real
+#                      minutes), continuously through overtime;
+#   B. shift length -- shift_duration_s() (the hard end of the work period);
+#   C. work done    -- shift_progress() (Operations / shift summary only);
+#   D. emergencies  -- their own countdown (StationStatus).
+# A new day restarts at 08:00 (shift_elapsed_s / awake_after_shift_s reset).
+# ======================================================================
+const CLOCK_START_MIN := 8 * 60
+const CLOCK_SHIFT_MIN := 8 * 60
+
+
+func clock_minutes() -> int:
+	var real_s: float = shift_elapsed_s + (awake_after_shift_s if shift_ended else 0.0)
+	var m: float = CLOCK_START_MIN + real_s * CLOCK_SHIFT_MIN / maxf(shift_duration_s(), 1.0)
+	return mini(int(m), 23 * 60 + 59)
+
+
+func clock_text_hhmm() -> String:
+	var m: int = clock_minutes()
+	return "%02d:%02d" % [m / 60, m % 60]
+
+
+func shift_end_text() -> String:
+	var m: int = CLOCK_START_MIN + CLOCK_SHIFT_MIN
+	return "%02d:%02d" % [m / 60, m % 60]
 
 
 func _poll_work_complete() -> void:
@@ -381,6 +422,12 @@ const ORDER_TYPES := {
 	&"solar_clean": {"tag": "SOLAR PNL", "category": "D", "weight": 3, "priority": 1, "title": "Solar outer panel inspection (EVA)", "intro_day": 10},
 	&"solar_coupler": {"tag": "SOLAR CPL", "category": "D", "weight": 3, "priority": 2, "title": "Service solar power coupler (EVA)", "intro_day": 11},
 	&"solar_hinge": {"tag": "SOLAR HNG", "category": "D", "weight": 3, "priority": 2, "title": "Solar hinge latch inspection (EVA)", "intro_day": 13},
+	# Round 42: Junction and Communications daily maintenance (physical,
+	# short-to-moderate, a different fault each time).
+	&"patch_bay": {"tag": "PATCH", "category": "B", "weight": 2, "priority": 2, "title": "Service signal patch bay (Comms)", "intro_day": 12},
+	&"emerg_lights": {"tag": "EM LIGHT", "category": "B", "weight": 2, "priority": 1, "title": "Emergency lighting test (Junction)", "intro_day": 14},
+	&"junction_panel": {"tag": "J-PANEL", "category": "B", "weight": 2, "priority": 1, "title": "Inspect Junction distribution panel", "intro_day": 15},
+	&"backup_rx": {"tag": "RX TEST", "category": "B", "weight": 2, "priority": 1, "title": "Backup receiver test (Comms)", "intro_day": 16},
 }
 ## Round 41: LONG exterior jobs -- never more than one open at a time
 ## (no day with several long EVA chains).
@@ -395,7 +442,7 @@ const LONG_EVA := [&"antenna", &"solar_clean", &"solar_coupler", &"solar_hinge"]
 # repair-speed bonuses: the work stays physical.
 # ======================================================================
 const FAMILIES := ["electrical", "life_support", "mechanical", "communications", "eva"]
-const ORDER_FAMILY := {&"breaker": ["electrical"], &"power": ["electrical"], &"thermal": ["electrical"], &"vent": ["life_support"], &"seal": ["mechanical"], &"data": ["communications"], &"antenna": ["communications", "eva"], &"lens": ["eva"], &"solar_clean": ["eva"], &"solar_coupler": ["electrical", "eva"], &"solar_hinge": ["mechanical", "eva"]}
+const ORDER_FAMILY := {&"breaker": ["electrical"], &"power": ["electrical"], &"thermal": ["electrical"], &"vent": ["life_support"], &"seal": ["mechanical"], &"data": ["communications"], &"antenna": ["communications", "eva"], &"lens": ["eva"], &"solar_clean": ["eva"], &"solar_coupler": ["electrical", "eva"], &"solar_hinge": ["mechanical", "eva"], &"patch_bay": ["communications"], &"emerg_lights": ["electrical"], &"junction_panel": ["electrical"], &"backup_rx": ["communications"]}
 const WORKDAY_FAMILY := {Workday.FILTER_SERVICE: ["life_support"], Workday.CALIBRATION: ["life_support"], Workday.ELECTRICAL_SERVICE: ["electrical"], Workday.COOLANT_INSPECTION: ["mechanical"], Workday.INSPECTION_ROUND: ["mechanical"], Workday.COMMS_CHECK: ["communications"]}
 var proficiency: Dictionary = {"electrical": 0, "life_support": 0, "mechanical": 0, "communications": 0, "eva": 0}
 var _credited: Dictionary = {}
@@ -519,6 +566,7 @@ func _poll_orders() -> void:
 			var title: String = ORDER_TYPES[StringName(o["type"])]["title"]
 			log_event("Closed work order %s: %s" % [o["id"], title], &"order_closed")
 			_notify("%s — complete." % title)
+			order_closed.emit(StringName(o["type"]))
 
 
 ## ONE short line per assignment for the workstation (Round 35 Priority 3):
@@ -629,8 +677,16 @@ func _end_shift() -> void:
 		shift_reported = true
 		shift_history.append({"day": day_number, "report": shift_report_lines()})
 		log_event("Daily shift ended")
-	_notify("Shift over. Return to your bunk and rest.")
+	if _eva_active():
+		_notify("Shift over. Finish safely and come back in through the airlock.")
+	else:
+		_notify("Shift over. Return to your bunk and rest.")
 	shift_ended_signal.emit(day_number)
+
+
+func _eva_active() -> bool:
+	var e: Node = get_tree().get_first_node_in_group(&"eva_system") if is_inside_tree() else null
+	return e != null and e.has_method("is_eva_active") and (e.is_eva_active() or bool(e.get("suited")))
 
 
 func _notify(text: String) -> void:

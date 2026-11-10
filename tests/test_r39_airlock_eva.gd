@@ -125,11 +125,13 @@ func _init() -> void:
 		eva.finish_switch()
 	await _walk([Vector3(-3.75, 0.05, -0.6), Vector3(-3.75, 0.05, -3.75), Vector3(-4.8, 0.05, -3.75), Vector3(-4.8, 0.05, -1.5)])
 	await create_timer(0.6).timeout
-	_check("back inside the chamber: gravity again, tether unclipped", not eva.outside and not fb.zero_g and eva.anchor_index == -1 and al.in_chamber(fb.global_position))
+	_check("back inside the chamber: still floating until sealed + pressurised (Round 42), tether unclipped", not eva.outside and fb.zero_g and eva.anchor_index == -1 and al.in_chamber(fb.global_position))
 	al.on_part(&"enter")
 	_check("ENTER starts", al.sequence == "in")
 	await _until(func(): return al.sequence == "", 10.0)
 	_check("ENTER done: outer shut, %.1f psi, inner hatch open" % al.psi, not al.outer_open and al.is_pressurized() and al.inner_open)
+	await create_timer(0.2).timeout
+	_check("pressurised: mag boots engaged, gravity again", not fb.zero_g and not eva.float_mode)
 	_check("chain: verify the link in Comms", ant.order_next()["short"] == "VERIFY LINK")
 	ant.on_part(&"test")
 	for i in 3: await process_frame

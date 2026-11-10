@@ -87,7 +87,13 @@ func wing_output(wing: String) -> float:
 
 
 func generation() -> float:
-	return wing_output("L") + wing_output("R")
+	return (wing_output("L") + wing_output("R")) * sun_factor()
+
+
+## Round 42: the orbital cycle's sunlight (1 = full sun, 0 = eclipse).
+func sun_factor() -> float:
+	var oc: Node = get_tree().get_first_node_in_group(&"orbital_cycle") if is_inside_tree() else null
+	return float(oc.sun_factor()) if oc != null else 1.0
 
 
 func load_kw() -> float:
@@ -124,7 +130,7 @@ func _process(delta: float) -> void:
 
 
 func readout() -> String:
-	return "SOLAR %.1f kW (L %.1f · R %.1f) · LOAD %.1f · RES %d%%" % [generation(), wing_output("L"), wing_output("R"), load_kw(), roundi(reserve * 100.0)]
+	return "SOLAR %.1f kW (L %.1f · R %.1f)%s · LOAD %.1f · RES %d%%" % [generation(), wing_output("L") * sun_factor(), wing_output("R") * sun_factor(), " ECLIPSE" if sun_factor() < 0.5 else "", load_kw(), roundi(reserve * 100.0)]
 
 
 ## StationStatus: a low reserve with a deficit is a WARNING in Engineering
