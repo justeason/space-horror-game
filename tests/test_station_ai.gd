@@ -224,7 +224,7 @@ func _settings_paths() -> void:
 	var panel = preload("res://scripts/ui/settings_panel.gd").new()
 	get_root().add_child(panel)
 	await process_frame
-	_check("menu Settings panel has the three assistant toggles", panel.ai_checks.size() == 3)
+	_check("menu Settings panel has the three assistant toggles", ["ai_guidance", "ai_voice", "ai_captions"].all(func(k): return panel.ai_checks.has(k)))
 	panel.queue_free()
 
 

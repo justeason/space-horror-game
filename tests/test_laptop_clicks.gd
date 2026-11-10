@@ -42,8 +42,10 @@ func _init() -> void:
 	_check("Round 39: the click zooms in on the laptop's desktop (home)", ss.is_editing() and screen.current_view() == &"home" and screen.is_zoomed())
 	_check("Round 39: desktop shows icons + today note, no log text", screen._home.visible and not screen._entry_field.visible and screen._note.text.find("DAY") != -1)
 	await create_timer(0.6).timeout
-	await _cursor_click(screen, lap, screen.button(&"log"))
-	_check("clicking the Personal Log desktop icon opens the zoomed editor", ss.is_editing() and screen.current_view() == &"log")
+	# Round 44: the Personal Log lives in JOURNAL > Notes (private notes).
+	await _cursor_click(screen, lap, screen.button(&"journal"))
+	await _cursor_click(screen, lap, screen.button(&"journal_notes"))
+	_check("clicking Journal > Notes opens the zoomed private-notes editor", ss.is_editing() and screen.current_view() == &"log")
 	await create_timer(0.6).timeout
 	await _cursor_click(screen, lap, screen.button(&"back"))
 	_check("[Save & Back] returns to the desktop", ss.is_laptop_open() and not ss.is_editing())
@@ -59,9 +61,11 @@ func _init() -> void:
 	await create_timer(0.4).timeout
 
 	# ---- Click the on-screen Personal Log button. ----
-	await _aim_at_button(screen, lap, screen.button(&"log"))
+	await _aim_at_button(screen, lap, screen.button(&"journal"))
 	await _click()
-	_check("clicking [Personal Log] on the screen opens the editor (no T needed)", ss.is_editing())
+	await create_timer(0.6).timeout
+	await _cursor_click(screen, lap, screen.button(&"journal_notes"))
+	_check("clicking [Journal] then [Notes] on the screen opens the editor (no T needed)", ss.is_editing() and screen.current_view() == &"log")
 	_check("...with a visible cursor for the on-screen buttons", Input.mouse_mode == Input.MOUSE_MODE_VISIBLE)
 	for k in [KEY_H, KEY_I]:
 		var e := InputEventKey.new()
@@ -75,10 +79,11 @@ func _init() -> void:
 	_check("...and the entry was kept", lv._saved_entry.ends_with("hi"))
 	await create_timer(0.4).timeout
 
-	# ---- Shift Report app, Home, Close Laptop. ----
-	await _aim_at_button(screen, lap, screen.button(&"report"))
+	# ---- TODAY app (Round 44: replaces Schedule / Shift Report on the
+	# desktop), Home, Close Laptop. ----
+	await _aim_at_button(screen, lap, screen.button(&"note"))
 	await _click()
-	_check("clicking [Shift Report] zooms in on the live report (Round 38)", ss.is_editing() and screen.current_view() == &"report" and screen.get_node("Control/VBox/ReportView").text.find("SHIFT IN PROGRESS") != -1)
+	_check("clicking [Today] zooms in on the live day (status + work %%)", ss.is_editing() and screen.current_view() == &"note" and screen.get_node("Control/VBox/ReportView").text.find("WORK") != -1)
 	await create_timer(0.6).timeout
 	await _cursor_click(screen, lap, screen.button(&"home"))
 	_check("zoomed: clicking [< Desktop] returns to the desktop, still zoomed", screen.current_view() == &"home" and ss.is_editing())

@@ -28,7 +28,9 @@ func _init() -> void:
 func _laptop() -> void:
 	var lv: Node = main.get_node("Player/LaptopView")
 	var scr: Node = lv._log_screen
-	_check("desktop shows every app icon", [&"log", &"messages", &"schedule", &"photos", &"files", &"report", &"game"].all(func(a): return scr.button(a) != null and scr.button(a).is_visible_in_tree()))
+	# Round 44: Schedule / Shift Report folded into TODAY / Files, Personal
+	# Log into JOURNAL (private notes) -- the desktop shows the new set.
+	_check("desktop shows every app icon", [&"note", &"journal", &"messages", &"photos", &"files", &"game", &"holdout", &"handover"].all(func(a): return scr.button(a) != null and scr.button(a).is_visible_in_tree()))
 	# ZOOM BUG (root cause: zoom == the log editor): zoomed, every app stays.
 	scr._pending_app = &"messages"
 	scr.set_editing(true)

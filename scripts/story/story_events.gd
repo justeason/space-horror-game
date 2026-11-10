@@ -63,6 +63,15 @@ const EVENTS := {
 	&"note_extra_item": {"name": "Daily note: an item nobody issued", "phase": 2, "late": false, "chance": 0.4, "cooldown_days": 5, "max_plays": 2, "enabled": true, "implemented": true,
 		"needs": "Open TODAY'S NOTE on the laptop. One extra checklist line is shown (presentation only); it is gone the next time the note is opened. The note's History (archive) shows it was never issued.",
 		"variants": ["normal", "abnormal"]},
+	&"phantom_cycle": {"name": "Airlock heard cycling (nothing commanded)", "phase": 2, "late": false, "chance": 0.4, "cooldown_days": 4, "max_plays": 2, "enabled": true, "implemented": true,
+		"needs": "Inside, 8 m+ from the airlock, not suited. The airlock's latch + vent hiss + latch play FROM the airlock; no state change, no log entry. Going there = a check; the AIRLOCK record shows no cycle.",
+		"variants": ["normal"]},
+	&"access_ghost": {"name": "Access log: an entry you didn't make", "phase": 2, "late": false, "chance": 0.35, "cooldown_days": 5, "max_plays": 1, "enabled": true, "implemented": true,
+		"needs": "A module not yet entered today. The ACCESS record (workstation RECORDS) shows '<ROOM> · entered · TECH-1' earlier today (presentation only). Seen when the record is read.",
+		"variants": ["normal"]},
+	&"family_misremember": {"name": "Family letter quotes something never written", "phase": 2, "late": true, "chance": 0.5, "cooldown_days": 99, "max_plays": 1, "enabled": true, "implemented": true,
+		"needs": "A family answer already delivered (not on day 1). Its displayed text gains one detail the technician never wrote; 'Sent letters' shows the real reply.",
+		"variants": ["normal"]},
 	&"blind_spot_object": {"name": "Object in a camera blind spot", "phase": 2, "late": true, "chance": 0.4, "cooldown_days": 4, "max_plays": 2, "enabled": false, "implemented": false,
 		"needs": "NOT IMPLEMENTED (future round).", "variants": []},
 	&"radio_contact": {"name": "Unknown radio contact", "phase": 3, "late": false, "chance": 1.0, "cooldown_days": 99, "max_plays": 1, "enabled": false, "implemented": false,
@@ -137,11 +146,34 @@ var evidence: Array = []           # [{event, day, kind: observation|check|contr
 ## record id -> the events it can contradict (what the record shows).
 const RECORD_LINKS := {
 	"note_archive": {"events": ["note_extra_item"], "text": "The note archive shows one revision, no edits -- the extra line was never issued."},
-	"environment_log": {"events": ["wrong_reading"], "text": "The workstation log shows normal cabin pressure all day."},
+	"environment_log": {"events": ["wrong_reading"], "text": "The environment log shows normal cabin pressure all day."},
+	"airlock_log": {"events": ["phantom_cycle"], "text": "The airlock activity log records no cycle at that time."},
+	"access_log": {"events": ["access_ghost"], "text": "The access log records an entry the technician did not make."},
+	"sent_mail": {"events": ["family_misremember"], "text": "The sent letter does not contain the detail the answer quotes."},
 }
 const NOTE_LINES := {"normal": "Check the corridor feed before bed.", "abnormal": "Leave the corridor feed on tonight. It helps."}
 var _note_overlay: Dictionary = {}
 var _note_shown: bool = false
+## Round 44: presentation overlays for station records / letters.
+var _record_overlay: Dictionary = {}      # kind -> [{day, t, text}]
+var _family_overlay: Dictionary = {}      # conv -> extra text
+var _access_room: String = ""
+var _closed_today: int = 0
+var journal: Node
+var inner: Node
+var family: Node
+const ACCESS_ROOMS := {&"storage": "STORAGE", &"engineering": "ENGINEERING", &"life_support": "LIFE SUPPORT", &"communications": "COMMS"}
+const FAMILY_EXTRA := "And you said the corridor light keeps you awake. Try an eye mask?"
+const THOUGHTS := {
+	"note_archive": ["I didn't write that. Did I?", "那不是我写的。是吗？"],
+	"airlock_log": ["No cycle logged. I heard it.", "没有循环记录。可我听见了。"],
+	"access_log": ["That's strange. I haven't been in %s today.", "奇怪。我今天没去过%s。"],
+	"sent_mail": ["That's not what I wrote.", "我不是这么写的。"],
+	"environment_log": ["Those readings shouldn't be different.", "这些读数不该不一样。"],
+	"heard_phantom": ["Was that the airlock?", "是气闸的声音吗？"],
+	"note_seen": ["Was that always on the list?", "清单上一直有这一项吗？"],
+	"mail_seen": ["When did I tell her that?", "我什么时候跟她说过这个？"],
+}
 
 
 func _ready() -> void:
@@ -151,13 +183,22 @@ func _ready() -> void:
 	for id in EVENTS:
 		state[id] = _blank()
 	_presence = _build_presence()
+	journal = load("res://scripts/story/journal.gd").new()
+	journal.name = "Journal"
+	add_child(journal)
+	inner = load("res://scripts/story/inner_voice.gd").new()
+	inner.name = "InnerVoice"
+	add_child(inner)
+	family = load("res://scripts/story/family_mail.gd").new()
+	family.name = "FamilyMail"
+	add_child(family)
 	if _dp != null:
 		if _dp.has_signal(&"order_closed"):
-			_dp.order_closed.connect(func(t): note_duty(String(t)))
+			_dp.order_closed.connect(func(t): note_duty(String(t)); _closed_today += 1; journal.on_order_closed(String(t)))
 		if _dp.has_signal(&"task_completed"):
 			_dp.task_completed.connect(func(t): if t != &"c01": note_duty(String(t)))
 		if _dp.has_signal(&"day_started"):
-			_dp.day_started.connect(func(_d): _check_milestones())
+			_dp.day_started.connect(_on_day_started)
 	# Round 42: the developer panel exists ONLY in debug / development
 	# builds (never in an exported release build).
 	if OS.is_debug_build():
@@ -246,6 +287,8 @@ func _check_milestones() -> void:
 	if story_phase == 1 and has_milestone("intro_complete") and has_milestone("station_familiar") and has_milestone("handover_read"):
 		story_phase = 2
 		history.append({"id": "phase", "day": day(), "event": "phase_2"})
+		if journal != null:
+			journal.on_milestone("phase_2")
 	if story_phase >= 2 and seen_count() >= 2:
 		_add_milestone("late_phase_2")
 	var inv: int = investigations.filter(func(x): return not String(x).begins_with("_")).size()
@@ -253,6 +296,8 @@ func _check_milestones() -> void:
 		_add_milestone("reality_doubt")
 		story_phase = 3
 		history.append({"id": "phase", "day": day(), "event": "phase_3"})
+		if journal != null:
+			journal.on_milestone("phase_3")
 
 
 func seen_count() -> int:
@@ -268,6 +313,8 @@ func _investigated(id: String) -> void:
 		investigations.append(id)
 	history.append({"id": id, "day": day(), "event": "investigated"})
 	_add_evidence(id, "check", "Checked in person: nothing out of place.", "")
+	if journal != null:
+		journal.on_checked(id)
 	_check_milestones()
 
 
@@ -282,6 +329,8 @@ func _add_evidence(event_id: String, kind: String, text: String, ref: String) ->
 ## An anomaly was noticed (seen) -- an open question.
 func observe(event_id: String, text: String) -> void:
 	_add_evidence(event_id, "observation", text, "")
+	if journal != null:
+		journal.on_observed(event_id)
 
 
 ## "none" | "observed" | "checked" | "contradicted"
@@ -306,10 +355,15 @@ func on_record_checked(record_id: String) -> void:
 	var link: Dictionary = RECORD_LINKS.get(record_id, {})
 	for ev in Array(link.get("events", [])):
 		if investigation_state(String(ev)) in ["observed", "checked"] or (active == StringName(ev) and not active_dev):
+			var first: bool = investigation_state(String(ev)) != "contradicted"
 			_add_evidence(String(ev), "contradiction", String(link["text"]), record_id)
 			if not investigations.has(String(ev)):
 				investigations.append(String(ev))
 				history.append({"id": String(ev), "day": day(), "event": "investigated"})
+			if first:
+				if journal != null:
+					journal.on_contradiction(String(ev), record_id)
+				_thought(record_id)
 			_check_milestones()
 
 
@@ -342,6 +396,7 @@ func on_document_opened(doc_id: String) -> void:
 		var variant: String = "abnormal" if phase() >= 3 else "normal"
 		if _start(&"note_extra_item", variant):
 			_note_shown = true
+			_thought("note_seen")
 
 
 # ------------------------------------------------------------- arming
@@ -488,6 +543,147 @@ func _near_airlock() -> bool:
 	return cam != null and cam.global_position.x < -3.6 and cam.global_position.z < 0.6 and cam.global_position.z > -3.2
 
 
+func _far_from_airlock(m: float) -> bool:
+	var cam: Camera3D = _player_cam()
+	return cam != null and cam.global_position.distance_to(Vector3(-4.8, 1.6, -1.5)) >= m and cam.global_position.y < 3.0
+
+
+## A module the technician has not entered today (from the access log's
+## own first-entry record), or "" if none. dev: any (Storage first).
+func _unvisited_room(dev: bool) -> String:
+	var lg: Node = get_tree().get_first_node_in_group(&"station_log")
+	for r in ACCESS_ROOMS:
+		if dev or lg == null or not lg.visited_today(r):
+			return ACCESS_ROOMS[r]
+	return ""
+
+
+## A family thread whose answer has been delivered.
+func _family_target() -> String:
+	if family == null:
+		return ""
+	for c in family.ORDER:
+		if family.answer_delivered(c):
+			return c
+	return ""
+
+
+func _thought(id: String) -> void:
+	if inner == null or not THOUGHTS.has(id):
+		return
+	var en: String = THOUGHTS[id][0]
+	var zh: String = THOUGHTS[id][1]
+	if id == "access_log":
+		var room: String = _access_room if _access_room != "" else "STORAGE"
+		en = en % room.capitalize()
+		zh = zh % room
+	inner.think(id, en, zh)
+
+
+# ------------------------------------------------- records + letters
+## Presentation overlay lines for a station record kind (station_log.gd).
+func record_overlays(kind: String) -> Array:
+	return Array(_record_overlay.get(kind, []))
+
+
+func family_overlay(conv: String) -> String:
+	return String(_family_overlay.get(conv, ""))
+
+
+## A record view was opened (workstation RECORDS tabs / laptop).
+## Reading a record that carries an active anomaly = noticing it.
+func on_record_viewed(record_id: String) -> void:
+	if record_id == "access_log" and active == &"access_ghost":
+		if not active_dev:
+			var st: Dictionary = state[&"access_ghost"]
+			st["seen"] = true
+			observe("access_ghost", EVENTS[&"access_ghost"]["name"])
+		var lg: Node = get_tree().get_first_node_in_group(&"station_log")
+		var room_key: StringName = &""
+		for r in ACCESS_ROOMS:
+			if ACCESS_ROOMS[r] == _access_room:
+				room_key = r
+		if lg == null or not lg.visited_today(room_key):
+			on_record_checked("access_log")
+	else:
+		on_record_checked(record_id)
+
+
+## A letter thread was opened on the laptop.
+func on_letter_opened(conv: String) -> void:
+	if active == &"family_misremember" and _family_overlay.has(conv):
+		if not active_dev:
+			state[&"family_misremember"]["seen"] = true
+			observe("family_misremember", EVENTS[&"family_misremember"]["name"])
+		_thought("mail_seen")
+
+
+# ------------------------------------------------------- day + chapter
+func _on_day_started(d: int) -> void:
+	if journal != null and d > 1:
+		journal.on_shift_summary(d - 1, _closed_today)
+	_closed_today = 0
+	# Presentation anomalies tied to a day end with it.
+	if active in [&"access_ghost", &"family_misremember"]:
+		stop(bool(state[active]["seen"]))
+	_check_milestones()
+	_check_chapter()
+
+
+## Round 44 Priority 17: CHAPTER ONE ends (a demo stopping point, never a
+## lock) once phase 2 has begun and EITHER one contradiction was found
+## through a record, OR (the player missed every clue) four more days
+## have passed in phase 2. Several routes: note archive, airlock log,
+## access log, sent letters, environment log.
+var phase2_day: int = -1
+signal chapter_complete(chapter: int)
+
+
+func chapter_one_complete() -> bool:
+	return milestones.has("chapter_1")
+
+
+func _check_chapter() -> void:
+	if chapter_one_complete() or story_phase < 2:
+		return
+	if phase2_day < 0:
+		phase2_day = day()
+	var contra: bool = evidence.any(func(e): return String(e["kind"]) == "contradiction")
+	if contra or day() >= phase2_day + 4:
+		_add_milestone("chapter_1")
+		if journal != null:
+			journal.on_milestone("chapter_1")
+		chapter_complete.emit(1)
+		_show_chapter_card()
+
+
+func _show_chapter_card() -> void:
+	if not is_inside_tree():
+		return
+	var layer := CanvasLayer.new()
+	layer.layer = 9
+	layer.name = "ChapterCard"
+	var bg := ColorRect.new()
+	bg.color = Color(0, 0, 0, 0.72)
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(bg)
+	var l := Label.new()
+	l.text = "END OF CHAPTER ONE\n\nThe station keeps its own records.\nSo do you.\n\n(the station runs on — keep playing)"
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	l.set_anchors_preset(Control.PRESET_FULL_RECT)
+	l.add_theme_font_size_override("font_size", 24)
+	l.add_theme_color_override("font_color", Color(0.92, 0.88, 0.78))
+	layer.add_child(l)
+	get_parent().add_child(layer)
+	var tw := layer.create_tween()
+	tw.tween_interval(7.0)
+	tw.tween_property(bg, "color:a", 0.0, 1.5)
+	tw.parallel().tween_property(l, "modulate:a", 0.0, 1.5)
+	tw.tween_callback(layer.queue_free)
+
+
 # ------------------------------------------------------------ loop
 func _process(delta: float) -> void:
 	if _dp == null:
@@ -496,9 +692,9 @@ func _process(delta: float) -> void:
 		_watch_s += delta
 	for k in _pending_investigation.keys():
 		_pending_investigation[k] = float(_pending_investigation[k]) - delta
-		if k == "hatch_handle" and _near_airlock():
+		if (k == "hatch_handle" or k == "phantom_cycle") and _near_airlock():
 			_pending_investigation.erase(k)
-			_investigated("hatch_handle")
+			_investigated(k)
 		elif float(_pending_investigation.get(k, 0.0)) <= 0.0:
 			_pending_investigation.erase(k)
 	if active != &"":
@@ -536,6 +732,15 @@ func _process(delta: float) -> void:
 				_gaze_s = 0.0
 		&"hatch_handle":
 			if not _eva_busy() and not _near_airlock() and float(_dp.shift_elapsed_s) > 60.0:
+				_start(armed, variant)
+		&"phantom_cycle":
+			if not _eva_busy() and _far_from_airlock(8.0) and float(_dp.shift_elapsed_s) > 90.0 and day() > 1:
+				_start(armed, variant)
+		&"access_ghost":
+			if float(_dp.shift_elapsed_s) > 120.0 and _unvisited_room(false) != "" and day() > 1:
+				_start(armed, variant)
+		&"family_misremember":
+			if day() > 1 and _family_target() != "":
 				_start(armed, variant)
 
 
@@ -585,6 +790,26 @@ func _start(id: StringName, variant: String = "normal", dev: bool = false) -> bo
 		&"note_extra_item":
 			_note_overlay = {"kind": "extra_item", "text": NOTE_LINES.get(variant, NOTE_LINES["normal"]), "event": "note_extra_item"}
 			_note_shown = false
+		&"phantom_cycle":
+			var snd: Node = get_tree().get_first_node_in_group(&"station_sounds")
+			if snd == null:
+				_abort_start()
+				return false
+			snd.phantom_cycle()
+		&"access_ghost":
+			var room: String = _unvisited_room(dev)
+			if room == "":
+				_abort_start()
+				return false
+			_access_room = room
+			var m: int = maxi((_dp.clock_minutes() if _dp != null else 600) - 25 - absi(hash([day(), "ghost"])) % 30, 8 * 60)
+			_record_overlay["access"] = [{"day": day(), "t": "%02d:%02d" % [m / 60, m % 60], "text": "%s · entered · TECH-1" % room}]
+		&"family_misremember":
+			var conv: String = _family_target()
+			if conv == "":
+				_abort_start()
+				return false
+			_family_overlay = {conv: FAMILY_EXTRA}
 	return true
 
 
@@ -631,6 +856,15 @@ func _update_active(delta: float) -> void:
 		&"note_extra_item":
 			if _active_t >= 900.0:
 				stop(true)
+		&"phantom_cycle":
+			var snd2: Node = get_tree().get_first_node_in_group(&"station_sounds")
+			if snd2 == null or (not snd2.phantom_active() and _active_t > 5.0):
+				# Heard (the whole station hears the airlock). Going there
+				# within a few minutes counts as checking it.
+				_thought("heard_phantom")
+				stop(true)
+		&"access_ghost", &"family_misremember":
+			pass        # presentation lasts the day; seen when the record / letter is read
 		&"hatch_handle":
 			_hatch_animate()
 			if _feed_on_screen("EXT-02") or _feed_on_screen("INT-07"):
@@ -671,6 +905,16 @@ func stop(seen: bool = false) -> void:
 				_pending_investigation["hatch_handle"] = 120.0
 		&"note_extra_item":
 			_note_overlay = {}
+		&"phantom_cycle":
+			var snd3: Node = get_tree().get_first_node_in_group(&"station_sounds")
+			if snd3 != null:
+				snd3.stop_phantom()
+			if seen and not dev:
+				_pending_investigation["phantom_cycle"] = 240.0
+		&"access_ghost":
+			_record_overlay.erase("access")
+		&"family_misremember":
+			_family_overlay = {}
 	if seen and not dev:
 		observe(String(id), EVENTS[id]["name"])
 	if not dev:
@@ -941,7 +1185,7 @@ func state_dict() -> Dictionary:
 	for id in state:
 		ev[String(id)] = state[id].duplicate()
 	return {"events": ev, "feed_days": feed_days.duplicate(true), "armed_for_day": armed_for_day,
-		"story": {"version": 2, "phase": story_phase, "milestones": milestones.duplicate(), "duties": duty_kinds.duplicate(), "investigations": investigations.duplicate(), "evidence": evidence.duplicate(true)}}
+		"story": {"version": 2, "phase": story_phase, "milestones": milestones.duplicate(), "duties": duty_kinds.duplicate(), "investigations": investigations.duplicate(), "evidence": evidence.duplicate(true), "phase2_day": phase2_day, "closed_today": _closed_today}}
 
 
 func load_dict(d: Dictionary) -> void:
@@ -987,6 +1231,8 @@ func load_dict(d: Dictionary) -> void:
 		milestones = Array(sd.get("milestones", [])).map(func(x): return String(x))
 		duty_kinds = Array(sd.get("duties", [])).map(func(x): return String(x))
 		investigations = Array(sd.get("investigations", [])).map(func(x): return String(x))
+	phase2_day = int(sd.get("phase2_day", -1))
+	_closed_today = int(sd.get("closed_today", 0))
 	evidence = []
 	for e in Array(sd.get("evidence", [])):
 		if e is Dictionary:

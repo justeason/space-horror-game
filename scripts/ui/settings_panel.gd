@@ -19,6 +19,7 @@ var size_option: OptionButton
 var sens_slider: HSlider
 var invert_check: CheckBox
 var reduce_check: CheckBox
+var brightness_slider: HSlider
 var language_option: OptionButton
 var back_button: Button
 var ai_checks := {}
@@ -112,6 +113,16 @@ func _build() -> void:
 	invert_check.button_pressed = bool(GS.get_value("invert_y"))
 	invert_check.toggled.connect(func(on): GS.set_value("invert_y", on))
 	r4.add_child(invert_check)
+	var rb := _row("SET_BRIGHTNESS")
+	var bs := HSlider.new()
+	bs.min_value = 0.7
+	bs.max_value = 1.4
+	bs.step = 0.05
+	bs.custom_minimum_size = Vector2(220, 0)
+	bs.value = float(GS.get_value("brightness"))
+	bs.value_changed.connect(func(v): GS.set_value("brightness", v))
+	rb.add_child(bs)
+	brightness_slider = bs
 	var r6 := _row("SET_REDUCE_FX")
 	reduce_check = CheckBox.new()
 	reduce_check.text = "On"
@@ -128,6 +139,15 @@ func _build() -> void:
 		cb.toggled.connect(func(on): GS.set_value(k, on))
 		ar.add_child(cb)
 		ai_checks[key] = cb
+	for key in ["thought_voice", "thought_captions"]:
+		var tr_row := _row("SET_" + key.to_upper())
+		var tcb := CheckBox.new()
+		tcb.text = "On"
+		tcb.button_pressed = bool(GS.get_value(key))
+		var tk: String = key
+		tcb.toggled.connect(func(on): GS.set_value(tk, on))
+		tr_row.add_child(tcb)
+		ai_checks[key] = tcb
 	var controls := Label.new()
 	controls.text = tr("SET_CONTROLS") + ": " + tr("CONTROLS_TEXT")
 	controls.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

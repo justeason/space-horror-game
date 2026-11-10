@@ -87,15 +87,18 @@ func _cyl(r: float, length: float, pos: Vector3, along_x: bool, mat: Material) -
 
 ## Round 42 Priority 21: the accent strips are a dim GUIDE glow, not a
 ## light source (playtest: "too bright"). Emission was col x 1.6.
-const STRIP_GLOW := 0.55
+## Round 44 Priority 15 (playtest: strips now too weak): 0.55 -> 0.78.
+const STRIP_GLOW := 0.78
+## Storage floor guidance strips: dimmer than the ceiling accents (-30%).
+const FLOOR_GLOW := 0.38
 
 
-func _strip(size: Vector3, pos: Vector3, col: Color, zone: StringName) -> void:
-	var m := _m(col * 0.25, 0.0, col * STRIP_GLOW)
+func _strip(size: Vector3, pos: Vector3, col: Color, zone: StringName, glow: float = STRIP_GLOW) -> void:
+	var m := _m(col * 0.25, 0.0, col * glow)
 	m.emission_energy_multiplier = 1.0
 	var mi := _box(size, pos, m)
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	strips.append({"mat": m, "zone": zone, "color": col})
+	strips.append({"mat": m, "zone": zone, "color": col, "glow": glow})
 
 
 func _near_equipment(p: Vector3, r: float = 0.55) -> bool:
@@ -184,12 +187,12 @@ func _round43_details(geo: Node) -> void:
 				var mid: float = (lo + hi) * 0.5
 				var inset: float = float(face) - (n.x if n.x != 0 else n.z) * 0.045
 				var pos: Vector3 = Vector3(inset, 0.012, mid) if not along_x else Vector3(mid, 0.012, inset)
-				_strip(Vector3(0.025, 0.012, hi - lo) if not along_x else Vector3(hi - lo, 0.012, 0.025), pos, col, &"")
+				_strip(Vector3(0.025, 0.012, hi - lo) if not along_x else Vector3(hi - lo, 0.012, 0.025), pos, col, &"", FLOOR_GLOW)
 		for corner in [Vector3(-0.6, 0, -0.6), Vector3(0.6, 0, 0.6)]:
 			var l := OmniLight3D.new()
 			l.name = "StorageFloorFill"
 			l.light_color = Color(0.75, 0.88, 1.0)
-			l.light_energy = 0.45
+			l.light_energy = 0.32          # Round 44: -29% (playtest: too bright)
 			l.omni_range = 1.9
 			l.omni_attenuation = 1.4
 			l.shadow_enabled = false
@@ -528,7 +531,7 @@ func _process(delta: float) -> void:
 	var br: Node = get_parent().get_node_or_null("Equipment/BreakerPanel")
 	for s in strips:
 		var on: bool = s["zone"] == &"" or br == null or br.zone_powered(s["zone"])
-		(s["mat"] as StandardMaterial3D).emission = (s["color"] as Color) * (STRIP_GLOW if on else 0.0)
+		(s["mat"] as StandardMaterial3D).emission = (s["color"] as Color) * (float(s.get("glow", STRIP_GLOW)) if on else 0.0)
 
 
 func strip_lit(zone: StringName) -> bool:

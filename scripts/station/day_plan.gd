@@ -105,6 +105,14 @@ func _ready() -> void:
 	var v: CanvasLayer = preload("res://scripts/ui/fatigue_vignette.gd").new()
 	v.name = "FatigueVignette"
 	add_child(v)
+	# Round 44: the consultable station records + positional station sounds.
+	var lg: Node = preload("res://scripts/station/station_log.gd").new()
+	lg.name = "StationLog"
+	add_child(lg)
+	var snd: Node = preload("res://scripts/audio/station_sounds.gd").new()
+	snd.name = "StationSounds"
+	add_child(snd)
+	preload("res://scripts/station/game_settings.gd").apply_one.call_deferred("brightness")
 
 
 # ======================================================================
@@ -179,7 +187,36 @@ func entertainment_allowed() -> Dictionary:
 		return {"ok": false, "reason": "STATION ALERT — %s. Games are locked until it is resolved." % String(ss.emergency().get("title", "EMERGENCY"))}
 	if _eva_active():
 		return {"ok": false, "reason": "Not while suited up."}
+	var env: Node = get_node_or_null(^"../EnvironmentModel")
+	if env != null and int(env.get("severity")) > 0:
+		return {"ok": false, "reason": "AIR QUALITY ALARM. Deal with it first."}
 	return {"ok": true, "reason": ""}
+
+
+# ======================================================================
+# Round 44 Priority 1: TIME DOMAINS (one authority, this node).
+#   GAMEPLAY TIME  -- the shift clock and everything keyed to it (orbit,
+#                     scheduled emergencies, routines, bedtime grace,
+#                     tiredness, ordinary environment drift via
+#                     gameplay_delta()). Held by named reasons:
+#                     &"waking" (implicit), &"laptop" (focused personal
+#                     laptop, ANY app), &"entertainment" (legacy name).
+#   UI TIME        -- laptop navigation, app animations, minigames: real
+#                     frame delta, never held.
+#   CRITICAL TIMERS-- a live emergency's own countdown (equipment
+#                     emergency_info) is never held: focused laptop use is
+#                     refused during one, and one that starts during laptop
+#                     focus ends the focus at once (session_log_screen).
+#   STORY PRESENTATION / AUDIO -- run on real time (a story event may play
+#                     while the clock is held; audio is never paused).
+# ======================================================================
+func laptop_focus_allowed() -> Dictionary:
+	return entertainment_allowed()
+
+
+## The delta gameplay systems outside DayPlan should advance by.
+func gameplay_delta(delta: float) -> float:
+	return 0.0 if clock_paused() else delta
 
 
 ## The day starts once the technician is up (sleep_state reports not
@@ -456,6 +493,8 @@ func fire_emergency(kind: String = "overload", seed: int = -1) -> void:
 		return
 	var c: int = pw.surge(seed if seed >= 0 else day_number)
 	log_event("EMERGENCY: Bus A overload (%s)" % pw.CHANNELS[c], &"emergency")
+	if is_inside_tree():
+		get_tree().call_group(&"journal", &"on_emergency", day_number)
 	var existing: Array = orders.filter(func(o): return o["status"] == "open" and String(o["type"]) == "power")
 	if existing.is_empty():
 		_order_seq += 1
@@ -756,6 +795,8 @@ func _end_shift() -> void:
 		_notify("Shift over. Finish safely and come back in through the airlock.")
 	else:
 		_notify("Shift over. Return to your bunk and rest.")
+	if day_number == 1:
+		_ai_event(&"save_hint")
 	shift_ended_signal.emit(day_number)
 
 

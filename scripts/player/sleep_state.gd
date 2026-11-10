@@ -699,6 +699,7 @@ func _kill_eyes_tween() -> void:
 func open_laptop(zoom_in: bool = false) -> void:
 	if _state != State.SITTING or _lying:
 		return
+	get_tree().call_group(&"station_ai", &"event", &"laptop_intro")
 	_state = State.LAPTOP
 	if _player_body.has_method("set_seated_head_follow"):
 		_player_body.set_seated_head_follow(false)
@@ -774,6 +775,13 @@ func close_laptop() -> void:
 func begin_editing() -> void:
 	if _state != State.LAPTOP:
 		return
+	# Round 44 Priority 1: focused laptop use pauses station time, so it is
+	# refused while a genuine emergency runs (exiting is always allowed).
+	if _day_plan != null and _day_plan.has_method("laptop_focus_allowed"):
+		var ok: Dictionary = _day_plan.laptop_focus_allowed()
+		if not ok["ok"]:
+			_task_message(String(ok["reason"]))
+			return
 	_state = State.EDITING
 	_laptop_view.begin_editing()
 	_look_controller.escape_enabled = false

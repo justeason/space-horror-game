@@ -618,11 +618,31 @@ func _duty_details(d: Dictionary) -> Array:
 
 
 # --------------------------------------------------------------- RECORDS
+## Round 44 Priority 9: RECORDS tabs -- the daily summary plus the four
+## consultable station logs (station_log.gd). Opening a log tab tells the
+## story director a record was consulted (investigations).
+const RECORD_TABS := [["summary", "SUMMARY"], ["airlock", "AIRLOCK"], ["camera", "CAMERAS"], ["environment", "ENVIRONMENT"], ["access", "ACCESS"]]
+var record_tab: String = "summary"
+var record_buttons: Dictionary = {}
+
+
+func select_record_tab(id: String) -> void:
+	record_tab = id
+	for k in record_buttons:
+		(record_buttons[k] as Button).modulate = Color(1, 0.85, 0.45) if k == id else Color(1, 1, 1)
+	if id != "summary" and is_inside_tree():
+		get_tree().call_group(&"story_events", &"on_record_viewed", id + "_log")
+	_refresh_records()
+
+
 func _build_records() -> void:
 	var p: Control = _pages[Page.RECORDS]
+	for i in RECORD_TABS.size():
+		var t: Array = RECORD_TABS[i]
+		record_buttons[t[0]] = _btn(t[1], Vector2(10 + i * 124, 2), Vector2(120, 22), p, select_record_tab.bind(t[0]), 11)
 	var sc := ScrollContainer.new()
-	sc.position = Vector2(10, 4)
-	sc.size = Vector2(620, 330)
+	sc.position = Vector2(10, 28)
+	sc.size = Vector2(620, 306)
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	p.add_child(sc)
 	_records = Label.new()
@@ -634,6 +654,10 @@ func _build_records() -> void:
 
 
 func _refresh_records() -> void:
+	if record_tab != "summary":
+		var lg: Node = get_tree().get_first_node_in_group(&"station_log") if is_inside_tree() else null
+		_records.text = "\n".join(lg.lines(record_tab, 18)) if lg != null else "(no station log)"
+		return
 	var lines: Array[String] = ["TODAY · DAY %d" % dp.day_number]
 	var log: Array = Array(dp.day_log())
 	if log.is_empty():

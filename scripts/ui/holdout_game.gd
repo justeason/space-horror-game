@@ -74,6 +74,22 @@ const KINDS := {
 	"bloater": {"hp": 26.0, "speed": 15.0, "dmg": 0.0, "r": 7.0, "credits": 6, "color": Color(0.75, 0.55, 0.4), "wave": 6},
 	"armored": {"hp": 40.0, "speed": 17.0, "dmg": 10.0, "r": 6.0, "credits": 7, "color": Color(0.55, 0.6, 0.65), "wave": 7},
 	"elite": {"hp": 380.0, "speed": 15.0, "dmg": 24.0, "r": 11.0, "credits": 30, "color": Color(0.7, 0.3, 0.3), "wave": 5},
+	# Round 44: LURKER waits dormant INSIDE buildings and ambushes; SPEWER
+	# leaves acid puddles behind it (area denial: keep moving).
+	"lurker": {"hp": 24.0, "speed": 48.0, "dmg": 10.0, "r": 4.5, "credits": 6, "color": Color(0.5, 0.45, 0.6), "wave": 4},
+	"spewer": {"hp": 30.0, "speed": 16.0, "dmg": 5.0, "r": 6.0, "credits": 7, "color": Color(0.6, 0.75, 0.2), "wave": 6},
+}
+const ACID_EVERY := 1.4
+const ACID_LIFE := 6.0
+const ACID_R := 9.0
+const ACID_DPS := 7.0
+const LURK_WAKE := 70.0
+## Round 44 Priority 11: EASY = the Round 43 balance; HARD = more zombies,
+## faster escalation, earlier variety, deadlier combinations -- not just
+## more health. Rewards scale a little so the harder run pays.
+const DIFFICULTY := {
+	"easy": {"name": "EASY", "count": 1.0, "interval": 1.0, "unlock_shift": 0, "hp_growth": 0.08, "speed": 1.0, "max_alive": 70, "credits": 1.0, "elite_every": 5},
+	"hard": {"name": "HARD", "count": 1.75, "interval": 0.7, "unlock_shift": 2, "hp_growth": 0.12, "speed": 1.08, "max_alive": 95, "credits": 1.3, "elite_every": 4},
 }
 const SPIT_RANGE := Vector2(85.0, 135.0)
 const SPIT_CD := 2.6
@@ -92,8 +108,14 @@ const WEAPONS := {
 	"shotgun": {"name": "SHOTGUN", "interval": 0.95, "dmg": 6.0, "range": 85.0, "speed": 240.0, "pellets": 6, "spread": 0.55, "pierce": 0, "ap": false, "cost": 90, "color": Color(1.0, 0.6, 0.3)},
 	"rifle": {"name": "RIFLE", "interval": 1.1, "dmg": 34.0, "range": 230.0, "speed": 430.0, "pellets": 1, "spread": 0.0, "pierce": 3, "ap": true, "cost": 140, "color": Color(0.85, 0.95, 1.0)},
 	"arc": {"name": "ARC COIL", "interval": 0.8, "dmg": 13.0, "range": 150.0, "speed": 0.0, "pellets": 1, "spread": 0.0, "pierce": 3, "ap": true, "cost": 260, "color": Color(0.55, 0.85, 1.0)},
+	# Round 44: MACHETE (emergency melee: a wide swing at everything close)
+	# and LAUNCHER (late unlock: a lobbed grenade, area blast at the target).
+	"machete": {"name": "MACHETE", "interval": 0.45, "dmg": 16.0, "range": 26.0, "speed": 0.0, "pellets": 1, "spread": 0.0, "pierce": 0, "ap": false, "cost": 30, "color": Color(0.9, 0.9, 0.85)},
+	"launcher": {"name": "LAUNCHER", "interval": 1.6, "dmg": 30.0, "range": 175.0, "speed": 170.0, "pellets": 1, "spread": 0.0, "pierce": 0, "ap": true, "cost": 320, "color": Color(1.0, 0.55, 0.25)},
 }
-const WEAPON_ORDER := ["pistol", "smg", "shotgun", "rifle", "arc"]
+const WEAPON_ORDER := ["pistol", "machete", "smg", "shotgun", "rifle", "arc", "launcher"]
+const SWING_ARC := 1.2           # radians either side of the target direction
+const GRENADE_R := 34.0
 const ARC_JUMP := 62.0
 
 ## id -> [label, max rank, [costs per rank], per-rank effect text]
@@ -119,6 +141,9 @@ var ranks: Dictionary = {}
 var runs: int = 0
 var unlocked: Dictionary = {"pistol": true}
 var weapon: String = "pistol"
+var difficulty: String = "easy"
+var best_by: Dictionary = {"easy": 0, "hard": 0}
+var best_wave_by: Dictionary = {"easy": 0, "hard": 0}
 ## Run state.
 var mode: String = "title"        # title | play | shop | paused | over
 var player := START
@@ -137,6 +162,9 @@ var pickups: Array = []           # {pos, kind: "scrap"|"medkit", value, life}
 var corpses: Array = []           # {pos, kind, t, r, col}
 var beams: Array = []             # {pts, t}
 var fx: Array = []                # {pos, t, col}
+var acid: Array = []              # {pos, life}
+var grenades: Array = []          # {pos, target, dmg}
+var buildings: Array = []         # {name, rect, doors: [{out, in}], kind}
 var shots_fired: int = 0
 var damage_taken: float = 0.0
 var hurt_flash: float = 0.0
@@ -211,7 +239,7 @@ func _ready() -> void:
 	_ov_buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	_ov_buttons.add_theme_constant_override("separation", 6)
 	_overlay.add_child(_ov_buttons)
-	for spec in [["start", "START"], ["resume", "RESUME"], ["continue", "NEXT WAVE"], ["shop", "ARMORY"], ["restart", "RESTART"], ["back", "BACK"], ["desktop", "DESKTOP"]]:
+	for spec in [["diff_easy", "EASY"], ["diff_hard", "HARD"], ["start", "START"], ["resume", "RESUME"], ["continue", "NEXT WAVE"], ["shop", "ARMORY"], ["restart", "RESTART"], ["back", "BACK"], ["desktop", "DESKTOP"]]:
 		var b := _button(_ov_buttons, spec[1], 10, Vector2.ZERO)
 		var id: String = spec[0]
 		b.pressed.connect(func(): action(id))
@@ -271,14 +299,15 @@ func build_map() -> void:
 	for x in [520.0, 1300.0]:
 		roads.append(Rect2(x - 22, 0, 44, WORLD.size.y))
 	# Named landmark buildings (solid; bullets stop).
-	for spec in [["MOTEL", Rect2(120, 110, 230, 120)], ["PHARMACY", Rect2(640, 110, 150, 110)], ["FUEL STOP", Rect2(1390, 120, 170, 90)],
-			["CHAPEL", Rect2(130, 420, 120, 150)], ["BUS DEPOT", Rect2(1420, 950, 260, 130)], ["DINER", Rect2(640, 960, 150, 100)]]:
+	for spec in [["MOTEL", Rect2(120, 110, 230, 120)], ["FUEL STOP", Rect2(1390, 120, 170, 90)],
+			["CHAPEL", Rect2(130, 420, 120, 150)], ["BUS DEPOT", Rect2(1420, 950, 260, 130)]]:
 		_solid(spec[1], "building")
 		landmarks.append({"name": spec[0], "rect": spec[1]})
 	# Plain buildings fill the blocks (never the plaza around START).
 	for r in [Rect2(880, 120, 120, 90), Rect2(1060, 140, 90, 120), Rect2(1640, 360, 120, 140), Rect2(1420, 420, 110, 90),
-			Rect2(140, 960, 140, 120), Rect2(330, 1000, 110, 90), Rect2(1640, 620, 110, 150), Rect2(980, 990, 130, 110)]:
+			Rect2(345, 1000, 110, 90), Rect2(1640, 620, 110, 150), Rect2(980, 990, 130, 110)]:
 		_solid(r, "building")
+	_build_interiors()
 	# Park (west of the plaza): fence with a gap + trees.
 	var park := Rect2(600, 420, 230, 160)
 	landmarks.append({"name": "PARK", "rect": park})
@@ -316,6 +345,110 @@ func build_map() -> void:
 
 func _solid(r: Rect2, kind: String) -> void:
 	obstacles.append({"rect": r, "kind": kind, "solid_bullets": true})
+
+
+# ======================================================================
+# Round 44 Priority 12: ENTERABLE BUILDINGS. Walls (6 px, solid, stop
+# bullets) with real door gaps, interior partitions, furniture (counters /
+# tables block movement but not bullets; shelves block both), interior
+# supply spots. The ROOF hides the inside (and any zombie in it) until the
+# survivor walks in. Zombies use the doors: a zombie in a different space
+# than the survivor heads for the nearest door of the building it is in /
+# the survivor is in (door points just outside and just inside).
+# ======================================================================
+const WALL := 6.0
+const DOOR := 24.0
+
+
+func _build_interiors() -> void:
+	buildings = []
+	# HOUSE: living room, bedroom, small kitchen.
+	_interior("HOUSE", Rect2(120, 950, 200, 150), "house", [["n", 0.25], ["e", 0.75]],
+		[Rect2(200, 950, WALL, 36), Rect2(200, 1010, WALL, 90), Rect2(206, 1030, 50, WALL), Rect2(280, 1030, 40, WALL)],
+		[[Rect2(128, 995, 10, 40), "sofa", false], [Rect2(142, 1045, 26, 18), "table", false], [Rect2(262, 1052, 40, 26), "bed", false], [Rect2(298, 958, 14, 32), "wardrobe", true], [Rect2(212, 960, 30, 10), "counter", false]],
+		[Vector2(300, 1090), Vector2(230, 1000)])
+	# PHARMACY: three shelf aisles, a counter, a back store room.
+	_interior("PHARMACY", Rect2(640, 110, 150, 110), "store", [["s", 0.3]],
+		[Rect2(758, 110, WALL, 40), Rect2(758, 176, WALL, 44)],
+		[[Rect2(664, 128, 8, 56), "shelf", true], [Rect2(694, 128, 8, 56), "shelf", true], [Rect2(724, 128, 8, 56), "shelf", true], [Rect2(650, 198, 30, 8), "counter", false], [Rect2(768, 124, 14, 10), "boxes", true]],
+		[Vector2(776, 200), Vector2(708, 120)])
+	# DINER: booths, a long counter, kitchen with a back door.
+	_interior("DINER", Rect2(640, 960, 150, 100), "diner", [["n", 0.35], ["e", 0.8]],
+		[Rect2(730, 1020, 60, WALL)],
+		[[Rect2(652, 974, 20, 12), "table", false], [Rect2(652, 1004, 20, 12), "table", false], [Rect2(652, 1034, 20, 12), "table", false], [Rect2(690, 980, 8, 34), "counter", false], [Rect2(742, 1034, 30, 12), "stove", true]],
+		[Vector2(770, 1046), Vector2(680, 1046)])
+
+
+func _interior(name: String, r: Rect2, kind: String, doors: Array, partitions: Array, furniture: Array, supplies: Array) -> void:
+	var b := {"name": name, "rect": r, "kind": kind, "doors": []}
+	for side in ["n", "s", "w", "e"]:
+		var horiz: bool = side in ["n", "s"]
+		var length: float = r.size.x if horiz else r.size.y
+		var gaps: Array = []
+		for d in doors:
+			if d[0] == side:
+				gaps.append(float(d[1]) * length)
+		var cur: float = 0.0
+		gaps.sort()
+		for g in gaps + [INF]:
+			var g0: float = minf(g - DOOR * 0.5, length) if g != INF else length
+			if g0 - cur > 0.5:
+				var seg: Rect2
+				if horiz:
+					seg = Rect2(r.position.x + cur, (r.position.y if side == "n" else r.end.y - WALL), g0 - cur, WALL)
+				else:
+					seg = Rect2((r.position.x if side == "w" else r.end.x - WALL), r.position.y + cur, WALL, g0 - cur)
+				obstacles.append({"rect": seg, "kind": "wall", "solid_bullets": true, "building": name})
+			if g != INF:
+				cur = g + DOOR * 0.5
+				var c: Vector2 = (Vector2(r.position.x + g, r.position.y if side == "n" else r.end.y) if horiz else Vector2(r.position.x if side == "w" else r.end.x, r.position.y + g))
+				var out_dir: Vector2 = {"n": Vector2(0, -1), "s": Vector2(0, 1), "w": Vector2(-1, 0), "e": Vector2(1, 0)}[side]
+				b["doors"].append({"out": c + out_dir * 12.0, "in": c - out_dir * 14.0, "at": c})
+	for pr in partitions:
+		obstacles.append({"rect": pr, "kind": "wall", "solid_bullets": true, "building": name})
+	for f in furniture:
+		obstacles.append({"rect": f[0], "kind": "furniture", "label": f[1], "solid_bullets": bool(f[2]), "building": name})
+	for sp in supplies:
+		supply_points.append(sp)
+	b["supplies"] = supplies
+	buildings.append(b)
+	landmarks.append({"name": name, "rect": r, "interior": true})
+
+
+## Index of the building whose interior contains p (-1 = outdoors).
+func building_at(p: Vector2) -> int:
+	for i in buildings.size():
+		if (buildings[i]["rect"] as Rect2).grow(-1.0).has_point(p):
+			return i
+	return -1
+
+
+func player_building() -> int:
+	return building_at(player)
+
+
+func _nearest_door(bi: int, p: Vector2) -> Dictionary:
+	var best: Dictionary = {}
+	var bd: float = INF
+	for d in buildings[bi]["doors"]:
+		var dd: float = p.distance_to(d["at"])
+		if dd < bd:
+			bd = dd
+			best = d
+	return best
+
+
+## Where a zombie at zp should head to reach the survivor across walls.
+func nav_goal(zp: Vector2) -> Vector2:
+	var zb: int = building_at(zp)
+	var pb: int = player_building()
+	if zb == pb:
+		return player
+	if zb != -1:
+		var d: Dictionary = _nearest_door(zb, zp)
+		return d["out"] if zp.distance_to(d["in"]) < 8.0 or zp.distance_to(d["at"]) < 10.0 else d["in"]
+	var d2: Dictionary = _nearest_door(pb, zp)
+	return d2["in"] if zp.distance_to(d2["out"]) < 8.0 or zp.distance_to(d2["at"]) < 10.0 else d2["out"]
 
 
 func landmark_names() -> Array:
@@ -500,6 +633,10 @@ func weapon_action(id: String) -> bool:
 # ---------------------------------------------------------------- flow
 func action(id: String) -> void:
 	match id:
+		"diff_easy":
+			set_difficulty("easy")
+		"diff_hard":
+			set_difficulty("hard")
 		"start", "restart":
 			start_run()
 		"resume":
@@ -548,6 +685,8 @@ func start_run() -> void:
 	corpses = []
 	beams = []
 	fx = []
+	acid = []
+	grenades = []
 	held = {}
 	message = ""
 	_begin_wave(1)
@@ -562,10 +701,30 @@ func start_seeded(s: int) -> void:
 	_rng.seed = s
 
 
+func diff() -> Dictionary:
+	return DIFFICULTY.get(difficulty, DIFFICULTY["easy"])
+
+
+func set_difficulty(d: String) -> void:
+	if DIFFICULTY.has(d) and mode in ["title", "over", "shop"]:
+		difficulty = d
+		best = int(best_by.get(d, 0))
+		best_wave = int(best_wave_by.get(d, 0))
+		_refresh_overlay()
+
+
+func max_alive() -> int:
+	return int(diff()["max_alive"])
+
+
+func wave_size(n: int) -> int:
+	return int(round((6 + 4 * n) * float(diff()["count"])))
+
+
 func _begin_wave(n: int) -> void:
 	wave = n
 	wave_t = 0.0
-	_to_spawn = 6 + 4 * n
+	_to_spawn = wave_size(n)
 	_spawn_t = 0.0
 	# Fresh medkits at a few supply points.
 	pickups = pickups.filter(func(p): return p["kind"] != "medkit")
@@ -575,7 +734,7 @@ func _begin_wave(n: int) -> void:
 	for k in KINDS:
 		if int(KINDS[k]["wave"]) == n and k != "elite":
 			newkind = k
-	if n % 5 == 0:
+	if n % int(diff()["elite_every"]) == 0:
 		_announce("WAVE %d  ·  ELITE INCOMING" % n)
 	elif newkind != "":
 		_announce("WAVE %d  ·  %sS SIGHTED" % [n, newkind.to_upper()])
@@ -589,18 +748,21 @@ func _announce(text: String) -> void:
 
 
 func spawn_interval() -> float:
-	return maxf(0.35, 2.0 - 0.15 * wave)
+	return maxf(0.25, (2.0 - 0.15 * wave) * float(diff()["interval"]))
 
 
-## The kinds this wave may send, with weights.
+## The kinds this wave may send, with weights (HARD unlocks them earlier).
 func kind_table() -> Array:
+	var w: int = wave + int(diff()["unlock_shift"])
 	var t: Array = [["walker", 5.0]]
-	if wave >= 2: t.append(["swarm", 1.6])
-	if wave >= 3: t.append(["runner", 2.4])
-	if wave >= 4: t.append(["spitter", 1.0])
-	if wave >= 5: t.append(["brute", minf(0.6 + 0.1 * (wave - 5), 1.5)])
-	if wave >= 6: t.append(["bloater", 0.8])
-	if wave >= 7: t.append(["armored", 0.9])
+	if w >= 2: t.append(["swarm", 1.6])
+	if w >= 3: t.append(["runner", 2.4])
+	if w >= 4: t.append(["spitter", 1.0])
+	if w >= 4: t.append(["lurker", 0.7])
+	if w >= 5: t.append(["brute", minf(0.6 + 0.1 * (w - 5), 1.5)])
+	if w >= 6: t.append(["bloater", 0.8])
+	if w >= 6: t.append(["spewer", 0.7])
+	if w >= 7: t.append(["armored", 0.9])
 	return t
 
 
@@ -632,15 +794,36 @@ func spawn_zombie(kind: String = "") -> Dictionary:
 			break
 	if p == Vector2.INF:
 		p = resolve(player + Vector2.from_angle(_rng.randf() * TAU) * ring, r)
-	var hpz: float = float(KINDS[k]["hp"]) * (1.0 + 0.08 * (wave - 1))
+	if k == "lurker":
+		var lp: Vector2 = _lurk_spot()
+		if lp != Vector2.INF:
+			p = lp
+	elif building_at(p) != -1:
+		p = resolve(Vector2((buildings[building_at(p)]["rect"] as Rect2).get_center().x, (buildings[building_at(p)]["rect"] as Rect2).end.y + 30.0), r)
+	var hpz: float = float(KINDS[k]["hp"]) * (1.0 + float(diff()["hp_growth"]) * (wave - 1))
 	var z := {"pos": p, "hp": hpz, "max": hpz, "kind": k}
+	if k == "lurker":
+		z["dormant"] = true
 	_norm(z)
 	zombies.append(z)
 	return z
 
 
+## A free spot inside a building the survivor is not in (lurkers).
+func _lurk_spot() -> Vector2:
+	for attempt in 12:
+		var bi: int = _rng.randi() % buildings.size()
+		if bi == player_building():
+			continue
+		var r: Rect2 = (buildings[bi]["rect"] as Rect2).grow(-14.0)
+		var c := Vector2(_rng.randf_range(r.position.x, r.end.x), _rng.randf_range(r.position.y, r.end.y))
+		if is_free(c, 5.0):
+			return c
+	return Vector2.INF
+
+
 func _spawn_group() -> void:
-	if zombies.size() >= MAX_ALIVE:
+	if zombies.size() >= max_alive():
 		_to_spawn += 1          # postponed, not lost
 		return
 	var k: String = _pick_kind()
@@ -748,8 +931,15 @@ func step(dt: float) -> void:
 	if _to_spawn > 0 and _spawn_t <= 0.0:
 		_spawn_t = spawn_interval()
 		_to_spawn -= 1
-		if wave % 5 == 0 and _to_spawn == 0:
-			spawn_zombie("elite")
+		if wave % int(diff()["elite_every"]) == 0 and _to_spawn == 0:
+			# Round 44: elite waves come with a rotating escort.
+			var elite: Dictionary = spawn_zombie("elite")
+			var escort: Array = [["brute", "brute"], ["spitter", "spitter", "runner"], ["bloater", "swarm", "swarm"]][(wave / int(diff()["elite_every"])) % 3]
+			for ek in escort:
+				var ez: Dictionary = spawn_zombie(ek)
+				var ep: Vector2 = (elite["pos"] as Vector2) + Vector2(_rng.randf_range(-20, 20), _rng.randf_range(-20, 20))
+				if is_free(ep, float(KINDS[ek]["r"])):
+					ez["pos"] = ep
 		else:
 			_spawn_group()
 	_step_zombies(dt)
@@ -762,6 +952,8 @@ func step(dt: float) -> void:
 			_fire_t = fire_interval()
 			_fire_at(target)
 	_step_bullets(dt)
+	_step_grenades(dt)
+	_step_acid(dt)
 	_step_spits(dt)
 	_step_pickups(dt)
 	_collect_dead()
@@ -772,7 +964,7 @@ func step(dt: float) -> void:
 		return
 	# Wave cleared: everything spawned and dead.
 	if _to_spawn == 0 and zombies.is_empty():
-		var bonus: int = 5 + 2 * wave
+		var bonus: int = int(round((5 + 2 * wave) * float(diff()["credits"])))
 		credits += bonus
 		run_credits += bonus
 		score += 50 * wave
@@ -783,6 +975,7 @@ func step(dt: float) -> void:
 			run_credits += mb
 			message += "  ·  MILESTONE +%d CR" % mb
 		best_wave = maxi(best_wave, wave)
+		best_wave_by[difficulty] = maxi(int(best_wave_by.get(difficulty, 0)), wave)
 		shop_return = "wave"
 		mode = "shop"
 		_refresh_overlay()
@@ -809,8 +1002,21 @@ func _step_zombies(dt: float) -> void:
 		if kind == "bloater" and dist < reach + 14.0:
 			z["fuse"] = 0.0
 			continue
-		var speed: float = float(kd["speed"])
-		var goal: Vector2 = player
+		if z.get("dormant", false):
+			# Lurker: waits in the dark until the survivor comes close / in.
+			var zbi: int = building_at(zp)
+			if dist < LURK_WAKE or (zbi != -1 and zbi == player_building()):
+				z["dormant"] = false
+				fx.append({"pos": zp, "t": 0.35, "col": Color(0.8, 0.6, 1.0)})
+			else:
+				continue
+		var speed: float = float(kd["speed"]) * float(diff()["speed"])
+		var goal: Vector2 = nav_goal(zp)
+		if kind == "spewer":
+			z["acid_t"] = float(z.get("acid_t", 0.0)) + dt
+			if float(z["acid_t"]) >= ACID_EVERY:
+				z["acid_t"] = 0.0
+				acid.append({"pos": zp, "life": ACID_LIFE})
 		if kind == "spitter":
 			# Keep a firing distance; telegraph, then lob a slow glob.
 			if dist < SPIT_RANGE.x:
@@ -907,6 +1113,42 @@ func _step_bullets(dt: float) -> void:
 	bullets = bullets.filter(func(b): return float(b["life"]) > 0.0 and WORLD.grow(10).has_point(b["pos"]))
 
 
+func _step_grenades(dt: float) -> void:
+	for g in grenades:
+		var gp: Vector2 = g["pos"]
+		var to: Vector2 = (g["target"] as Vector2) - gp
+		var stepv: float = float(WEAPONS["launcher"]["speed"]) * dt
+		var nxt: Vector2 = gp + to.normalized() * minf(stepv, to.length())
+		if to.length() <= stepv or not _segment_blocked(gp, nxt, 0.0, true).is_empty():
+			_explode(gp if to.length() > stepv else g["target"], float(g["dmg"]))
+			g["done"] = true
+		else:
+			g["pos"] = nxt
+	grenades = grenades.filter(func(g): return not g.get("done", false))
+
+
+func _explode(at: Vector2, dmg: float) -> void:
+	fx.append({"pos": at, "t": 0.5, "col": Color(1.0, 0.6, 0.25), "big": GRENADE_R})
+	for z in zombies:
+		var d: float = (z["pos"] as Vector2).distance_to(at)
+		if float(z["hp"]) > 0.0 and d <= GRENADE_R:
+			_damage_zombie(z, dmg * (1.0 - 0.5 * d / GRENADE_R), true)
+
+
+func _step_acid(dt: float) -> void:
+	var burning := false
+	for a in acid:
+		a["life"] = float(a["life"]) - dt
+		if (a["pos"] as Vector2).distance_to(player) <= ACID_R + PLAYER_R * 0.5:
+			burning = true
+	if burning:
+		var d: float = ACID_DPS * dt * armor_factor()
+		hp -= d
+		damage_taken += d
+		hurt_flash = maxf(hurt_flash, 0.12)
+	acid = acid.filter(func(a): return float(a["life"]) > 0.0)
+
+
 func _damage_zombie(z: Dictionary, amount: float, ap: bool) -> void:
 	var dmg: float = amount
 	if crit_chance() > 0.0 and _rng.randf() < crit_chance():
@@ -917,6 +1159,8 @@ func _damage_zombie(z: Dictionary, amount: float, ap: bool) -> void:
 		fx.append({"pos": z["pos"], "t": 0.12, "col": Color(0.8, 0.85, 0.9)})
 	z["hp"] = float(z["hp"]) - dmg
 	z["flash"] = 0.12
+	if dmg >= 12.0:
+		fx.append({"pos": (z["pos"] as Vector2) + Vector2(-4, -10), "t": 0.35, "col": Color(1.0, 0.95, 0.8), "text": "%d" % roundi(dmg)})
 
 
 func _step_spits(dt: float) -> void:
@@ -961,7 +1205,7 @@ func _collect_dead() -> void:
 				_burst(z)
 			kills += 1
 			kills_by_kind[kind] = int(kills_by_kind.get(kind, 0)) + 1
-			var c: int = int(KINDS[kind]["credits"])
+			var c: int = int(round(float(KINDS[kind]["credits"]) * float(diff()["credits"])))
 			run_credits += c
 			credits += c
 			score += 10 * c
@@ -992,6 +1236,19 @@ func _fire_at(target: Dictionary) -> void:
 	var base: float = (tpos - player).angle()
 	shots_fired += 1
 	fx.append({"pos": player + Vector2.from_angle(base) * 7.0, "t": 0.06, "col": w["color"]})
+	if weapon == "machete":
+		# A wide swing: everything within reach in the arc toward the target.
+		var hits := 0
+		for z in zombies:
+			var zv: Vector2 = (z["pos"] as Vector2) - player
+			if float(z["hp"]) > 0.0 and zv.length() <= float(w["range"]) + float(KINDS[z["kind"]]["r"]) and absf(wrapf(zv.angle() - base, -PI, PI)) <= SWING_ARC:
+				_damage_zombie(z, damage(), false)
+				hits += 1
+		fx.append({"pos": player, "t": 0.15, "col": w["color"], "swing": base})
+		return
+	if weapon == "launcher":
+		grenades.append({"pos": player, "target": tpos, "dmg": damage()})
+		return
 	if weapon == "arc":
 		# Instant bolt chaining to nearby zombies (MULTISHOT adds chain links).
 		var pts: Array = [player]
@@ -1054,8 +1311,10 @@ func _update_camera() -> void:
 func _game_over() -> void:
 	hp = 0.0
 	mode = "over"
-	best = maxi(best, score)
-	best_wave = maxi(best_wave, wave)
+	best_by[difficulty] = maxi(int(best_by.get(difficulty, 0)), score)
+	best_wave_by[difficulty] = maxi(int(best_wave_by.get(difficulty, 0)), wave)
+	best = int(best_by[difficulty])
+	best_wave = int(best_wave_by[difficulty])
 	held = {}
 	message = ""
 	_refresh_overlay()
@@ -1071,9 +1330,9 @@ func _refresh_overlay() -> void:
 	_overlay.visible = mode != "play"
 	match mode:
 		"title":
-			_ov_title.text = "HOLDOUT"
-			_ov_text.text = "Survive the town. WASD moves — your %s fires by itself.\nBest %d (wave %d) · Wallet %d CR" % [WEAPONS[weapon]["name"], best, best_wave, credits]
-			show = {"start": true, "shop": true, "desktop": true}
+			_ov_title.text = "HOLDOUT · %s" % diff()["name"]
+			_ov_text.text = "Survive the town. WASD moves — your %s fires by itself. Buildings can be entered.\n%s best %d (wave %d) · Wallet %d CR" % [WEAPONS[weapon]["name"], diff()["name"], int(best_by.get(difficulty, 0)), int(best_wave_by.get(difficulty, 0)), credits]
+			show = {"diff_easy": true, "diff_hard": true, "start": true, "shop": true, "desktop": true}
 		"paused":
 			_ov_title.text = "PAUSED"
 			_ov_text.text = "Wave %d · Score %d · HP %d · %s" % [wave, score, int(hp), WEAPONS[weapon]["name"]]
@@ -1098,11 +1357,13 @@ func _refresh_overlay() -> void:
 					wb.text = "%s %dCR" % [WEAPONS[wid]["name"], int(WEAPONS[wid]["cost"])]
 				wb.disabled = not unlocked.get(wid, false) and credits < int(WEAPONS[wid]["cost"])
 		"over":
-			_ov_title.text = "GAME OVER"
-			_ov_text.text = "Wave %d · %d kills · Score %d · Best %d (wave %d)\n+%d CR this run (wallet %d CR)" % [wave, kills, score, best, best_wave, run_credits, credits]
-			show = {"restart": true, "shop": true, "desktop": true}
-	for k in ["start", "resume", "continue", "shop", "restart", "back", "desktop"]:
+			_ov_title.text = "GAME OVER · %s" % diff()["name"]
+			_ov_text.text = "Wave %d · %d kills · Score %d · %s best %d (wave %d)\n+%d CR this run (wallet %d CR)" % [wave, kills, score, diff()["name"], best, best_wave, run_credits, credits]
+			show = {"diff_easy": true, "diff_hard": true, "restart": true, "shop": true, "desktop": true}
+	for k in ["diff_easy", "diff_hard", "start", "resume", "continue", "shop", "restart", "back", "desktop"]:
 		(buttons[k] as Button).visible = show.get(k, false)
+	for d in ["easy", "hard"]:
+		(buttons["diff_" + d] as Button).modulate = Color(1.0, 0.8, 0.35) if difficulty == d else Color(0.7, 0.7, 0.7)
 
 
 ## World -> arena drawing space (the world pass draws under a ZOOM transform).
@@ -1174,6 +1435,20 @@ func _draw_arena() -> void:
 			a.draw_rect(Rect2(_w2s(pp) - Vector2(3, 1), Vector2(6, 2)), Color(0.85, 0.15, 0.15))
 		else:
 			a.draw_circle(_w2s(pp), 2.5, Color(1.0, 0.82, 0.3))
+	# Building interiors: floors (always; the roof covers them from outside).
+	for b in buildings:
+		var br: Rect2 = b["rect"]
+		if view.intersects(br):
+			var floor_c: Color = {"house": Color(0.33, 0.27, 0.2), "store": Color(0.36, 0.38, 0.38), "diner": Color(0.3, 0.22, 0.22)}.get(String(b["kind"]), Color(0.3, 0.3, 0.3))
+			a.draw_rect(Rect2(_w2s(br.position), br.size), floor_c)
+			var step_px: int = 12 if b["kind"] != "diner" else 10
+			for k in range(int(br.position.x) + step_px, int(br.end.x), step_px):
+				a.draw_line(_w2s(Vector2(k, br.position.y)), _w2s(Vector2(k, br.end.y)), floor_c.darkened(0.12), 1.0)
+	# Acid puddles (spewers): area to avoid.
+	for ac in acid:
+		var al: float = clampf(float(ac["life"]) / 1.5, 0.0, 1.0)
+		a.draw_circle(_w2s(ac["pos"]), ACID_R, Color(0.45, 0.85, 0.15, 0.35 * al))
+		a.draw_circle(_w2s(ac["pos"]), ACID_R * 0.55, Color(0.7, 1.0, 0.3, 0.45 * al))
 	# Corpses (death animation: a flattened, fading body + stain).
 	for c in corpses:
 		var k: float = float(c["t"]) / 0.7
@@ -1206,6 +1481,13 @@ func _draw_arena() -> void:
 				for s in range(0, int(maxf(sr.size.x, sr.size.y)), 8):
 					var stripe: Rect2 = Rect2(sr.position + Vector2(0, s), Vector2(sr.size.x, 4)) if vert else Rect2(sr.position + Vector2(s, 0), Vector2(4, sr.size.y))
 					a.draw_rect(stripe.intersection(sr), Color(0.95, 0.95, 0.9))
+			"wall":
+				a.draw_rect(sr, Color(0.55, 0.52, 0.48))
+				a.draw_rect(sr, Color(0.2, 0.19, 0.18), false, 1.0)
+			"furniture":
+				var fc: Color = {"shelf": Color(0.55, 0.42, 0.3), "boxes": Color(0.6, 0.5, 0.3), "bed": Color(0.5, 0.55, 0.7), "sofa": Color(0.45, 0.3, 0.3), "stove": Color(0.6, 0.6, 0.62), "wardrobe": Color(0.42, 0.32, 0.22)}.get(String(o.get("label", "")), Color(0.5, 0.4, 0.32))
+				a.draw_rect(sr, fc.darkened(0.3))
+				a.draw_rect(sr.grow(-1.0), fc)
 			"fence":
 				a.draw_rect(sr, Color(0.45, 0.33, 0.2))
 				var vert2: bool = sr.size.y > sr.size.x
@@ -1214,9 +1496,13 @@ func _draw_arena() -> void:
 	# Landmark names on their roofs.
 	for lm in landmarks:
 		var lr: Rect2 = lm["rect"]
-		if view.intersects(lr):
+		if view.intersects(lr) and not lm.get("interior", false):
 			var tp: Vector2 = _w2s(lr.get_center()) + Vector2(-float(String(lm["name"]).length()) * 3.0, 3)
 			a.draw_string(font, tp, lm["name"], HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.95, 0.88, 0.6))
+	# Grenades in flight.
+	for g in grenades:
+		a.draw_circle(_w2s(g["pos"]), 2.6, Color(0.35, 0.4, 0.3))
+		a.draw_circle(_w2s(g["pos"]), 1.2, Color(1.0, 0.6, 0.25))
 	# Spit globs.
 	for s in spits:
 		a.draw_circle(_w2s(s["pos"]), 3.0, Color(0.45, 0.95, 0.35))
@@ -1224,6 +1510,22 @@ func _draw_arena() -> void:
 	# Zombies (each kind its own silhouette).
 	for z in zombies:
 		_draw_zombie(z, view)
+	# ROOFS: every building the survivor is NOT inside keeps its roof on --
+	# what (or who) is inside stays hidden until you walk in.
+	var pbi: int = player_building()
+	for bi in buildings.size():
+		var rb: Rect2 = buildings[bi]["rect"]
+		if bi == pbi or not view.intersects(rb):
+			continue
+		a.draw_rect(Rect2(_w2s(rb.position) + Vector2(3, 3), rb.size), Color(0, 0, 0, 0.35))
+		a.draw_rect(Rect2(_w2s(rb.position), rb.size), Color(0.36, 0.22, 0.18))
+		a.draw_line(_w2s(Vector2(rb.position.x, rb.get_center().y)), _w2s(Vector2(rb.end.x, rb.get_center().y)), Color(0.25, 0.15, 0.12), 2.0)
+		for k in range(int(rb.position.y) + 8, int(rb.end.y), 8):
+			a.draw_line(_w2s(Vector2(rb.position.x, k)), _w2s(Vector2(rb.end.x, k)), Color(0.32, 0.2, 0.16), 1.0)
+		for d in buildings[bi]["doors"]:
+			a.draw_rect(Rect2(_w2s(d["at"]) - Vector2(5, 5), Vector2(10, 10)), Color(0.12, 0.1, 0.09))
+		var nm: String = buildings[bi]["name"]
+		a.draw_string(font, _w2s(rb.get_center()) + Vector2(-float(nm.length()) * 3.0, -4), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.95, 0.88, 0.6))
 	# Bullets + arc bolts.
 	for b in bullets:
 		var bp: Vector2 = _w2s(b["pos"])
@@ -1260,6 +1562,9 @@ func _draw_arena() -> void:
 		var t: float = float(f["t"])
 		if f.has("text"):
 			a.draw_string(font, _w2s(f["pos"]) + Vector2(-8, -(0.4 - t) * 20.0), f["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, 8, f["col"])
+		elif f.has("swing"):
+			var sa: float = float(f["swing"])
+			a.draw_arc(_w2s(f["pos"]), 22.0, sa - SWING_ARC, sa + SWING_ARC, 12, Color(0.95, 0.95, 0.9, clampf(t * 6.0, 0, 0.9)), 2.0)
 		elif f.has("big"):
 			a.draw_circle(_w2s(f["pos"]), float(f["big"]) * (1.0 - t), Color(f["col"], clampf(t * 1.6, 0.0, 0.6)))
 		else:
@@ -1330,6 +1635,15 @@ func _draw_zombie(z: Dictionary, view: Rect2) -> void:
 			a.draw_circle(sp, zr * swell - 1.5, c if fuse < 0.0 or fmod(fuse * 10.0, 1.0) > 0.5 else Color(1.0, 0.9, 0.5))
 			for i in 3:
 				a.draw_circle(sp + Vector2.from_angle(i * 2.1) * zr * 0.5, 1.5, Color(0.5, 0.65, 0.3))
+		"lurker":
+			var dorm: bool = z.get("dormant", false)
+			a.draw_circle(sp, zr, Color(c, 0.35 if dorm else 1.0))
+			a.draw_circle(sp + to * 1.5, 1.2, Color(0.9, 0.85, 1.0, 0.4 if dorm else 1.0))
+			a.draw_circle(sp + to.rotated(0.6) * 2.4, 0.8, Color(0.9, 0.85, 1.0, 0.4 if dorm else 1.0))
+		"spewer":
+			a.draw_circle(sp, zr + 1.0, c.darkened(0.5))
+			a.draw_circle(sp, zr, c)
+			a.draw_circle(sp + to * 3.0, 2.2, Color(0.85, 1.0, 0.35))
 		"armored":
 			a.draw_circle(sp, zr + 1.0, Color(0.2, 0.22, 0.25))
 			a.draw_circle(sp, zr, c)
@@ -1361,7 +1675,8 @@ func _draw_minimap(a: Control) -> void:
 
 # ------------------------------------------------------------ save / load
 func state_dict() -> Dictionary:
-	return {"best": best, "best_wave": best_wave, "credits": credits, "ranks": ranks.duplicate(), "runs": runs, "unlocked": unlocked.keys(), "weapon": weapon}
+	return {"best": best, "best_wave": best_wave, "credits": credits, "ranks": ranks.duplicate(), "runs": runs, "unlocked": unlocked.keys(), "weapon": weapon,
+		"difficulty": difficulty, "best_by": best_by.duplicate(), "best_wave_by": best_wave_by.duplicate()}
 
 
 func load_state(d: Dictionary) -> void:
@@ -1379,6 +1694,17 @@ func load_state(d: Dictionary) -> void:
 	weapon = String(d.get("weapon", "pistol"))
 	if not unlocked.has(weapon):
 		weapon = "pistol"
+	difficulty = String(d.get("difficulty", "easy"))
+	if not DIFFICULTY.has(difficulty):
+		difficulty = "easy"
+	var bb: Dictionary = d.get("best_by", {"easy": best})
+	var bw: Dictionary = d.get("best_wave_by", {"easy": best_wave})
+	best_by = {"easy": maxi(int(bb.get("easy", 0)), 0), "hard": maxi(int(bb.get("hard", 0)), 0)}
+	best_wave_by = {"easy": maxi(int(bw.get("easy", 0)), 0), "hard": maxi(int(bw.get("hard", 0)), 0)}
+	best = int(best_by[difficulty])
+	best_wave = int(best_wave_by[difficulty])
+	acid = []
+	grenades = []
 	# A saved game never resumes mid-run.
 	mode = "title"
 	zombies = []

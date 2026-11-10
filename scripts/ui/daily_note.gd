@@ -34,6 +34,13 @@ static func build(dp: Node, q: Node) -> Dictionary:
 	var day: int = int(dp.day_number) if dp != null else 1
 	var header: Array = []
 	header.append("Priority: %s" % (String(dp.today_title()) if dp != null else "routine checks"))
+	# Round 44: TODAY also carries what Schedule used to show -- the open
+	# jobs, compactly (DayPlan rows; no second task list).
+	if dp != null:
+		var open_rows: Array = dp.order_rows().filter(func(r): return not r.get("done", false) and String(r.get("id", "")) != "MEAL")
+		if not open_rows.is_empty():
+			var tags: Array = open_rows.slice(0, 4).map(func(r): return "%s (%s)" % [r["tag"], dp.ROOM_SHORT.get(StringName(r.get("room", &"")), "?")])
+			header.append("Jobs: %s%s" % [", ".join(tags), "" if open_rows.size() <= 4 else " +%d" % (open_rows.size() - 4)])
 	if dp != null and dp.has_method("cargo_port") and dp.cargo_port() != null:
 		var nd: int = int(dp.next_cargo_day)
 		header.append("Cargo: %s" % ("arrives TODAY — dock it before you rest" if nd == day or String(dp.cargo_duty) == "open" else "next drop day %d" % nd))
@@ -56,7 +63,10 @@ static func build(dp: Node, q: Node) -> Dictionary:
 			items.append({"id": "work", "label": "Work orders %d/%d" % [done, rows.size()], "done": done == rows.size()})
 	items.append({"id": "dinner", "label": "Dinner (after the shift)", "done": bool(rs.get("dinner", false))})
 	items.append({"id": "basil", "label": "Water the basil", "done": bool(rs.get("basil", false))})
-	return {"title": "SHIFT NOTE · DAY %d" % day, "author": AUTHOR, "header": header, "items": items}
+	var status: String = ""
+	if dp != null and dp.has_method("clock_text_hhmm"):
+		status = " · %s · %s" % [dp.clock_text_hhmm(), "REST" if dp.shift_ended else "WORK %d%%" % int(round(dp.shift_progress() * 100.0))]
+	return {"title": "SHIFT NOTE · DAY %d%s" % [day, status], "author": AUTHOR, "header": header, "items": items}
 
 
 ## The note as displayed: authentic content + presentation overlays.

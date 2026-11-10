@@ -58,6 +58,7 @@ func _ready() -> void:
 	if geo != null:
 		_dress_hull(geo)
 		_finish_walls.call_deferred()
+	_separate_light_layers.call_deferred()
 
 
 # ---------------------------------------------------------------- helpers
@@ -739,8 +740,8 @@ func _finish_walls() -> void:
 				if i % 4 == 0 and length >= 2.0:
 					var hlt := OmniLight3D.new()
 					hlt.light_color = Color(1.0, 0.88, 0.7)
-					hlt.light_energy = 0.9
-					hlt.omni_range = 2.6
+					hlt.light_energy = 0.5          # Round 44: dimmer, eclipse reads darker
+					hlt.omni_range = 2.2
 					hlt.light_cull_mask = EXTERIOR
 					hlt.shadow_enabled = false
 					hlt.position = Vector3(bay.x, y1 - 0.35, bay.z) + n * 0.45
@@ -799,3 +800,51 @@ func _finish_walls() -> void:
 	for g in fin.find_children("*", "GeometryInstance3D", true, false):
 		(g as GeometryInstance3D).layers = 1 | EXTERIOR
 		(g as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+
+# ======================================================================
+# Round 44 Priority 16: INTERIOR LIGHT NO LONGER LEAKS ONTO THE HULL.
+# ROOT CAUSE: the room lights (Lights/*, unshadowed omnis) kept the default
+# all-layers cull mask, and every exterior mesh was on layer 1 | EXTERIOR,
+# so a room lamp lit the hull right through its wall -- the courtyard seen
+# through the observation port stayed bright in eclipse while wide
+# exterior feeds went dark. FIX at the rendering-layer level:
+#   - exterior geometry (this builder, solar arrays, antenna mast) is on
+#     the EXTERIOR layer only (every camera still renders that layer);
+#   - every light outside the exterior / the player drops the EXTERIOR bit
+#     from its cull mask. Exterior work lights, hull lamps and the sun are
+#     EXTERIOR-only already; the technician's own lamp (Player) keeps
+#     lighting the hull on EVA.
+# ======================================================================
+var exterior_meshes_moved: int = 0
+var interior_lights_masked: int = 0
+
+
+func _separate_light_layers() -> void:
+	var root: Node = get_parent()
+	var roots: Array = [self]
+	for path in ["Equipment/SolarArrays", "Equipment/AntennaMast"]:
+		var n: Node = root.get_node_or_null(path)
+		if n != null:
+			roots.append(n)
+	for r in roots:
+		for g in (r as Node).find_children("*", "GeometryInstance3D", true, false):
+			var gi: GeometryInstance3D = g
+			if gi.layers & EXTERIOR and gi.layers & 1:
+				gi.layers = gi.layers & ~1
+				exterior_meshes_moved += 1
+	var player: Node = root.get_node_or_null("Player")
+	for l in root.find_children("*", "Light3D", true, false):
+		var lt: Light3D = l
+		if lt is DirectionalLight3D or is_ancestor_of(lt) or (player != null and player.is_ancestor_of(lt)):
+			continue
+		var in_ext := false
+		for r in roots:
+			if (r as Node).is_ancestor_of(lt):
+				in_ext = true
+		if in_ext or lt.light_cull_mask == EXTERIOR:
+			continue
+		if lt.light_cull_mask & EXTERIOR:
+			lt.light_cull_mask = lt.light_cull_mask & ~EXTERIOR
+			interior_lights_masked += 1

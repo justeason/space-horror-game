@@ -101,6 +101,8 @@ const LINES := {
 	&"eva_aim": [Prio.INSTRUCT, "Aim at your destination. Your tethers limit how far you travel.", "瞄准目的地。安全绳会限制你的移动范围。"],
 	&"handover_note": [Prio.INFO, "The previous technician's handover is on your laptop desktop: SHIFT HANDOVER.", "上一位技术员的交接说明在你笔记本电脑桌面上：SHIFT HANDOVER。"],
 	&"handover_day1": [Prio.INFO, "Checked in. Review the previous shift handover on your laptop.", "已签到。请在笔记本电脑上查看上一班的交接说明。"],
+	&"laptop_intro": [Prio.INFO, "Your laptop. TODAY shows the day at a glance. The station clock waits while you use it.", "你的笔记本电脑。TODAY 一眼显示当天安排。使用电脑时站内时间会暂停。"],
+	&"save_hint": [Prio.INFO, "Shift over. The station saves each morning; save any time from the workstation SYSTEM page. Then rest in your bunk.", "班次结束。空间站每天早上自动存档；也可随时在工作站 SYSTEM 页面存档。然后回床铺休息。"],
 	&"hygiene_intro": [Prio.INFO, "Hygiene niche. Brush your teeth; the push tap saves water.", "洗漱角。刷牙吧，按压式水龙头很省水。"],
 	&"solar_intro": [Prio.INSTRUCT, "Solar truss. Follow the rings. Clip the next ring before you release the last.", "太阳能桁架。沿挂环前进：先扣下一个挂环，再解开上一个。"],
 	&"coupler_live": [Prio.SAFETY, "That coupler is live. Isolate the string first.", "该耦合器带电。请先隔离该组串。"],

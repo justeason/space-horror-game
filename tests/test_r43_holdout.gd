@@ -77,14 +77,14 @@ func _world() -> void:
 
 func _enemies() -> void:
 	h.start_seeded(3)
-	_check("seven enemy kinds + elite with different stats", h.KINDS.size() == 8 and h.KINDS["runner"]["speed"] > h.KINDS["walker"]["speed"] and h.KINDS["brute"]["hp"] > 3.0 * h.KINDS["walker"]["hp"] and h.KINDS["swarm"]["r"] < h.KINDS["walker"]["r"])
+	_check("nine enemy kinds + elite with different stats (R44: + lurker, spewer)", h.KINDS.size() == 10 and h.KINDS["runner"]["speed"] > h.KINDS["walker"]["speed"] and h.KINDS["brute"]["hp"] > 3.0 * h.KINDS["walker"]["hp"] and h.KINDS["swarm"]["r"] < h.KINDS["walker"]["r"])
 	h.wave = 1
 	_check("wave 1 table: walkers only", h.kind_table().size() == 1)
 	h.wave = 7
 	var seen: Dictionary = {}
 	for i in 400:
 		seen[h._pick_kind()] = true
-	_check("wave 7 draws every kind (%s)" % str(seen.keys()), seen.size() == 7)
+	_check("wave 7 draws every kind (%s)" % str(seen.keys()), seen.size() == 9)
 	# Swarm arrives as a pack.
 	h.zombies = []
 	h._rng.seed = 1
@@ -176,7 +176,7 @@ func _enemies() -> void:
 func _weapons_upgrades() -> void:
 	h.start_seeded(5)
 	h.credits = 0
-	_check("five weapons, pistol owned", h.WEAPONS.size() == 5 and h.unlocked.has("pistol") and h.weapon == "pistol")
+	_check("seven weapons (R44: + machete, launcher), pistol owned", h.WEAPONS.size() == 7 and h.unlocked.has("pistol") and h.weapon == "pistol")
 	_check("locked weapon refused without credits", not h.weapon_action("rifle") and h.message.find("Need") != -1 and h.weapon == "pistol")
 	h.credits = 1000
 	_check("unlock = notification + equipped", h.weapon_action("smg") and h.weapon == "smg" and h.banner.find("NEW WEAPON") != -1)

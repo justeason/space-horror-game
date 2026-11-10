@@ -88,6 +88,12 @@ func step(dt: float) -> void:
 
 
 func _process(delta: float) -> void:
+	# Round 44: ordinary drift pauses with gameplay time (focused laptop,
+	# waking). An abnormal environment (severity > 0) keeps simulating --
+	# and laptop focus is refused / ended then (DayPlan.entertainment_allowed).
+	var dpn: Node = get_node_or_null(^"../DayPlan")
+	if dpn != null and dpn.has_method("gameplay_delta") and severity == 0:
+		delta = dpn.gameplay_delta(delta)
 	step(delta)
 	_t += delta
 	_apply_effects()

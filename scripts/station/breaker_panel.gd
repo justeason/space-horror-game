@@ -156,7 +156,12 @@ func trip(i: int, why: String) -> void:
 		return
 	on[i] = false
 	cause[i] = why
-	sfx(&"breaker")
+	# Round 44: a trip is heard FROM the breaker panel.
+	var snd: Node = get_tree().get_first_node_in_group(&"station_sounds") if is_inside_tree() else null
+	if snd != null:
+		snd.play_at(&"breaker", global_position, true)
+	else:
+		sfx(&"breaker")
 	_apply()
 	if _dp != null:
 		_dp.log_event("Breaker %s tripped (%s)" % [BREAKERS[i]["id"], why])

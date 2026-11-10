@@ -14,9 +14,10 @@ func _init() -> void:
 	var lv: Node = main.get_node("Player/LaptopView")
 	var scr: Node = lv._log_screen
 	_check("day 1: two messages, both unread", scr.messages_today().size() == 2 and scr.unread_count() == 2)
-	_check("app bar has Messages (2) / Schedule / Photos", scr.button(&"messages").text == "Messages (2)" and scr.button(&"schedule") != null and scr.button(&"photos") != null)
+	# Round 44: Schedule folded into TODAY (&"note").
+	_check("app bar has Messages (2) / Today / Photos", scr.button(&"messages").text == "Messages (2)" and scr.button(&"note") != null and scr.button(&"photos") != null)
 	scr.open_app(&"messages")
-	_check("Messages view lists them, newest first", scr.current_view() == &"messages" and scr._report.text.find("Mara") != -1)
+	_check("Messages view lists them, newest first (Older mail, Round 44 mail view)", scr.current_view() == &"messages" and scr._mail_text.text.find("Mara") != -1)
 	_check("opening Messages marks them read", scr.unread_count() == 0 and scr.button(&"messages").text == "Messages")
 	scr.open_app(&"home")
 	scr.open_app(&"schedule")

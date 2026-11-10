@@ -367,6 +367,11 @@ func _say(text: String, s: float = 3.0) -> void:
 
 
 func _sfx(kind: StringName) -> void:
+	# Round 44: airlock mechanics are heard FROM the airlock (positional).
+	var snd: Node = get_tree().get_first_node_in_group(&"station_sounds") if is_inside_tree() else null
+	if snd != null and kind in [&"latch", &"hiss", &"success"]:
+		snd.play_at(kind, snd.AIRLOCK_POS, true)
+		return
 	var s: Node = get_node_or_null(^"../Player/HUD/MechanicalSfx")
 	if s != null and s.has_method("play_kind"):
 		s.play_kind(kind)

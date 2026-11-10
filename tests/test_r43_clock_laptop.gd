@@ -34,35 +34,37 @@ func _init() -> void:
 
 
 func _clock_holds() -> void:
+	# Round 44 Priority 1 supersedes the Round 43 games-only policy: the
+	# WHOLE focused laptop holds gameplay time (any app); leaving focus
+	# resumes it. (test_r44_laptop_family covers it in depth.)
 	_check("day is active once nobody is lying in the bunk", dp.day_active and not dp.clock_paused())
-	scr.set_editing(true)
-	scr.open_app(&"log")
-	var t0: float = dp.shift_elapsed_s
-	await create_timer(0.5).timeout
-	_check("productivity app (Personal Log): the clock keeps running", dp.shift_elapsed_s > t0 + 0.3 and not scr.entertainment_hold)
-	for app in [&"game", &"holdout"]:
+	for app in [&"log", &"game", &"holdout"]:
+		scr.set_editing(true)
 		scr.open_app(app)
 		await process_frame
 		await process_frame
 		var a: float = dp.shift_elapsed_s
-		var aw: float = dp.awake_after_shift_s
-		await create_timer(1.0).timeout
-		_check("%s open on the zoomed laptop: shift clock held (%.3f -> %.3f)" % [app, a, dp.shift_elapsed_s], scr.entertainment_hold and dp.is_held(&"entertainment") and absf(dp.shift_elapsed_s - a) < 0.0001 and dp.awake_after_shift_s == aw)
+		await create_timer(0.8).timeout
+		_check("%s open on the focused laptop: shift clock held (%.3f -> %.3f)" % [app, a, dp.shift_elapsed_s], scr.entertainment_hold and dp.is_held(&"laptop") and absf(dp.shift_elapsed_s - a) < 0.0001)
 		_check("%s: the laptop clock shows PAUSED" % app, scr._clock.text.find("PAUSED") != -1)
-		scr.open_app(&"home")
+		scr.set_editing(false)
 		await process_frame
 		await process_frame
 		var b: float = dp.shift_elapsed_s
-		_check("back on the desktop: hold released, no time jump (%.3f vs %.3f)" % [b, a], not dp.is_held(&"entertainment") and b - a < 0.1)
+		_check("focus left: hold released, no time jump (%.3f vs %.3f)" % [b, a], not dp.is_held(&"laptop") and b - a < 0.1)
 		await create_timer(0.4).timeout
 		_check("...and the clock runs again (single update, no double count)", dp.shift_elapsed_s > b + 0.2 and dp.shift_elapsed_s < b + 0.6)
+	scr.set_editing(true)
+	scr.open_app(&"holdout")
+	await process_frame
+	await process_frame
 	# Zooming out / closing also releases.
 	scr.open_app(&"holdout")
 	await process_frame
 	await process_frame
 	scr.set_editing(false)
 	await process_frame
-	_check("zooming out of a game releases the hold", not dp.is_held(&"entertainment"))
+	_check("zooming out of a game releases the hold", not dp.is_held(&"laptop"))
 	# Emergency policy.
 	scr.set_editing(true)
 	dp.fire_emergency("overload", 3)
@@ -71,18 +73,18 @@ func _clock_holds() -> void:
 	_check("during an emergency games are refused: '%s'" % ok["reason"], not ok["ok"] and String(ok["reason"]).find("ALERT") != -1)
 	scr.open_app(&"holdout")
 	await process_frame
-	_check("opening Holdout during the emergency: refused, desktop shows the alert", scr.current_view() == &"home" and scr.blocked_reason != "" and not dp.is_held(&"entertainment"))
+	_check("opening Holdout during the emergency: refused, desktop shows the alert, no hold", scr.current_view() == &"home" and scr.blocked_reason != "" and not dp.is_held(&"laptop"))
 	main.get_node("Equipment/PowerDistribution").load_dict({"demand": [2, 2, 2], "setting": [2, 2, 2], "verified": true})
 	await process_frame
 	scr.open_app(&"holdout")
 	await process_frame
 	await process_frame
-	_check("emergency over: the game opens and holds the clock again", scr.current_view() == &"holdout" and dp.is_held(&"entertainment"))
+	_check("emergency over: the game opens and holds the clock again", scr.current_view() == &"holdout" and dp.is_held(&"laptop"))
 	scr.holdout.start_seeded(2)
 	dp.fire_emergency("overload", 4)
 	await process_frame
 	await process_frame
-	_check("an emergency starting MID-GAME pauses the game and releases the hold", scr.holdout.mode != "play" and not dp.is_held(&"entertainment") and scr.current_view() == &"home")
+	_check("an emergency starting MID-GAME pauses the game and releases the hold", scr.holdout.mode != "play" and not dp.is_held(&"laptop") and scr.current_view() == &"home")
 	main.get_node("Equipment/PowerDistribution").load_dict({"demand": [2, 2, 2], "setting": [2, 2, 2], "verified": true})
 	dp.emergency_plan = {}
 	scr.open_app(&"home")

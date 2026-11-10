@@ -176,6 +176,9 @@ TESTS=(
   test_r43_clock_laptop
   test_r43_holdout
   test_r43_station
+  test_r44_laptop_family
+  test_r44_records_horror
+  test_r44_holdout_light
 )
 
 if [ "$#" -gt 0 ]; then

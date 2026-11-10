@@ -40,7 +40,25 @@ extends SubViewport
 var _day_plan: Node = null
 
 
+## Round 44 Priority 14: the laptop screen RENDERS at 2x (960 x 560) while
+## its UI keeps the 480 x 280 layout (size_2d_override, stretched): text,
+## icons and games are rasterised at twice the pixels. Input arrives in
+## RENDER pixels (click_at / hover_at: uv x size) and Godot maps it through
+## the stretch, so a visible button answers exactly where it is clicked;
+## uv_of() reports layout positions as uv of the layout size.
+const RENDER_SCALE := 2
+
+
+func layout_size() -> Vector2:
+	return Vector2(size_2d_override) if size_2d_override != Vector2i.ZERO else Vector2(size)
+
+
 func _ready() -> void:
+	if size_2d_override == Vector2i.ZERO:
+		var base: Vector2i = size
+		size_2d_override = base
+		size_2d_override_stretch = true
+		size = base * RENDER_SCALE
 	render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	_entry_field.editable = false
 	_set_hint_for_viewing()
@@ -111,7 +129,7 @@ func _build_app_bar() -> void:
 	brand.add_theme_color_override("font_color", Color(0.95, 0.8, 0.55))
 	_bar.add_child(brand)
 	_bar.move_child(brand, 0)
-	for spec in [[&"home", "< Desktop"], [&"note_history", "History"], [&"save", "Save"], [&"back", "< Save & Back"], [&"close", "Close"]]:
+	for spec in [[&"home", "< Desktop"], [&"note_history", "History"], [&"journal_obs", "Seen"], [&"journal_notes", "Notes"], [&"save", "Save"], [&"back", "< Save & Back"], [&"close", "Close"]]:
 		_add_button(_bar, spec[0], spec[1])
 	_clock = Label.new()
 	_clock.name = "Clock"
@@ -222,20 +240,29 @@ func _build_app_bar() -> void:
 	_show_view(&"home")
 
 
+## Round 44 Priority 2: ONE place per kind of information.
+##   TODAY     the day at a glance (status, jobs, cargo, checklist, one
+##             reminder) -- replaces Today's Note + Schedule;
+##   JOURNAL   the character's automatic journal (+ OBSERVATIONS, + the
+##             player's own PRIVATE NOTES = the former Personal Log);
+##   MESSAGES  personal correspondence (with replies);
+##   FILES     documents, archives -- shift reports now live in
+##             Work/Archived Reports (generated from DayPlan's history);
+##   PHOTOS, ENTERTAINMENT; SHIFT HANDOVER stays a desktop shortcut.
+## Old app ids still open (schedule -> Today, report -> the archive,
+## log -> private notes), so nothing saved or scripted breaks.
 const APPS := [
-	[&"note", "Today's Note", Color(0.98, 0.88, 0.45)],
+	[&"note", "Today", Color(0.98, 0.88, 0.45)],
 	[&"handover", "Shift Handover", Color(0.95, 0.55, 0.4)],
-	[&"log", "Personal Log", Color(0.85, 0.7, 0.35)],
+	[&"journal", "Journal", Color(0.85, 0.7, 0.35)],
 	[&"messages", "Messages", Color(0.35, 0.7, 1.0)],
-	[&"schedule", "Schedule", Color(0.45, 0.85, 0.6)],
 	[&"photos", "Photos", Color(0.9, 0.5, 0.6)],
 	[&"files", "Files", Color(0.75, 0.75, 0.8)],
-	[&"report", "Shift Report", Color(0.6, 0.85, 0.9)],
 	[&"game", "Cargo Drop", Color(0.95, 0.6, 0.25)],
 	[&"holdout", "Holdout", Color(0.55, 0.85, 0.4)],
 ]
 const DailyNote = preload("res://scripts/ui/daily_note.gd")
-const APP_TITLES := {&"note": "TODAY'S NOTE", &"note_record": "NOTE ARCHIVE", &"handover": "SHIFT HANDOVER", &"home": "DESKTOP", &"log": "PERSONAL LOG", &"messages": "MESSAGES", &"schedule": "SCHEDULE", &"photos": "PHOTOS", &"files": "FILES", &"file": "FILES", &"report": "SHIFT REPORT", &"game": "CARGO DROP", &"holdout": "HOLDOUT"}
+const APP_TITLES := {&"journal": "JOURNAL", &"observations": "OBSERVATIONS", &"mail_sent": "SENT LETTERS", &"note": "TODAY", &"note_record": "NOTE ARCHIVE", &"handover": "SHIFT HANDOVER", &"home": "DESKTOP", &"log": "PRIVATE NOTES", &"messages": "MESSAGES", &"schedule": "SCHEDULE", &"photos": "PHOTOS", &"files": "FILES", &"file": "FILES", &"report": "SHIFT REPORT", &"game": "CARGO DROP", &"holdout": "HOLDOUT"}
 const Files = preload("res://scripts/ui/laptop_files.gd")
 var _app_title: Label
 var _brand: Label
@@ -295,6 +322,10 @@ func _on_app(id: StringName) -> void:
 			app_requested.emit(id)
 		&"note_history":
 			_show_view(&"note_record")
+		&"journal_obs":
+			_show_view(&"observations")
+		&"journal_notes":
+			_show_view(&"log")
 		&"photo_prev":
 			photo_index = posmod(photo_index - 1, Files.list("Photos").size())
 			_show_view(&"photos")
@@ -327,7 +358,7 @@ func open_app(id: StringName) -> void:
 func _fit_bar() -> void:
 	if _bar == null or _brand == null:
 		return
-	var avail: float = float(size.x) - 24.0
+	var avail: float = layout_size().x - 24.0
 	_brand.visible = not entertainment_hold
 	if _bar.get_combined_minimum_size().x > avail:
 		_brand.visible = false
@@ -338,13 +369,20 @@ func content_width() -> float:
 
 
 func _show_view(v: StringName) -> void:
+	if v == &"schedule":
+		v = &"note"          # Round 44: folded into TODAY
 	_view = v
+	if v == &"report":
+		# Round 44: the shift report lives in Files (archived reports).
+		folder = "Work/Archived Reports"
+		open_entry({"kind": "txt", "rec": _report_record(-1)})
+		return
 	if v == &"handover":
 		# The desktop shortcut LINKS to the one real record in Files.
 		folder = Files.HANDOVER_PATH
 		open_entry({"kind": "txt", "rec": Files.find(Files.HANDOVER_PATH, Files.HANDOVER_FILE)})
 		return
-	var text_view: bool = v in [&"report", &"messages", &"schedule", &"file", &"note", &"note_record"]
+	var text_view: bool = v in [&"report", &"schedule", &"file", &"note", &"note_record", &"journal", &"observations", &"mail_sent"]
 	if _report != null:
 		_report.add_theme_font_size_override("font_size", 12)
 	_home.visible = v == &"home"
@@ -384,6 +422,11 @@ func _show_view(v: StringName) -> void:
 	_fit_bar()
 	if _buttons.has(&"note_history"):
 		_buttons[&"note_history"].visible = v == &"note"
+	if _buttons.has(&"journal_obs"):
+		_buttons[&"journal_obs"].visible = v == &"journal"
+		_buttons[&"journal_notes"].visible = v == &"journal"
+	if _mail_box != null:
+		_mail_box.visible = v == &"messages"
 	match v:
 		&"note":
 			_note_opened()
@@ -394,10 +437,21 @@ func _show_view(v: StringName) -> void:
 			if is_inside_tree():
 				get_tree().call_group(&"story_events", &"on_record_checked", "note_archive")
 		&"messages":
-			_report.text = "\n".join(messages_lines())
 			for m in messages_today():
 				read_messages[String(m["id"])] = true
+			_build_mail()
 			_refresh_unread()
+		&"mail_sent":
+			var fm: Node = _family()
+			_report.text = "\n".join(fm.sent_lines()) if fm != null else "SENT LETTERS"
+			if is_inside_tree():
+				get_tree().call_group(&"story_events", &"on_record_viewed", "sent_mail")
+		&"journal":
+			var jn: Node = get_tree().get_first_node_in_group(&"journal") if is_inside_tree() else null
+			var jl: Array = jn.lines(12) if jn != null else []
+			_report.text = "JOURNAL\n" + ("\n".join(jl) if not jl.is_empty() else "(nothing written yet — the first entry comes after your first shift)")
+		&"observations":
+			_report.text = "\n".join(observation_lines())
 		&"schedule":
 			_report.text = "\n".join(schedule_lines())
 		&"report":
@@ -446,6 +500,14 @@ func _build_file_list() -> void:
 			entries.append({"name": sf + "/", "kind": "dir", "target": folder + "/" + sf})
 		for f in Files.list(folder):
 			entries.append({"name": f["name"], "kind": f["type"], "rec": f})
+		if folder == "Work/Archived Reports" and _day_plan != null:
+			# Round 44: this rotation's shift reports (DayPlan's own history).
+			for i in _day_plan.shift_history.size():
+				var r: Dictionary = _report_record(i)
+				entries.append({"name": r["name"], "kind": "txt", "rec": r})
+			if not _day_plan.shift_ended:
+				var cur: Dictionary = _report_record(-1)
+				entries.append({"name": cur["name"], "kind": "txt", "rec": cur})
 	for e in entries:
 		var b := Button.new()
 		b.text = String(e["name"]) + (("   " + String(e["rec"]["date"])) if e.has("rec") and String(e["rec"].get("date", "")) != "" else "")
@@ -555,7 +617,8 @@ func schedule_lines() -> Array:
 
 func _refresh_unread() -> void:
 	if _buttons.has(&"messages"):
-		var n: int = unread_count()
+		var fm: Node = _family()
+		var n: int = unread_count() + (fm.unread_count() if fm != null else 0)
 		_buttons[&"messages"].text = "Messages (%d)" % n if n > 0 else "Messages"
 
 
@@ -586,7 +649,7 @@ func click_at(uv: Vector2) -> void:
 ## Normalized screen coordinates of a control's centre (tests/tools).
 func uv_of(c: Control) -> Vector2:
 	var r: Rect2 = c.get_global_rect()
-	return Vector2(r.get_center().x / size.x, r.get_center().y / size.y)
+	return r.get_center() / layout_size()
 
 
 func refresh_day() -> void:
@@ -771,9 +834,21 @@ func _process(delta: float) -> void:
 		_clock_tick = 0.0
 		_refresh_clock()
 	_update_entertainment_hold()
+	# Round 44 Priority 20: a closed laptop does not render its screen.
+	var lv: Node = get_parent()
+	var lid_open: bool = lv == null or not lv.has_method("is_open") or lv.is_open() or _zoomed
+	var want_mode: int = SubViewport.UPDATE_ALWAYS if lid_open else SubViewport.UPDATE_DISABLED
+	if render_target_update_mode != want_mode:
+		render_target_update_mode = want_mode
 
 
 # ======================================================================
+# Round 44 Priority 1: the WHOLE focused (zoomed-in) laptop holds gameplay
+# time under the &"laptop" reason -- desktop, Today, messages, journal,
+# files, photos and games alike. If a genuine emergency starts while
+# focused, the focus ends (the technician is handed back the station) and
+# the hold is released; zooming in during one is refused (sleep_state.gd).
+# The Round 43 notes below describe the earlier games-only policy.
 # Round 43 Priority 1: PERSONAL GAMES PAUSE THE SHIFT CLOCK. The laptop
 # distinguishes PRODUCTIVITY apps (log, notes, messages, files, report --
 # the clock runs) from ENTERTAINMENT apps (Cargo Drop, Holdout, any future
@@ -795,19 +870,21 @@ func is_entertainment(id: StringName) -> bool:
 
 
 func _update_entertainment_hold() -> void:
-	var want: bool = _zoomed and is_entertainment(_view) and is_visible_game()
+	var want: bool = _zoomed
 	if want and _day_plan != null and _day_plan.has_method("entertainment_allowed"):
 		var ok: Dictionary = _day_plan.entertainment_allowed()
 		if not ok["ok"]:
 			want = false
 			_pause_games()
 			_show_block(String(ok["reason"]))
+			# Hand control back: end the focused session.
+			app_requested.emit(&"back")
 	if want != entertainment_hold:
 		entertainment_hold = want
 		_refresh_clock()
 		_fit_bar()
 		if _day_plan != null and _day_plan.has_method("hold_clock"):
-			_day_plan.hold_clock(&"entertainment", want)
+			_day_plan.hold_clock(&"laptop", want)
 
 
 func is_visible_game() -> bool:
@@ -841,7 +918,7 @@ static func _app_icon(id: StringName, c: Color) -> ImageTexture:
 	var ink := Color(0.08, 0.09, 0.1)
 	var paper := Color(0.96, 0.95, 0.9)
 	match id:
-		&"log":
+		&"log", &"journal":
 			img.fill_rect(Rect2i(8, 4, 14, 18), paper)
 			for k in 4:
 				img.fill_rect(Rect2i(10, 7 + k * 3, 10, 1), ink)
@@ -927,3 +1004,143 @@ func _note_opened() -> void:
 	var st: Node = _story()
 	if st != null and st.has_method("on_document_opened"):
 		st.on_document_opened("daily_note")
+
+
+
+# ======================================================================
+# Round 44: archived shift reports, journal observations, family mail.
+# ======================================================================
+func _family() -> Node:
+	return get_tree().get_first_node_in_group(&"family_mail") if is_inside_tree() else null
+
+
+## A shift report as a file record (i = index in shift_history; -1 = the
+## current shift: in progress, or the latest finished one).
+func _report_record(i: int) -> Dictionary:
+	if _day_plan == null:
+		return {"name": "shift_report.txt", "date": "", "type": "txt", "text": "No station link."}
+	if i >= 0 and i < _day_plan.shift_history.size():
+		var h: Dictionary = _day_plan.shift_history[i]
+		return {"name": "shift_report_day_%02d.txt" % int(h["day"]), "date": "day %d" % int(h["day"]), "type": "txt", "text": "\n".join(Array(h["report"]))}
+	if _day_plan.shift_ended and not _day_plan.shift_history.is_empty():
+		return _report_record(_day_plan.shift_history.size() - 1)
+	var lines: Array = ["SHIFT IN PROGRESS — %d%% done (report so far):" % int(round(_day_plan.shift_progress() * 100.0))] + Array(_day_plan.shift_report_lines()).slice(1)
+	return {"name": "shift_report_day_%02d_in_progress.txt" % int(_day_plan.day_number), "date": "today", "type": "txt", "text": "\n".join(lines)}
+
+
+## Compact investigation summary: what was noticed / checked / contradicted.
+func observation_lines() -> Array:
+	var st: Node = _story()
+	var out: Array = ["OBSERVATIONS"]
+	if st == null or not "evidence" in st or st.evidence.is_empty():
+		out.append("  Nothing out of the ordinary. Good.")
+		return out
+	var by: Dictionary = {}
+	for e in st.evidence:
+		by[String(e["event"])] = true
+	for ev in by:
+		var mark: String = {"observed": "?", "checked": "?·", "contradicted": "!"}.get(st.investigation_state(ev), "")
+		var jn: Node = get_tree().get_first_node_in_group(&"journal")
+		var txt: String = String(jn.OBSERVED.get(ev, ev)) if jn != null else ev
+		out.append("  [%s] %s" % [mark, txt.left(78)])
+	out.append("")
+	out.append("  ? noticed   ?· checked in person   ! records disagree")
+	return out
+
+
+var _mail_box: HBoxContainer
+var _mail_list: VBoxContainer
+var _mail_text: Label
+var _mail_opts: VBoxContainer
+var mail_open: String = ""
+
+
+func _ensure_mail_ui() -> void:
+	if _mail_box != null:
+		return
+	var vbox: VBoxContainer = $Control/VBox
+	_mail_box = HBoxContainer.new()
+	_mail_box.name = "MailView"
+	_mail_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_mail_box.add_theme_constant_override("separation", 6)
+	vbox.add_child(_mail_box)
+	vbox.move_child(_mail_box, vbox.get_children().find(_report) + 1)
+	_mail_list = VBoxContainer.new()
+	_mail_list.custom_minimum_size = Vector2(140, 0)
+	_mail_list.add_theme_constant_override("separation", 2)
+	_mail_box.add_child(_mail_list)
+	var right := VBoxContainer.new()
+	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_mail_box.add_child(right)
+	_mail_text = Label.new()
+	_mail_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_mail_text.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_mail_text.add_theme_font_size_override("font_size", 11)
+	_mail_text.add_theme_color_override("font_color", Color(0.82, 0.9, 0.86))
+	_mail_text.clip_text = true
+	right.add_child(_mail_text)
+	_mail_opts = VBoxContainer.new()
+	_mail_opts.add_theme_constant_override("separation", 2)
+	right.add_child(_mail_opts)
+
+
+func _mail_button(parent: Node, text: String, cb: Callable, name: String) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.name = name.validate_node_name()
+	b.focus_mode = Control.FOCUS_NONE
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	b.clip_text = true
+	b.add_theme_font_size_override("font_size", 10)
+	b.pressed.connect(cb)
+	parent.add_child(b)
+	return b
+
+
+func _build_mail() -> void:
+	_ensure_mail_ui()
+	for c in _mail_list.get_children() + _mail_opts.get_children():
+		c.get_parent().remove_child(c)
+		c.queue_free()
+	var fm: Node = _family()
+	if fm != null:
+		var convs: Array = fm.available()
+		convs.reverse()
+		for conv in convs:
+			var unread: bool = fm.state(conv) == "unread" or (fm.answer_delivered(conv) and not bool(fm.threads.get(conv, {}).get("answer_read", false)))
+			_mail_button(_mail_list, "%s%s · %s" % ["● " if unread else "", fm.CONVERSATIONS[conv]["short"], fm.CONVERSATIONS[conv]["subject"]], open_thread.bind(conv), "Thread_" + conv)
+	_mail_button(_mail_list, "Older mail", open_thread.bind("_older"), "Thread_older")
+	_mail_button(_mail_list, "Sent letters ›", func(): _show_view(&"mail_sent"), "Thread_sent")
+	if mail_open == "" and fm != null and not fm.available().is_empty():
+		mail_open = fm.available().back()
+	_fill_thread()
+
+
+func open_thread(conv: String) -> void:
+	mail_open = conv
+	_build_mail()
+
+
+func _fill_thread() -> void:
+	var fm: Node = _family()
+	for c in _mail_opts.get_children():
+		_mail_opts.remove_child(c)
+		c.queue_free()
+	if mail_open == "_older" or mail_open == "" or fm == null or not fm.CONVERSATIONS.has(mail_open):
+		_mail_text.text = "\n".join(messages_lines())
+		return
+	fm.mark_read(mail_open)
+	if is_inside_tree():
+		get_tree().call_group(&"story_events", &"on_letter_opened", mail_open)
+	_mail_text.text = "\n".join(fm.thread_lines(mail_open))
+	if fm.state(mail_open) != "replied":
+		for o in fm.options(mail_open):
+			_mail_button(_mail_opts, "Reply: %s" % o["text"], send_reply.bind(mail_open, String(o["id"])), "Reply_" + String(o["id"]))
+	_refresh_unread()
+
+
+func send_reply(conv: String, choice: String) -> bool:
+	var fm: Node = _family()
+	var ok: bool = fm != null and fm.reply(conv, choice)
+	_build_mail()
+	return ok

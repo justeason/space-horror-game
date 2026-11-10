@@ -45,9 +45,11 @@ func _personal_log() -> void:
 		var vb: Control = scr.get_node("Control/VBox")
 		var te: TextEdit = scr.get_node("Control/VBox/EntryField")
 		var right: float = te.get_global_rect().end.x
-		_check("log editor fits the screen (%d chars): editor right edge %.0f <= %d" % [txt.length(), right, scr.size.x], vb.size.x <= scr.size.x - 20 and right <= scr.size.x - 8 and te.wrap_mode != TextEdit.LINE_WRAPPING_NONE)
+		# Round 44: the screen renders at 2x; widths are in LAYOUT units.
+		var lw: float = scr.layout_size().x
+		_check("log editor fits the screen (%d chars): editor right edge %.0f <= %d" % [txt.length(), right, lw], vb.size.x <= lw - 20 and right <= lw - 8 and te.wrap_mode != TextEdit.LINE_WRAPPING_NONE)
 	var bar: Control = scr.get_node("Control/VBox/AppBar")
-	_check("menu bar (with Save / Save & Back / Close) never wider than the screen (%.0f)" % bar.get_combined_minimum_size().x, bar.get_combined_minimum_size().x <= scr.size.x - 24)
+	_check("menu bar (with Save / Save & Back / Close) never wider than the screen (%.0f)" % bar.get_combined_minimum_size().x, bar.get_combined_minimum_size().x <= scr.layout_size().x - 24)
 	_check("Save and Back stay visible while editing", scr._buttons[&"save"].visible and scr._buttons[&"back"].visible)
 	scr.set_editing(false)
 

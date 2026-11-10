@@ -128,6 +128,8 @@ const DEFAULTS := {
 	# Round 37: interface scale on top of the automatic resolution scaling,
 	# and steady (non-flashing) warning lights.
 	"ui_scale": 1.0, "steady_warnings": false,
+	# Round 44: the technician's inner voice + display brightness.
+	"thought_voice": true, "thought_captions": true, "brightness": 1.0,
 }
 const UI_SCALES := [0.8, 0.9, 1.0, 1.15, 1.3, 1.5]
 static var _values: Dictionary = {}
@@ -191,6 +193,15 @@ static func apply_one(key: String) -> void:
 		var tree: SceneTree = Engine.get_main_loop() as SceneTree
 		if tree != null and tree.root != null:
 			tree.root.content_scale_factor = clampf(float(get_value("ui_scale")), 0.6, 2.0)
+	elif key == "brightness":
+		# Round 44: overall brightness = the world environment's exposure
+		# (tonemap), applied wherever a WorldEnvironment exists.
+		var tree2: SceneTree = Engine.get_main_loop() as SceneTree
+		if tree2 != null and tree2.current_scene != null:
+			for we in tree2.current_scene.find_children("*", "WorldEnvironment", true, false):
+				var env: Environment = (we as WorldEnvironment).environment
+				if env != null:
+					env.tonemap_exposure = clampf(float(get_value("brightness")), 0.6, 1.5)
 	elif key == "language":
 		preload("res://scripts/ui/localization.gd").setup()
 		TranslationServer.set_locale(String(get_value("language")))

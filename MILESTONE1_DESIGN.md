@@ -10351,3 +10351,184 @@ When the shift ends, a warm glow comes on over the bunk: a wordless "go to bed" 
 - The daily note's two-column checklist is aligned with a proportional
   font (approximate columns). Holdout is single-weapon by design.
 - Not manually playtested.
+
+# Round 44 — Laptop pauses the station, journal + inner voice, family replies, station records and sound investigations, Holdout modes and buildings, lighting calibration, first-chapter demo path, release audit
+
+## A. Time domains (one authority: DayPlan)
+- GAMEPLAY time (shift clock, orbit, scheduled emergencies, routines,
+  bedtime grace, tiredness, ordinary environment drift via
+  `gameplay_delta()`, ordinary station operations) is HELD by named
+  reasons: implicit `waking`, `laptop` (the focused personal laptop — ANY
+  app: desktop, Today, messages, journal, files, photos, games).
+- UI time (laptop navigation, app animations, minigames) and STORY
+  presentation / audio run on real time (a station sound can be heard
+  while using the laptop).
+- CRITICAL timers are never held: laptop focus is refused during an
+  emergency or air-quality alarm (exit always allowed); an emergency that
+  starts during focus ends it at once (desktop alert, control returned).
+  Holds are never saved; a load can never stay frozen.
+
+## B. Laptop information architecture
+- Desktop: TODAY, SHIFT HANDOVER, JOURNAL, MESSAGES, PHOTOS, FILES, Cargo
+  Drop, Holdout. TODAY = status (time · work %), priority, open jobs,
+  cargo, supplies, one reminder, the self-ticking checklist — Schedule is
+  folded in. Shift reports are archived files (Work/Archived Reports,
+  generated from DayPlan's history + the shift in progress). Old ids keep
+  working (schedule -> Today, report -> archive, log -> private notes).
+- The laptop screen RENDERS at 2x (960 x 560) with its 480 x 280 layout
+  (size_2d_override, stretched); clicks / hover arrive in render pixels and
+  map through the stretch (tested: the visible icon answers; empty desktop
+  does not); a closed laptop stops rendering.
+
+## C. Automatic journal (`scripts/story/journal.gd`)
+- Short dated first-person entries from REAL experiences: each finished
+  day, the first job of each kind, emergencies, letters sent, anomalies
+  only once SEEN, physical checks, record contradictions, phase / chapter
+  turns. One entry per stable key (no duplicates on reload / reopening);
+  deterministic text. JOURNAL app (+ SEEN: compact observations, + NOTES:
+  the former Personal Log, untouched). Story progression never needs typing.
+
+## D. Inner voice (`scripts/story/inner_voice.gd`)
+- Rare, once-per-id first-person thoughts when evidence was really
+  observed ("That's strange. I haven't been in Storage today.", "No cycle
+  logged. I heard it.", "That's not what I wrote."). Caption: centred,
+  warm, in quotes, no speaker label; never over an assistant line;
+  cooldown. Voice: local macOS `say` ("Flo"), NON-spatial, own InnerVoice
+  bus (low-pass + slight room) -> Voice; settings "Spoken inner thoughts"
+  / "Inner-thought captions". Headless / non-macOS: captions only
+  (`backend()` reports it). EN + ZH lines.
+
+## E. Family correspondence (`scripts/story/family_mail.gd`)
+- Four hand-written threads (Mara: eating / far away; Mum: sleeping; Dev:
+  quiz). Read -> 2-4 reply buttons -> the reply is in the thread -> the
+  answer for THAT choice arrives the next station day. No rolls; a reply
+  is stored once; answers never disappear; save/load keeps choice and
+  delivery day. The "far away" letter (and the "something strange" option)
+  only exists after an anomaly was SEEN; hiding it is a valid choice.
+  Sent letters = the authentic record.
+- Horror foundation: `family_misremember` (late phase 2, not day 1,
+  developer-triggerable) adds one PRESENTATION sentence to a delivered
+  answer ("you said the corridor light keeps you awake") — the stored
+  thread and Sent letters stay true; reading both = a contradiction.
+
+## F. Station sounds (`scripts/audio/station_sounds.gd`)
+- Positional SFX from the real equipment (airlock latches / hiss from the
+  airlock, breaker trips from the panel). A few ORDINARY operations a day
+  (gameplay time only, paced, never in emergencies): Life Support fan
+  speed change, Engineering relay self-test, comms RX auto-calibration,
+  hull ticking at eclipse transitions — each logged, so most odd noises
+  have an ordinary record.
+- `phantom_cycle` (phase 2): latch + vent hiss + latch FROM the airlock,
+  nothing commanded, no state change, NO log entry. Going there = a
+  check; the AIRLOCK record = the contradiction (journal + thought).
+
+## G. Consultable station records (`scripts/station/station_log.gd`)
+- AIRLOCK (cycle start / complete, hatch open / close, vent / repress,
+  seal-test result), CAMERAS (offline / restored, daily recording check),
+  ENVIRONMENT (hourly pressure / O2 / air / bus, real ordinary ops),
+  ACCESS (workstation login, first entry into each module per day).
+  Written only by real state changes; workstation RECORDS tabs (SUMMARY /
+  AIRLOCK / CAMERAS / ENVIRONMENT / ACCESS). Story overlays are merged for
+  display only and flagged; the stored history is authentic and saved.
+- `access_ghost` (phase 2): the ACCESS record shows "<ROOM> · entered ·
+  TECH-1" for a module not visited today (presentation only); reading it
+  is the observation + contradiction + thought (only if really unvisited).
+
+## H. Investigation as play
+- Per event: observed -> checked (went there) -> contradicted (a record
+  disagrees); RECORD_LINKS: note_archive, airlock_log, access_log,
+  sent_mail, environment_log. Nothing points the way; JOURNAL > SEEN shows
+  ? / ?· / ! marks. Several independent routes; missing clues never
+  blocks the chapter.
+
+## I. First chapter (demo slice)
+- Day 1 orientation (assistant intro, watch, check-in, then the handover
+  pointer), ordinary days, laptop context, cameras as routine work,
+  familiarity -> phase 2 (unchanged rules). CHAPTER ONE completes the
+  morning after phase 2 has begun AND a record contradiction was found —
+  or, quiet route, four phase-2 days without one. A short end card ("END
+  OF CHAPTER ONE … keep playing"), a journal line, milestone `chapter_1`;
+  nothing is locked and play continues.
+
+## J. New-player usability (audit)
+- Already present: bunk prompts (E get up / F laptop), day-1 assistant
+  intro (watch, check-in), map highlights, equipment intros, context
+  prompts, Controls text in Settings. Added: first laptop use ("TODAY
+  shows the day… the clock waits"), day-1 shift end (autosave each
+  morning, SYSTEM page save, rest), the handover pointer after check-in.
+  No EVA on day 1 (unchanged scheduling).
+
+## K. Holdout
+- EASY (Round 43 balance) / HARD (x1.75 zombies, x0.7 spawn interval,
+  kinds unlock 2 waves earlier, +12%/wave health, +8% speed, elite every
+  4th wave, alive cap 95, x1.3 rewards). Best score / wave per mode;
+  mode saved; a Round 43 save's best becomes the EASY best.
+- Buildings: HOUSE (3 rooms), PHARMACY (shelf aisles, counter, store
+  room), DINER (booths, counter, kitchen + back door): 6 px walls with
+  real door gaps, partitions, furniture (counters / tables block
+  movement only, shelves block bullets too), interior supply spots, a ROOF
+  that hides the inside (and what is in it) until you walk in; zombies use
+  door waypoints.
+- New: MACHETE (cheap melee swing, hits everything in a 140 deg arc),
+  LAUNCHER (late unlock, lobbed grenade, area blast), LURKER (dormant
+  inside buildings, ambush), SPEWER (acid puddles that force moving),
+  rotating elite escorts, damage numbers.
+- Measured: a HARD step with 95 zombies 3.8 ms (headless); rendered
+  60 fps (vsync) with the laptop focused in that wave.
+
+## L. Lighting
+- Ambient 0.20 -> 0.17; accent strips 0.55 -> 0.78; Storage floor strips
+  0.38 (dimmer than ceiling accents) and floor fills 0.45 -> 0.32;
+  Control room main light 1.0 -> 0.9; Comms 0.85 -> 0.72 (more isolated);
+  Living warmer. Breaker darkness / emergency lighting unchanged (tested).
+- Exterior light leak ROOT CAUSE: room lights (unshadowed omnis) used the
+  default all-layers cull mask and every exterior mesh was on layer 1 |
+  EXTERIOR -> lamps lit the hull through walls. FIX: exterior geometry on
+  the EXTERIOR layer only (1002 meshes), interior lights drop the
+  EXTERIOR bit (60 lights); the sun, work lights, hull lamps (now dimmer)
+  and the technician's own lamp still light the exterior.
+
+## M. Accessibility / localization audit
+- Settings: volumes per bus, fullscreen / window size, UI scale, steady
+  warning lights, reduce visual effects, sensitivity, invert Y, assistant
+  guidance / voice / captions, NEW brightness (tonemap exposure), spoken
+  inner thoughts, inner-thought captions; controls text; EN / ZH.
+- Bilingual: menus, settings, assistant lines, inner thoughts. ENGLISH
+  ONLY (documented): laptop apps and their documents, journal, letters,
+  station records, workstation pages, Holdout, developer panel.
+
+## N. Release export audit
+- `export_presets.cfg` (macOS, universal, tests / tools excluded) added.
+  Export attempted: BLOCKED — "No export template found at
+  ~/Library/Application Support/Godot/export_templates/4.7.2.stable/
+  macos.zip". No build was produced or run; release readiness is NOT
+  claimed. Findings for the build: developer panel is debug-only
+  (OS.is_debug_build), saves / settings live in user:// under the project
+  name (an exported build would SHARE the editor's save folder — set
+  `application/config/custom_user_dir_name` for a demo), `say`-based
+  voices are macOS-only (other platforms: OS TTS or captions).
+
+## O. Release-readiness checklist (planning, not a launch claim)
+- A FIRST SESSION — controls discoverable (bunk prompts, assistant intro,
+  Settings controls); basic tasks playable (tested); no known soft lock.
+  OPEN: real first-time player test.
+- B GAMEPLAY — maintenance loop, chapter-one progression and optional
+  activities work in automated tests. OPEN: pacing playtest.
+- C STABILITY — save/load covered by suites; OPEN: exported build,
+  crash-recovery test.
+- D PERFORMANCE — measured 60 fps (vsync) in five scenes on the dev Mac;
+  memory flat. OPEN: lower-spec hardware.
+- E PRESENTATION — lighting recalibrated; primitives still used for many
+  props. OPEN: art pass on key areas.
+- F ACCESSIBILITY — subtitles, reduced effects, steady warnings,
+  brightness, sensitivity / invert. OPEN: localisation of laptop texts,
+  key rebinding.
+- G CONTENT — chapter one scope defined; optional content functional.
+  OPEN: chapter two.
+
+## P. Limitations
+- No exported build (templates missing). Laptop/journal/letters/records
+  are English-only. The inner voice is captions-only outside macOS.
+  Holdout zombies use door waypoints + corner steering (no full
+  pathfinding); a zombie can still hug furniture briefly. Hull lamps keep
+  small lit pools in eclipse by design. Not manually playtested.
