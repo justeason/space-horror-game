@@ -186,7 +186,8 @@ func _voice_and_chapter() -> void:
 	ai.set_enabled(false)
 	for i in 30:
 		await process_frame
-	_check("then shows as a caption (distinct, in quotes): '%s'" % iv._label.text, iv.history.any(func(h): return h["id"] == "test_wait") and iv._label.text.begins_with("“"))
+	# Round 46: an INNER caption -- italic, no quotation marks.
+	_check("then shows as a caption (distinct: italic, no quotes): '%s'" % iv._label.text, iv.history.any(func(h): return h["id"] == "test_wait") and not iv._label.text.begins_with("“") and iv._label.get_theme_font("font") is FontVariation)
 	_check("voice backend reported honestly: %s" % iv.backend(), iv.backend().begins_with("captions"))
 	var sd: Dictionary = JSON.parse_string(JSON.stringify(iv.state_dict()))
 	iv.load_dict({})

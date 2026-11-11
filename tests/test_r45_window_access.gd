@@ -143,7 +143,10 @@ func _window_event() -> void:
 	# limbs stay attached, the body slides along the tunnel out of frame.
 	var max_head := 0.0
 	var zs: Array = []
-	for i in 40:
+	# Round 46: the sequence is longer (1.15 s reaction + 0.9 s retreat):
+	# sample until it is over.
+	var t0 := Time.get_ticks_msec()
+	while fig.state != "gone" and Time.get_ticks_msec() - t0 < 5000:
 		await process_frame
 		max_head = maxf(max_head, absf(fig._head.rotation.x))
 		if fig.state == "retreat":

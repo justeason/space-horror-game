@@ -48,14 +48,14 @@ const CAMERA_ONLY := 1 << 18
 const DIRECT_ONLY := 1 << 19
 ## id -> registry entry.
 const EVENTS := {
-	&"corridor_presence": {"name": "Presence behind the operator", "phase": 2, "late": false, "chance": 0.55, "cooldown_days": 3, "max_plays": 3, "enabled": true, "implemented": true,
-		"needs": "Seated at the workstation, Cameras page, INT-02 watched for 6 s (and on an earlier day). Ends on stand / turn round / feed change.",
+	&"corridor_presence": {"name": "Figure crossing the Junction (INT-02)", "phase": 2, "late": false, "chance": 0.55, "cooldown_days": 3, "max_plays": 3, "enabled": true, "implemented": true,
+		"needs": "Seated at the workstation, Cameras page, INT-02 watched for 6 s (and on an earlier day). A figure walks out of the Communications opening, across the Junction, into the Engineering opening (camera only). Going to the Junction afterwards = a physical check.",
 		"variants": ["normal", "abnormal"]},
 	&"window_mismatch": {"name": "Window / camera disagree", "phase": 2, "late": false, "chance": 0.5, "cooldown_days": 4, "max_plays": 2, "enabled": true, "implemented": true,
 		"needs": "Standing at the Control Room observation port, looking out 2.5 s (EXT-03 watched on an earlier day).",
 		"variants": ["normal"]},
-	&"wrong_reading": {"name": "Contradictory instrument", "phase": 2, "late": false, "chance": 0.45, "cooldown_days": 4, "max_plays": 2, "enabled": true, "implemented": true,
-		"needs": "Looking at the Control Room ENVIRONMENT wall panel (within 3 m) for 1.5 s. The workstation keeps the true value.",
+	&"wrong_reading": {"name": "Calibration the workstation denies (task-linked)", "phase": 2, "late": false, "chance": 0.45, "cooldown_days": 4, "max_plays": 2, "enabled": true, "implemented": true,
+		"needs": "NORMAL: a calibration (L07 sensors / M02 signal) completed today; back at the workstation the equipment is listed NOT CALIBRATED -- the instrument, the work order and the log all say it is. ABNORMAL: the assistant announces a calibration that has NOT been done. Checking the instrument in person = investigated.",
 		"variants": ["normal", "abnormal"]},
 	&"hatch_handle": {"name": "Outer hatch handle turns", "phase": 2, "late": true, "chance": 0.45, "cooldown_days": 5, "max_plays": 2, "enabled": true, "implemented": true,
 		"needs": "Inside the station, away from the airlock. A knock sounds at the airlock; on INT-07 (chamber camera) the outer hatch's dogging lever turns. Going to the airlock ends it.",
@@ -75,6 +75,12 @@ const EVENTS := {
 	&"window_figure": {"name": "Figure behind the tunnel port (Chapter One climax)", "phase": 2, "late": false, "chance": 0.0, "cooldown_days": 999, "max_plays": 1, "enabled": true, "implemented": true,
 		"needs": "READY after one anomaly seen (or 2 quiet phase-2 days), not day 1. Shown ONLY when visible from the Control Room port; reacts to a direct gaze; guided once a day if ignored. See window_encounter.gd.",
 		"variants": ["normal"]},
+	&"peripheral_figure": {"name": "Figure at the edge of vision (fast head turn)", "phase": 2, "late": false, "chance": 0.0, "cooldown_days": 1, "max_plays": 99, "enabled": true, "implemented": true,
+		"needs": "Free walking, story phase >= 2, not day 1, at most once a day. After a FAST head turn a figure stands for a moment near the view's edge (the side turned away from), at a real floor spot with a clear line of sight; looking back -> gone. Eyes only. See peripheral_watch.gd.",
+		"variants": ["normal"]},
+	&"basil_return": {"name": "The dead basil is alive again (Phase 3)", "phase": 3, "late": true, "chance": 0.0, "cooldown_days": 999, "max_plays": 1, "enabled": true, "implemented": true,
+		"needs": "Phase 3 only. The plant must have GENUINELY died (3 days unwatered) and been SEEN dead; on a later day it is presented healthy -- no watering, no replacement on record. See quarters_life.gd.",
+		"variants": ["normal"]},
 	&"blind_spot_object": {"name": "Object in a camera blind spot", "phase": 2, "late": true, "chance": 0.4, "cooldown_days": 4, "max_plays": 2, "enabled": false, "implemented": false,
 		"needs": "NOT IMPLEMENTED (future round).", "variants": []},
 	&"radio_contact": {"name": "Unknown radio contact", "phase": 3, "late": false, "chance": 1.0, "cooldown_days": 99, "max_plays": 1, "enabled": false, "implemented": false,
@@ -89,8 +95,21 @@ const PRESENCE_MAX_S := 9.0
 const PRESENCE_SEEN_S := 1.2       # on screen this long while watched = seen
 const WINDOW_GAZE_S := 2.5
 const WINDOW_EVENT_S := 40.0
+## Round 46: the TASK-LINKED wrong reading (replaces the subtle wall-panel
+## number). Presentation only: DayPlan's task state, the work order, the
+## instrument and the station log stay true.
+const CAL_TASKS := {
+	"l07": {"room": &"life_support", "label": "PRESSURE SENSORS", "short": "SENSORS", "station": "Interactables/SensorCalibrationStation"},
+	"m02": {"room": &"communications", "label": "SIGNAL CHAIN", "short": "SIGNAL", "station": "Interactables/SignalCalibrationStation"},
+}
+const CAL_RETURN_S := 15.0               # at least this long after the calibration
+const CAL_SEEN_S := 2.5                  # on the Operations page this long = seen
+var _cal_done: Dictionary = {}           # task -> {day, t}
+var cal_task: String = ""                # the task the anomaly is about
+var cal_task_shown: String = ""          # the workstation currently denies this one
+var _last_cal_variant: String = "normal"
 const READING_GAZE_S := 1.5
-const READING_MAX_S := 30.0
+const READING_MAX_S := 360.0          # Round 46: lasts until checked (or ~6 min)
 const READING_AWAY_S := 4.0
 const HATCH_MAX_S := 75.0
 const HATCH_SEEN_S := 1.5
@@ -99,13 +118,14 @@ const HATCH_SEEN_S := 1.5
 ## approach, BEHIND the seated technician: first far down the Junction,
 ## then in the corridor, then just inside the Control Room doorway; the
 ## abnormal (phase 3) variant stands right behind the stool.
-const PRESENCE_SPOTS := [Vector3(-0.2, 0.0, 4.9), Vector3(-0.22, 0.0, 2.9), Vector3(0.3, 0.0, 1.45)]
-const PRESENCE_CLOSE := Vector3(0.18, 0.0, 0.25)
-## The wrong reading: true values stay in the model; only the wall panel lies.
-const READING_OVERRIDE := {
-	"normal": {"CABIN PRESSURE": "CABIN PRESSURE  96.8 kPa  LOW"},
-	"abnormal": {"CABIN PRESSURE": "CABIN PRESSURE  0.0 kPa  LOW", "O2 PARTIAL": "O2 PARTIAL      0.0 kPa  LOW"},
-}
+## Round 46: the Junction CROSSING (replaces the figure behind the chair):
+## out of the Communications opening (NE), across the open Junction, into
+## the Engineering opening (SW) -- on the corridor centrelines, through the
+## open doorways (no doors there), never through a wall.
+const PRESENCE_PATH := [Vector3(2.05, 0.0, 4.5), Vector3(0.7, 0.0, 4.6), Vector3(-0.2, 0.0, 5.3), Vector3(-1.1, 0.0, 6.06), Vector3(-2.5, 0.0, 6.06)]
+const PRESENCE_PAUSE_AT := 2.45          # path metres: mid-Junction
+const PRESENCE_CHECK_S := 240.0          # walk to the Junction within this = a physical check
+const JUNCTION_CENTRE := Vector3(-0.2, 1.6, 5.4)
 
 @export var day_plan_path: NodePath = ^"../DayPlan"
 var _dp: Node
@@ -149,10 +169,13 @@ var evidence: Array = []           # [{event, day, kind: observation|check|contr
 ## record id -> the events it can contradict (what the record shows).
 const RECORD_LINKS := {
 	"note_archive": {"events": ["note_extra_item"], "text": "The note archive shows one revision, no edits -- the extra line was never issued."},
-	"environment_log": {"events": ["wrong_reading"], "text": "The environment log shows normal cabin pressure all day."},
+	"environment_log": {"events": ["wrong_reading"], "text": "The maintenance record shows the calibration completed today -- verified by the stability self-test.",
+		"by_variant": {"abnormal": "The maintenance record shows no calibration today."}},
 	"airlock_log": {"events": ["phantom_cycle"], "text": "The airlock activity log records no cycle at that time."},
-	"access_log": {"events": ["access_ghost", "window_figure"], "text": "The access log records no one in the airlock tunnel but the technician."},
-	"camera_log": {"events": ["window_figure"], "text": "The cameras logged nothing unusual in the airlock section."},
+	"access_log": {"events": ["access_ghost", "window_figure", "corridor_presence"], "text": "The access log records no one in the airlock tunnel but the technician.",
+		"by_event": {"corridor_presence": "Neither the Communications nor the Engineering door logged anyone at that time."}},
+	"camera_log": {"events": ["window_figure", "corridor_presence"], "text": "The cameras logged nothing unusual in the airlock section.",
+		"by_event": {"corridor_presence": "INT-02 logged motion in the Junction -- 4 s, no tag. Nothing on any other camera."}},
 	"sent_mail": {"events": ["family_misremember"], "text": "The sent letter does not contain the detail the answer quotes."},
 }
 const NOTE_LINES := {"normal": "Check the corridor feed before bed.", "abnormal": "Leave the corridor feed on tonight. It helps."}
@@ -167,6 +190,7 @@ var journal: Node
 var inner: Node
 var family: Node
 var window: Node
+var peripheral: Node
 const ACCESS_ROOMS := {&"storage": "STORAGE", &"engineering": "ENGINEERING", &"life_support": "LIFE SUPPORT", &"communications": "COMMS"}
 const FAMILY_EXTRA := "And you said the corridor light keeps you awake. Try an eye mask?"
 const THOUGHTS := {
@@ -180,6 +204,13 @@ const THOUGHTS := {
 	"heard_phantom": ["Was that the airlock?", "是气闸的声音吗？"],
 	"note_seen": ["Was that always on the list?", "清单上一直有这一项吗？"],
 	"mail_seen": ["When did I tell her that?", "我什么时候跟她说过这个？"],
+	"basil_return": ["I thought that plant was dead.", "我以为那盆植物已经死了。"],
+	"presence_record": ["Something moved. No door opened.", "有东西在动。可没有一扇门开过。"],
+	"peripheral": ["...Was someone there?", "……那里刚才有人吗？"],
+	"cal_check": ["It says calibrated. Right here.", "这上面明明写着已校准。"],
+	"cal_check_false": ["It isn't. Nobody calibrated this.", "根本没有。没人校准过它。"],
+	"cal_denied": ["I just did that.", "我刚做完的。"],
+	"presence_check": ["Nobody. Just the doorways.", "没人。只有那几个门洞。"],
 }
 
 
@@ -196,15 +227,22 @@ func _ready() -> void:
 	inner = load("res://scripts/story/inner_voice.gd").new()
 	inner.name = "InnerVoice"
 	add_child(inner)
+	call_deferred("_hook_basil")
 	family = load("res://scripts/story/family_mail.gd").new()
 	family.name = "FamilyMail"
 	add_child(family)
+	peripheral = load("res://scripts/story/peripheral_watch.gd").new()
+	peripheral.name = "PeripheralWatch"
+	peripheral.se = self
+	add_child(peripheral)
+	peripheral.vanished.connect(_on_peripheral_vanished)
 	window = load("res://scripts/story/window_encounter.gd").new()
 	window.name = "WindowEncounter"
 	add_child(window)
 	if _dp != null:
 		if _dp.has_signal(&"order_closed"):
-			_dp.order_closed.connect(func(t): note_duty(String(t)); _closed_today += 1; journal.on_order_closed(String(t)))
+			_dp.task_completed.connect(_on_task_completed)
+			_dp.order_closed.connect(func(t): note_duty(String(t)); _closed_today += 1; journal.on_order_closed(String(t)); inner.everyday("repair") if inner != null else null)
 		if _dp.has_signal(&"task_completed"):
 			_dp.task_completed.connect(func(t): if t != &"c01": note_duty(String(t)))
 		if _dp.has_signal(&"day_started"):
@@ -366,14 +404,17 @@ func on_record_checked(record_id: String) -> void:
 	for ev in Array(link.get("events", [])):
 		if investigation_state(String(ev)) in ["observed", "checked"] or (active == StringName(ev) and not active_dev):
 			var first: bool = investigation_state(String(ev)) != "contradicted"
-			_add_evidence(String(ev), "contradiction", String(link["text"]), record_id)
+			var ctext: String = String(link.get("by_event", {}).get(String(ev), link["text"]))
+			if String(ev) == "wrong_reading" and link.has("by_variant"):
+				ctext = String(link["by_variant"].get(_last_cal_variant, ctext))
+			_add_evidence(String(ev), "contradiction", ctext, record_id)
 			if not investigations.has(String(ev)):
 				investigations.append(String(ev))
 				history.append({"id": String(ev), "day": day(), "event": "investigated"})
 			if first:
 				if journal != null:
 					journal.on_contradiction(String(ev), record_id)
-				_thought("window_record" if String(ev) == "window_figure" else record_id)
+				_thought("window_record" if String(ev) == "window_figure" else ("presence_record" if String(ev) == "corridor_presence" else record_id))
 			_check_milestones()
 
 
@@ -434,7 +475,37 @@ func eligibility(id: StringName) -> String:
 		return "played %d/%d" % [int(st["plays"]), int(e["max_plays"])]
 	if day() - int(st["last_day"]) < int(e["cooldown_days"]):
 		return "cooldown until day %d" % (int(st["last_day"]) + int(e["cooldown_days"]))
+	# Round 46 pacing: an ordinary day between MEDIUM events, and nothing
+	# medium on the day of the major (window) encounter.
+	if tier(id) == "medium":
+		if medium_played_on(day() - 1):
+			return "pacing: a medium event played yesterday"
+		if window != null and int(window.witnessed_day) == day():
+			return "pacing: the window encounter happened today"
 	return ""
+
+
+## Round 46 horror HIERARCHY (pacing): subtle / medium / major.
+const TIERS := {
+	"subtle": ["note_extra_item", "window_mismatch", "wrong_reading", "peripheral_figure", "access_ghost", "family_misremember", "basil_return"],
+	"medium": ["phantom_cycle", "corridor_presence", "hatch_handle"],
+	"major": ["window_figure"],
+}
+
+
+func tier(id: StringName) -> String:
+	for t in TIERS:
+		if String(id) in TIERS[t]:
+			return t
+	return "subtle"
+
+
+func medium_played_on(d: int) -> bool:
+	for id in TIERS["medium"]:
+		var st: Dictionary = state.get(StringName(id), {})
+		if int(st.get("last_day", -99)) == d and int(st.get("plays", 0)) > 0:
+			return true
+	return active != &"" and tier(active) == "medium" and d == day()
 
 
 ## Deterministic daily arming: at most one event, never below its phase,
@@ -578,6 +649,53 @@ func _family_target() -> String:
 	return ""
 
 
+func _on_peripheral_vanished(reason: String) -> void:
+	if peripheral.dev_preview:
+		peripheral.dev_preview = false
+		return
+	if reason in ["reset", "load"]:
+		return
+	state[&"peripheral_figure"]["plays"] = int(state[&"peripheral_figure"]["plays"]) + 1
+	state[&"peripheral_figure"]["last_day"] = day()
+	state[&"peripheral_figure"]["seen"] = true
+	observe("peripheral_figure", "Something at the edge of my eye. When I looked, nothing.")
+	if reason == "looked":
+		_thought("peripheral")
+
+
+func _hook_basil() -> void:
+	var q: Node = get_tree().get_first_node_in_group(&"quarters_life") if is_inside_tree() else null
+	if q != null and q.has_signal("basil_return_noticed") and not q.basil_return_noticed.is_connected(_on_basil_return_noticed):
+		q.basil_return_noticed.connect(_on_basil_return_noticed)
+	# Round 46: ordinary everyday thoughts (inner_voice.everyday()).
+	if q != null and q.has_signal("consumed") and not q.consumed.is_connected(_on_routine_consumed):
+		q.consumed.connect(_on_routine_consumed)
+	var al: Node = get_tree().get_first_node_in_group(&"airlock")
+	if al != null and al.has_signal("sequence_finished"):
+		al.sequence_finished.connect(func(k): if k == "in" and inner != null: inner.everyday("eva_back"))
+	if _dp != null and _dp.has_signal("shift_ended_signal"):
+		_dp.shift_ended_signal.connect(func(_d): if inner != null: inner.everyday("shift_end"))
+
+
+func _on_routine_consumed(kind: String) -> void:
+	if inner == null:
+		return
+	match kind:
+		"meal": inner.everyday("breakfast")
+		"dinner": inner.everyday("dinner")
+		"tea": inner.everyday("tea")
+		"pour": inner.everyday("basil")
+
+
+func _on_basil_return_noticed() -> void:
+	var q: Node = get_tree().get_first_node_in_group(&"quarters_life")
+	_thought("basil_return")
+	if q != null and bool(q.basil_return_dev):
+		return                     # developer preview: never counted
+	state[&"basil_return"]["seen"] = true
+	observe("basil_return", "The basil is green again. It died on day %d. Nothing on record since." % int(q.basil_dead_day))
+
+
 func _thought(id: String) -> void:
 	if inner == null or not THOUGHTS.has(id):
 		return
@@ -621,6 +739,8 @@ func on_record_viewed(record_id: String) -> void:
 
 ## A letter thread was opened on the laptop.
 func on_letter_opened(conv: String) -> void:
+	if inner != null and family != null and family.answer_delivered(conv):
+		inner.everyday("letter")
 	if active == &"family_misremember" and _family_overlay.has(conv):
 		if not active_dev:
 			state[&"family_misremember"]["seen"] = true
@@ -633,6 +753,12 @@ func _on_day_started(d: int) -> void:
 	if journal != null and d > 1:
 		journal.on_shift_summary(d - 1, _closed_today)
 	_closed_today = 0
+	# Round 46: Phase 3 -- the plant that really died is there again, green.
+	var q: Node = get_tree().get_first_node_in_group(&"quarters_life") if is_inside_tree() else null
+	if q != null and q.has_method("basil_return_eligible") and q.basil_return_eligible(phase()) and int(state[&"basil_return"]["plays"]) < 1:
+		q.basil_return(false)
+		state[&"basil_return"]["plays"] = int(state[&"basil_return"]["plays"]) + 1
+		history.append({"id": "basil_return", "day": d, "event": "presented"})
 	# Presentation anomalies tied to a day end with it.
 	if active in [&"access_ghost", &"family_misremember"]:
 		stop(bool(state[active]["seen"]))
@@ -700,6 +826,81 @@ func _show_chapter_card() -> void:
 
 
 # ------------------------------------------------------------ loop
+# ------------------------------------------- Round 46: calibration anomaly
+func _on_task_completed(task_id: StringName) -> void:
+	if CAL_TASKS.has(String(task_id)):
+		_cal_done[String(task_id)] = {"day": day(), "t": float(_dp.shift_elapsed_s) if _dp != null else 0.0}
+
+
+## A calibration finished today, long enough ago that the technician has
+## walked back -- and still really done (true state).
+func _recent_cal_task() -> String:
+	for t in _cal_done:
+		var c: Dictionary = _cal_done[t]
+		if int(c["day"]) == day() and _dp.is_task_done(StringName(t)) and float(_dp.shift_elapsed_s) - float(c["t"]) >= CAL_RETURN_S:
+			return String(t)
+	return ""
+
+
+## A calibration the day's work actually still requires (not done).
+func _pending_cal_task() -> String:
+	if _dp == null or int(_dp.workday) == 0:
+		return ""
+	for step in _dp.WORKDAY_STEPS.get(int(_dp.workday), []):
+		if String(step[2]) == "task" and CAL_TASKS.has(String(step[3])) and not _dp.is_task_done(StringName(step[3])):
+			return String(step[3])
+	return ""
+
+
+func _in_room(room: StringName) -> bool:
+	var br: Node = _root().get_node_or_null("Equipment/BreakerPanel")
+	var cam: Camera3D = _player_cam()
+	return br != null and cam != null and br.has_method("zone_at") and StringName(br.zone_at(cam.global_position)) == room
+
+
+func _shell_page_ops() -> bool:
+	var sh: Node = _root().get_node_or_null("Interactables/WorkstationConsole/WorkstationScreen/Shell")
+	return sh != null and int(sh.get("page")) == 0
+
+
+func _near_cal_station() -> bool:
+	var stn: Node3D = _root().get_node_or_null(NodePath(String(CAL_TASKS.get(cal_task if cal_task != "" else "l07", CAL_TASKS["l07"])["station"]))) as Node3D
+	return stn != null and not _ws_in_use() and _looking_at(stn.global_position, 2.4, 0.6)
+
+
+## Presentation duties the workstation's Operations page shows on top of
+## the real ones (StationStatus.duties()). Never touches task state.
+func workstation_overlay() -> Array:
+	if active != &"wrong_reading" or cal_task_shown == "":
+		return []
+	var c: Dictionary = CAL_TASKS[cal_task_shown]
+	return [{"room": c["room"], "tag": "CAL", "action": "%s not calibrated -- recalibrate" % String(c["label"]).capitalize(), "short": "%s NOT CALIBRATED" % String(c["short"]),
+		"severity": 2, "id": "STORY-CAL", "story": true,
+		"details": ["%s: NOT CALIBRATED" % c["label"], "Last calibration: none on record."]}]
+
+
+## Developer: set up either variant for real (marks / clears the task).
+func dev_prepare_cal(variant: String) -> void:
+	if not dev_allowed() or _dp == null:
+		return
+	_dev_touch()
+	if variant == "abnormal":
+		_dp.l07_status = _dp.TaskStatus.PENDING
+		_cal_done.erase("l07")
+	else:
+		_dp.mark_done(&"l07")
+		_cal_done["l07"] = {"day": day(), "t": float(_dp.shift_elapsed_s) - CAL_RETURN_S - 1.0}
+
+
+## Round 46: standing (not seated) in the open Junction.
+func _near_junction() -> bool:
+	var cam: Camera3D = _player_cam()
+	if cam == null or _ws_in_use():
+		return false
+	var p: Vector3 = cam.global_position
+	return Vector2(p.x - JUNCTION_CENTRE.x, p.z - JUNCTION_CENTRE.z).length() < 1.3
+
+
 func _process(delta: float) -> void:
 	if _dp == null:
 		return
@@ -710,6 +911,14 @@ func _process(delta: float) -> void:
 		if (k == "hatch_handle" or k == "phantom_cycle") and _near_airlock():
 			_pending_investigation.erase(k)
 			_investigated(k)
+		elif k == "wrong_reading" and _near_cal_station():
+			_pending_investigation.erase(k)
+			_investigated(k)
+			_thought("cal_check" if _last_cal_variant != "abnormal" else "cal_check_false")
+		elif k == "corridor_presence" and _near_junction():
+			_pending_investigation.erase(k)
+			_investigated(k)
+			_thought("presence_check")
 		elif float(_pending_investigation.get(k, 0.0)) <= 0.0:
 			_pending_investigation.erase(k)
 	if active != &"":
@@ -738,13 +947,17 @@ func _process(delta: float) -> void:
 			else:
 				_gaze_s = 0.0
 		&"wrong_reading":
-			var r: Node3D = _readout() as Node3D
-			if r != null and _looking_at(r.global_position, 3.0, 0.75):
-				_gaze_s += dt
-				if _gaze_s >= READING_GAZE_S:
+			if variant == "abnormal":
+				# The assistant announces a calibration nobody has done.
+				var pend: String = _pending_cal_task()
+				if pend != "" and _in_room(&"control_room") and float(_dp.shift_elapsed_s) > 90.0:
+					cal_task = pend
 					_start(armed, variant)
 			else:
-				_gaze_s = 0.0
+				var done: String = _recent_cal_task()
+				if done != "" and _ws_in_use():
+					cal_task = done
+					_start(armed, variant)
 		&"hatch_handle":
 			if not _eva_busy() and not _near_airlock() and float(_dp.shift_elapsed_s) > 60.0:
 				_start(armed, variant)
@@ -784,20 +997,25 @@ func _start(id: StringName, variant: String = "normal", dev: bool = false) -> bo
 	history.append({"id": String(id), "day": day(), "event": "start", "variant": variant, "dev": dev})
 	match id:
 		&"corridor_presence":
-			var spot: Vector3 = PRESENCE_CLOSE if variant == "abnormal" else PRESENCE_SPOTS[mini(int(state[id]["plays"]), PRESENCE_SPOTS.size() - 1)]
-			_presence.position = spot
-			_presence.visible = true
+			# Normal: a short, too-smooth head turn mid-crossing; abnormal: it
+			# stops in the middle and holds the turn toward the camera.
+			_presence.walk(PackedVector3Array(PRESENCE_PATH), PRESENCE_PAUSE_AT, 1.6 if variant == "abnormal" else 0.55)
 		&"window_mismatch":
 			var od: Node = get_tree().get_first_node_in_group(&"observation_discrepancy")
 			if od == null or not od.trigger("displaced", WINDOW_EVENT_S, "event"):
 				_abort_start()
 				return false
 		&"wrong_reading":
-			var r: Node = _readout()
-			if r == null or not r.has_method("set_display_override"):
-				_abort_start()
-				return false
-			r.set_display_override(READING_OVERRIDE.get(variant, READING_OVERRIDE["normal"]), "story:wrong_reading")
+			_last_cal_variant = variant
+			if cal_task == "":
+				cal_task = _recent_cal_task() if variant != "abnormal" else _pending_cal_task()
+			if cal_task == "":
+				cal_task = "l07"              # developer preview without a real task
+			cal_task_shown = cal_task if variant != "abnormal" else ""
+			if variant == "abnormal":
+				var ai: Node = get_tree().get_first_node_in_group(&"station_ai")
+				if ai != null and ai.has_method("say_key"):
+					ai.say_key(&"story_cal_premature" if cal_task == "l07" else &"story_cal_premature_m02")
 		&"hatch_handle":
 			if not _hatch_begin():
 				_abort_start()
@@ -828,6 +1046,15 @@ func _start(id: StringName, variant: String = "normal", dev: bool = false) -> bo
 		&"window_figure":
 			# Developer start only (normal play runs window_encounter.gd).
 			window.dev_spawn()
+		&"basil_return":
+			# Developer PREVIEW only (normal play: _on_day_started, Phase 3):
+			# dead plant presented alive, never counted or saved.
+			var q: Node = get_tree().get_first_node_in_group(&"quarters_life")
+			if q == null:
+				return false
+			if not q.basil_dead:
+				q.dev_basil_state(3)
+			q.basil_return(true)
 	return true
 
 
@@ -843,34 +1070,35 @@ func _update_active(delta: float) -> void:
 	match active:
 		&"corridor_presence":
 			var watching: bool = _watching("INT-02")
-			if watching:
+			if watching and _presence.is_shown():
 				_on_screen_s += delta
-			# The technician checks (turns toward the doorway behind them),
-			# stands up, or leaves the feed -> it is simply not there.
-			var cam: Camera3D = _player_cam()
-			var turned: bool = cam != null and (-cam.global_basis.z).z > 0.25
-			if turned and _on_screen_s >= PRESENCE_SEEN_S and not active_dev:
-				_investigated("corridor_presence")
+			# It walks out of the frame; looking away / standing up ends the
+			# event (the Junction is simply empty).
 			var limit: float = PRESENCE_MAX_S if not active_dev else 30.0
-			if (not watching and not active_dev) or turned or (not _ws_in_use() and not active_dev) or _active_t >= limit:
-				stop(_on_screen_s >= PRESENCE_SEEN_S)
+			if (not watching and not active_dev) or (not _ws_in_use() and not active_dev) or _active_t >= limit:
+				var seen: bool = _on_screen_s >= PRESENCE_SEEN_S
+				if seen and not active_dev:
+					_pending_investigation["corridor_presence"] = PRESENCE_CHECK_S
+					_record_overlay["camera"] = [{"day": day(), "t": _dp.clock_text_hhmm() if _dp != null else "", "text": "INT-02 · motion, Junction · 4 s · no tag"}]
+				stop(seen)
 		&"window_mismatch":
 			var od: Node = get_tree().get_first_node_in_group(&"observation_discrepancy")
 			if od == null or not od.is_active():
 				stop(true)
 		&"wrong_reading":
-			var r: Node3D = _readout() as Node3D
-			var looking: bool = r != null and _looking_at(r.global_position, 3.2, 0.7)
-			if looking:
+			if active_variant == "abnormal":
+				_on_screen_s = maxf(_on_screen_s, CAL_SEEN_S)     # heard on the intercom
+			elif _ws_in_use() and _shell_page_ops():
 				_on_screen_s += delta
-				_away_s = 0.0
-			else:
-				_away_s += delta
-			# Comparing with the workstation while it lies = investigating.
-			if _ws_in_use() and _on_screen_s >= READING_GAZE_S and not active_dev:
-				_investigated("wrong_reading")
-			if _active_t >= READING_MAX_S or (_away_s >= READING_AWAY_S and _on_screen_s > 0.5):
-				stop(_on_screen_s >= READING_GAZE_S)
+			# Going to the instrument itself = the physical check.
+			var stn: Node3D = _root().get_node_or_null(NodePath(String(CAL_TASKS.get(cal_task, CAL_TASKS["l07"])["station"]))) as Node3D
+			if stn != null and _on_screen_s >= CAL_SEEN_S and _looking_at(stn.global_position, 2.4, 0.6) and not _ws_in_use():
+				if not active_dev:
+					_investigated("wrong_reading")
+				_thought("cal_check" if active_variant != "abnormal" else "cal_check_false")
+				stop(true)
+			elif _active_t >= READING_MAX_S:
+				stop(_on_screen_s >= CAL_SEEN_S)
 		&"note_extra_item":
 			if _active_t >= 900.0:
 				stop(true)
@@ -910,16 +1138,16 @@ func stop(seen: bool = false) -> void:
 	active = &""
 	active_variant = ""
 	active_dev = false
-	_presence.visible = false
+	_presence.hide_now()
 	match id:
 		&"window_mismatch":
 			var od: Node = get_tree().get_first_node_in_group(&"observation_discrepancy")
 			if od != null and od.is_active():
 				od.clear()
 		&"wrong_reading":
-			var r: Node = _readout()
-			if r != null and r.has_method("clear_display_override"):
-				r.clear_display_override()
+			if seen and not dev and investigation_state("wrong_reading") != "checked":
+				_pending_investigation["wrong_reading"] = 600.0
+			cal_task_shown = ""
 		&"hatch_handle":
 			_hatch_end()
 			if seen and not dev:
@@ -986,7 +1214,9 @@ func _hatch_begin() -> bool:
 		for v in c.find_children("*", "VisualInstance3D", true, false):
 			# Keep the sunlit EXTERIOR bit (outer face) so the copy is lit
 			# exactly like the real handle on EXT-02.
-			(v as VisualInstance3D).layers = CAMERA_ONLY | (int(layers[mini(j, layers.size() - 1)]) & (1 << 11))
+			# Round 46: EXACTLY camera-only (the old "| EXTERIOR" made the turning
+			# copy visible to the eyes too). The sun lights story layers.
+			(v as VisualInstance3D).layers = CAMERA_ONLY
 			j += 1
 			(v as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		_hatch_clones.append(c)
@@ -1010,18 +1240,24 @@ func _hatch_begin() -> bool:
 func hatch_twist_deg() -> float:
 	if active != &"hatch_handle":
 		return 0.0
+	# Round 46: a clearer, effortful turn -- it catches part-way (a jolt),
+	# then forces on toward OPEN, holds, and drops back to LOCKED.
 	var t: float = fmod(_active_t, 14.0)
-	var amp: float = 110.0 if active_variant == "abnormal" else 55.0
+	var amp: float = 120.0 if active_variant == "abnormal" else 82.0
 	var k: float = 0.0
 	if t < 2.0:
 		k = 0.0
-	elif t < 5.0:
-		k = smoothstep(2.0, 5.0, t)
-	elif t < 8.0:
+	elif t < 3.2:
+		k = 0.4 * smoothstep(2.0, 3.2, t)
+	elif t < 4.0:
+		k = 0.4 + sin((t - 3.2) * 40.0) * 0.02            # caught: a jolt
+	elif t < 5.4:
+		k = 0.4 + 0.6 * smoothstep(4.0, 5.4, t)
+	elif t < 8.5:
 		k = 1.0
-	elif t < 10.5:
-		k = 1.0 - smoothstep(8.0, 10.5, t)
-	return amp * k + (sin(_active_t * 23.0) * 0.8 if k > 0.05 else 0.0)
+	elif t < 9.6:
+		k = 1.0 - smoothstep(8.5, 9.6, t)
+	return amp * k + (sin(_active_t * 23.0) * 1.2 if k > 0.05 else 0.0)
 
 
 func _hatch_animate() -> void:
@@ -1076,42 +1312,11 @@ static func _knock_stream() -> AudioStreamWAV:
 ## detail -- an absence of light in a human shape). CAMERA_ONLY layer,
 ## no collision, no shadow.
 func _build_presence() -> Node3D:
-	var root := Node3D.new()
-	root.name = "CorridorPresence"
-	var host: Node = _root()
-	host.add_child.call_deferred(root)
-	var m := StandardMaterial3D.new()
-	m.albedo_color = Color(0.035, 0.035, 0.04)      # dim, matte -- room light still models its shape
-	m.roughness = 1.0
-	var add := func(mesh: Mesh, pos: Vector3, scl: Vector3) -> void:
-		var mi := MeshInstance3D.new()
-		mi.mesh = mesh
-		mi.material_override = m
-		mi.position = pos
-		mi.scale = scl
-		mi.layers = CAMERA_ONLY
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		root.add_child(mi)
-	var cap := CapsuleMesh.new()
-	cap.radius = 0.19
-	cap.height = 1.05
-	add.call(cap, Vector3(0, 1.12, 0), Vector3(1.0, 1.0, 0.62))      # torso
-	var head := SphereMesh.new()
-	head.radius = 0.11
-	head.height = 0.25
-	add.call(head, Vector3(0, 1.72, 0.0), Vector3.ONE)
-	var limb := CapsuleMesh.new()
-	limb.radius = 0.07
-	limb.height = 0.85
-	add.call(limb, Vector3(-0.1, 0.45, 0), Vector3.ONE)              # legs
-	add.call(limb, Vector3(0.1, 0.45, 0), Vector3.ONE)
-	var arm := CapsuleMesh.new()
-	arm.radius = 0.055
-	arm.height = 0.72
-	add.call(arm, Vector3(-0.25, 1.12, 0), Vector3.ONE)             # arms hang
-	add.call(arm, Vector3(0.25, 1.12, 0), Vector3.ONE)
-	root.visible = false
-	return root
+	# Round 46: the reusable jointed APPARITION, camera-only.
+	var ap: Node3D = load("res://scripts/story/apparition.gd").new(1 << 18)
+	ap.name = "CorridorPresence"
+	_root().add_child.call_deferred(ap)
+	return ap
 
 
 # ---------------------------------------------------- developer layer

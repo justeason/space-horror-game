@@ -30,7 +30,21 @@ var dinner_day: int = -1            # MEAL 2 (dinner) eaten on this day
 var brush_day: int = -1             # morning teeth brushed on this day
 var brush_pm_day: int = -1          # optional evening brush
 var basil_day: int = -1             # basil watered on this day
-var basil_dry_days: int = 0         # consecutive days without water (visible)
+var basil_dry_days: int = 0         # CONDITION: 0 healthy, 1 dry, 2 wilting, 3 dead
+## Round 46: long-term care. Three station days in a row without water kill
+## the plant (deterministic). Watering a living plant improves it ONE step
+## the next morning (never an instant undo). A dead plant stays dead under
+## ordinary play -- water is refused. The TRUE history (died on day N, seen
+## dead, no watering since) is kept even if a Phase 3 story event later
+## PRESENTS it alive again (basil_return: presentation only).
+const BASIL_NAMES := ["HEALTHY", "DRY", "WILTING", "DEAD"]
+var basil_dead: bool = false
+var basil_dead_day: int = -1
+var basil_seen_dead: bool = false
+var basil_return_day: int = -1       # story presentation: alive again since
+var basil_return_seen: bool = false
+var basil_return_dev: bool = false   # developer preview (never counted)
+signal basil_return_noticed
 var missed_dinner: bool = false     # yesterday ended without dinner (mild)
 const DINNER_FROM_MIN := 18 * 60    # dinner from 18:00 (or once work is done); Round 45 15 h day
 const BRUSH_S := 4.0
@@ -129,18 +143,19 @@ func _build_lived_in() -> void:
 	d.name = "LivedIn"
 	add_child(d)
 	# Basil in a pot on the desk (the schedule's "water the basil").
-	box(Vector3(0.1, 0.09, 0.1), Vector3(3.45, 0.825, 2.25), Color(0.6, 0.35, 0.22), d, 0.0)
+	var bp: Vector3 = BASIL_LOCAL
+	box(Vector3(0.1, 0.09, 0.1), Vector3(bp.x, 0.825, bp.z), Color(0.6, 0.35, 0.22), d, 0.0)
 	for k in 5:
 		var leaf := CSGSphere3D.new()
 		leaf.radius = 0.035
-		leaf.position = Vector3(3.45 + cos(k * 1.3) * 0.03, 0.9 + (k % 2) * 0.03, 2.25 + sin(k * 1.3) * 0.03)
+		leaf.position = Vector3(bp.x + cos(k * 1.3) * 0.03, 0.9 + (k % 2) * 0.03, bp.z + sin(k * 1.3) * 0.03)
 		var lm := StandardMaterial3D.new()
 		lm.albedo_color = Color(0.25, 0.55, 0.22)
 		leaf.material = lm
 		d.add_child(leaf)
 		_leaves.append(leaf)
-	part(&"basil", Vector3(0.16, 0.2, 0.16), Vector3(3.45, 0.88, 2.25), d)
-	label("BASIL", Vector3(3.45, 0.79, 2.18), 8, Color(0.95, 0.9, 0.8), d).rotation_degrees.y = 180.0
+	part(&"basil", Vector3(0.16, 0.2, 0.16), Vector3(bp.x, 0.88, bp.z), d)
+	label("BASIL", Vector3(bp.x, 0.79, bp.z - 0.07), 8, Color(0.95, 0.9, 0.8), d).rotation_degrees.y = 180.0
 	# Wall calendar above the desk, with crossed-off days.
 	var cal := Node3D.new()
 	cal.position = Vector3(3.62, 1.42, 2.385)
@@ -195,7 +210,7 @@ func dinner_refusal() -> String:
 
 ## Today's routine for the daily note / tests.
 func routine_status() -> Dictionary:
-	return {"breakfast": breakfast_today(), "drink": drank_today(), "brush": brushed_today(), "dinner": dinner_today(), "basil": basil_watered_today(), "missed_dinner": missed_dinner}
+	return {"breakfast": breakfast_today(), "drink": drank_today(), "brush": brushed_today(), "dinner": dinner_today(), "basil": basil_watered_today(), "basil_dead": basil_dead and basil_return_day < 0, "missed_dinner": missed_dinner}
 
 
 func drank_today() -> bool:
@@ -228,10 +243,14 @@ func _consume(kind: String, seconds: float) -> bool:
 	return true
 
 
+signal consumed(kind: String)     # Round 46: everyday thoughts listen
+
+
 func _on_consumed(kind: String) -> void:
 	if _pending != kind:
 		return
 	_pending = ""
+	consumed.emit(kind)
 	match kind:
 		"water", "tea":
 			drank_day = _today()
@@ -251,8 +270,8 @@ func _on_consumed(kind: String) -> void:
 				_dp.log_event("Dinner")
 		"pour":
 			basil_day = _today()
-			basil_dry_days = 0
-			say("A little water for the basil.")
+			# Round 46: no instant undo -- the plant recovers a step overnight.
+			say("A little water for the basil." if basil_dry_days < 2 else "A lot of droop. It needs a few good days.")
 			if _dp != null:
 				_dp.log_event("Watered the basil")
 		"brush":
@@ -310,6 +329,10 @@ func on_part(id: StringName) -> void:
 					_brush_holder.visible = false
 				sfx(&"click")
 		&"basil":
+			if basil_dead and basil_return_day < 0:
+				basil_seen_dead = true
+				say("It's dead. Water won't help it now.")
+				return
 			if basil_watered_today():
 				say("The soil's still damp. That's enough for today.")
 				return
@@ -318,12 +341,7 @@ func on_part(id: StringName) -> void:
 			if _pending != "" or _hands_full():
 				return
 			_pending = "pour"
-			var b: Node = _body()
-			if b != null and b.has_method("begin_consume") and b.begin_consume("pour", 2.6, _basil_pos()):
-				if not b.consume_finished.is_connected(_on_consumed):
-					b.consume_finished.connect(_on_consumed)
-			else:
-				_on_consumed("pour")
+			_approach_then_pour()
 	_refresh()
 
 
@@ -341,7 +359,7 @@ func part_prompt(id: StringName) -> String:
 				return "Click: Breakfast pouch"
 			return "Click: Dinner tray" if dinner_refusal() == "" else ""
 		&"brush": return "" if brushed_today() and (brush_pm_day == _today() or _hour() < DINNER_FROM_MIN) else "Click: Brush teeth"
-		&"basil": return "" if basil_watered_today() else "Click: Water the basil"
+		&"basil": return "" if basil_watered_today() or (basil_dead and basil_return_day < 0) else "Click: Water the basil"
 		&"mug": return "Click: Drink tea" if tea_day == _today() and not _mug_drunk else ""
 	return ""
 
@@ -371,6 +389,7 @@ func bunk_glow_energy() -> float:
 
 func _process(delta: float) -> void:
 	_update_bunk_glow(delta)
+	_watch_basil()
 	if brewing < 0.0:
 		return
 	brewing += delta
@@ -394,32 +413,150 @@ func _refresh() -> void:
 	_refresh_basil()
 
 
+## Post-Round-45: the pot is watered from arm's length. Clicked from further
+## away, the body first takes a short, ordinary step up to the desk (the
+## guided walk: real physics, any movement key cancels and abandons the
+## pour), then the can is tipped -- the spout, not the wrist, over the pot.
+## Post-Round-45: the pot sits near the desk's FRONT edge (slab z 1.92-2.38),
+## between the task lamp (x 3.30) and the notebook (x 3.61); the stool
+## (x 3.64-3.96) keeps the body in front of x ~3.3. At the back (z 2.25) it
+## was out of arm's reach from anywhere a body can stand.
+const BASIL_LOCAL := Vector3(3.45, 0.85, 2.03)
+const POUR_REACH := 0.55         # horizontal eye -> pot distance an arm covers
+const POUR_STAND := 0.45         # where the step stops (short of the pot)
+const POUR_STEP_MAX_S := 1.6
+
+
+func _approach_then_pour() -> void:
+	var pot: Vector3 = _basil_pos()
+	var fb: Node = get_node_or_null(^"../../FreeMoveBody")
+	if fb != null and "guide_target" in fb and bool(fb.get("active")) and fb.guide_target == Vector3.INF and fb.has_method("current_eye_position"):
+		var eye: Vector3 = fb.current_eye_position()
+		var flat := Vector3(pot.x - eye.x, 0.0, pot.z - eye.z)
+		if flat.length() > POUR_REACH:
+			var stand: Vector3 = pot - flat.normalized() * POUR_STAND
+			fb.guide_cancelled = false
+			fb.guide_target = Vector3(stand.x, eye.y, stand.z)
+			var waited: float = 0.0
+			while fb.guide_target != Vector3.INF and waited < POUR_STEP_MAX_S and _pending == "pour":
+				await get_tree().physics_frame
+				waited += get_physics_process_delta_time()
+			var cancelled: bool = fb.guide_cancelled
+			fb.guide_target = Vector3.INF      # blocked by the desk / timed out: pour from here
+			if cancelled or _pending != "pour":
+				if _pending == "pour":
+					_pending = ""              # the player walked off: no water
+				return
+	var b: Node = _body()
+	if b != null and b.has_method("begin_consume") and b.begin_consume("pour", 2.6, pot):
+		if not b.consume_finished.is_connected(_on_consumed):
+			b.consume_finished.connect(_on_consumed)
+	else:
+		_on_consumed("pour")
+
+
 ## The basil shows how it has been looked after: green and upright when
 ## watered, droopier and paler for every dry day (recovers when watered).
 func _basil_pos() -> Vector3:
-	return to_global(Vector3(3.45, 0.85, 2.25))
+	return to_global(BASIL_LOCAL)
 
 
 func basil_health() -> float:
-	return clampf(1.0 - 0.25 * float(basil_dry_days), 0.25, 1.0)
+	if basil_dead and basil_return_day < 0:
+		return 0.0
+	return clampf(1.0 - 0.25 * float(basil_condition()), 0.25, 1.0)
+
+
+## 0 healthy .. 3 dead, as the plant LOOKS (a story return shows healthy).
+func basil_condition() -> int:
+	if basil_return_day >= 0:
+		return 0
+	return 3 if basil_dead else clampi(basil_dry_days, 0, 2)
+
+
+func basil_state_name() -> String:
+	return BASIL_NAMES[basil_condition()]
 
 
 func _refresh_basil() -> void:
-	var h: float = basil_health()
+	var c: int = basil_condition()
+	var perk: float = 0.004 if basil_watered_today() and c < 3 else 0.0
+	var bp: Vector3 = BASIL_LOCAL
+	# HEALTHY green + upright; DRY dull, a little lower; WILTING yellowed,
+	# drooping outward; DEAD brown, shrivelled and collapsed onto the soil.
+	var cols := [Color(0.25, 0.55, 0.22), Color(0.38, 0.5, 0.25), Color(0.55, 0.5, 0.22), Color(0.34, 0.24, 0.13)]
 	for i in _leaves.size():
 		var leaf: CSGSphere3D = _leaves[i]
-		leaf.radius = 0.035 * lerpf(0.75, 1.0, h)
-		leaf.position.y = 0.9 + (i % 2) * 0.03 * h - (1.0 - h) * 0.03
-		(leaf.material as StandardMaterial3D).albedo_color = Color(0.25, 0.55, 0.22).lerp(Color(0.55, 0.5, 0.25), 1.0 - h)
+		var ang: float = i * 1.3
+		var spread: float = [0.03, 0.034, 0.045, 0.05][c]
+		leaf.radius = 0.035 * [1.0, 0.92, 0.82, 0.6][c]
+		leaf.position = Vector3(bp.x + cos(ang) * spread, [0.9 + (i % 2) * 0.03, 0.895 + (i % 2) * 0.022, 0.878 + (i % 2) * 0.01, 0.862][c] + perk, bp.z + sin(ang) * spread)
+		leaf.scale = Vector3(1.0, [1.0, 0.95, 0.75, 0.42][c], 1.0)
+		(leaf.material as StandardMaterial3D).albedo_color = cols[c]
 
 
 ## New day: the routine resets; a skipped dinner is remembered (mild, the
 ## daily note mentions it), the basil dries a little if it was forgotten.
 func on_new_day(prev_day: int) -> void:
 	missed_dinner = meal_day == prev_day and dinner_day != prev_day
-	if basil_day != prev_day:
-		basil_dry_days = mini(basil_dry_days + 1, 3)
+	if not basil_dead:
+		if basil_day == prev_day:
+			basil_dry_days = maxi(basil_dry_days - 1, 0)      # one step better
+		else:
+			basil_dry_days += 1
+			if basil_dry_days >= 3:
+				basil_dry_days = 3
+				basil_dead = true
+				basil_dead_day = prev_day + 1
+				if _dp != null:
+					_dp.log_event("The basil has died")
 	_refresh()
+
+
+## Round 46 (Phase 3 foundation): may the story present the plant alive?
+## Only after it GENUINELY died and the technician SAW it dead, on a later
+## day, with no legitimate explanation (nothing replaces a plant here).
+func basil_return_eligible(phase: int) -> bool:
+	return phase >= 3 and basil_dead and basil_seen_dead and basil_return_day < 0 and _today() > basil_dead_day
+
+
+func basil_return(dev: bool = false) -> void:
+	basil_return_day = _today()
+	basil_return_seen = false
+	basil_return_dev = dev
+	_refresh()
+
+
+func basil_return_reset() -> void:
+	basil_return_day = -1
+	basil_return_seen = false
+	basil_return_dev = false
+	_refresh()
+
+
+## Developer: put the plant in a care state (0 healthy .. 3 dead).
+func dev_basil_state(c: int) -> void:
+	basil_return_reset()
+	basil_dead = c >= 3
+	basil_dry_days = clampi(c, 0, 3)
+	basil_dead_day = _today() if basil_dead else -1
+	basil_seen_dead = basil_dead
+	_refresh()
+
+
+## Seeing the plant (close, looking at it) -- dead, or impossibly alive.
+func _watch_basil() -> void:
+	var cam: Camera3D = get_viewport().get_camera_3d() if is_inside_tree() else null
+	if cam == null or not (basil_dead and (not basil_seen_dead or (basil_return_day >= 0 and not basil_return_seen))):
+		return
+	var to: Vector3 = _basil_pos() - cam.global_position
+	if to.length() > 2.6 or (-cam.global_transform.basis.z).dot(to.normalized()) < 0.9:
+		return
+	if basil_return_day < 0:
+		basil_seen_dead = true
+	elif not basil_return_seen:
+		basil_return_seen = true
+		basil_return_noticed.emit()
 
 
 ## Round 43: a compact HYGIENE niche on the quarters wall beside the galley:
@@ -460,7 +597,9 @@ func eat_and_drink_now() -> void:
 
 func state_dict() -> Dictionary:
 	return {"tea_day": tea_day, "drank_day": drank_day, "meal_day": meal_day, "mug_drunk": _mug_drunk,
-		"dinner_day": dinner_day, "brush_day": brush_day, "brush_pm_day": brush_pm_day, "basil_day": basil_day, "basil_dry": basil_dry_days, "missed_dinner": missed_dinner}
+		"dinner_day": dinner_day, "brush_day": brush_day, "brush_pm_day": brush_pm_day, "basil_day": basil_day, "basil_dry": basil_dry_days, "missed_dinner": missed_dinner,
+		"basil_dead": basil_dead, "basil_dead_day": basil_dead_day, "basil_seen_dead": basil_seen_dead,
+		"basil_return_day": basil_return_day if not basil_return_dev else -1, "basil_return_seen": basil_return_seen and not basil_return_dev}
 
 
 func load_dict(d: Dictionary) -> void:
@@ -473,6 +612,16 @@ func load_dict(d: Dictionary) -> void:
 	brush_pm_day = int(d.get("brush_pm_day", -1))
 	basil_day = int(d.get("basil_day", -1))
 	basil_dry_days = clampi(int(d.get("basil_dry", 0)), 0, 3)
+	# Round 46: a save from before plant death existed capped "dry" at 3
+	# (droopiest, still alive) -- never kill a plant on load.
+	basil_dead = bool(d.get("basil_dead", false))
+	if not d.has("basil_dead") and basil_dry_days >= 3:
+		basil_dry_days = 2
+	basil_dead_day = int(d.get("basil_dead_day", -1))
+	basil_seen_dead = bool(d.get("basil_seen_dead", false))
+	basil_return_day = int(d.get("basil_return_day", -1))
+	basil_return_seen = bool(d.get("basil_return_seen", false))
+	basil_return_dev = false
 	missed_dinner = bool(d.get("missed_dinner", false))
 	if _brush_holder != null:
 		_brush_holder.visible = true

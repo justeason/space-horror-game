@@ -136,9 +136,9 @@ func _refresh_text() -> void:
 		var g: Dictionary = _day_plan.guidance()
 		var room_txt: String = String(g.get("room", "")).replace("_", " ").to_upper().replace("CONTROL ROOM", "CTRL RM").replace("LIFE SUPPORT", "LIFE SUP")
 		if g.is_empty():
-			_watch_rig.set_watch_text("%s\nALL CLEAR\n%s" % [_clock_line(), "WRAP UP" if _day_plan.is_wrapping_up() else "ENDS %s" % _day_plan.shift_end_text()])
+			_watch_rig.set_watch_text("%s\nALL CLEAR\n%s" % [_clock_line(), "WORK DONE" if _day_plan.is_wrapping_up() else "ENDS %s" % _day_plan.shift_end_text()])
 		else:
-			_watch_rig.set_watch_text("%s\n%s\n%s · %s" % [_clock_line(), g["short"], room_txt, "WRAP UP" if _day_plan.is_wrapping_up() else "ON SHIFT"])
+			_watch_rig.set_watch_text("%s\n%s\n%s · %s" % [_clock_line(), g["short"], room_txt, "WORK DONE" if _day_plan.is_wrapping_up() else "ON SHIFT"])
 		return
 	var room: StringName = _day_plan.get_outstanding_task_room()
 	if room == &"":

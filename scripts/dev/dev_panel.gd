@@ -58,6 +58,14 @@ var _variant: String = "normal"
 var _eq_snapshots: Dictionary = {}     # node path -> state_dict
 var _t: float = 0.0
 var _mouse_before: int = Input.MOUSE_MODE_CAPTURED
+## Round 46: input ownership. While open the panel OWNS the mouse: a
+## full-screen, invisible blocker under it swallows clicks so nothing
+## behind (seated workstation, laptop, world interactions) reacts, and the
+## workstation's own mouse projection steps aside (owns_mouse()). On close
+## the previous look / mouse state is restored exactly -- seated stays
+## seated, a focused laptop stays focused, walking gets mouse-look back.
+var _look_before: bool = true
+var _blocker: Control
 var last_action: String = ""
 
 
@@ -69,13 +77,30 @@ func setup(p_main: Node, p_se: Node) -> void:
 func _ready() -> void:
 	layer = 90
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	add_to_group(&"mouse_overlay")
+	_blocker = Control.new()
+	_blocker.name = "DevPanelBlocker"
+	_blocker.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_blocker.mouse_filter = Control.MOUSE_FILTER_STOP
+	_blocker.visible = false
+	add_child(_blocker)
 	_build()
 	_root.visible = false
+
+
+## Round 46: true while the panel owns mouse input (see _blocker).
+func owns_mouse() -> bool:
+	return is_open
 
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F8:
 		toggle()
+		get_viewport().set_input_as_handled()
+	elif is_open and event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+		# Esc closes the panel only -- it must not also stand the technician
+		# up from the workstation or step back from the laptop.
+		close()
 		get_viewport().set_input_as_handled()
 
 
@@ -91,6 +116,7 @@ func open() -> void:
 		return
 	is_open = true
 	_root.visible = true
+	_blocker.visible = true
 	_lock_box.visible = not unlocked
 	_tabs.visible = unlocked
 	_mouse_before = Input.mouse_mode
@@ -105,6 +131,7 @@ func open() -> void:
 func close() -> void:
 	is_open = false
 	_root.visible = false
+	_blocker.visible = false
 	if DisplayServer.get_name() != "headless":
 		Input.mouse_mode = _mouse_before
 	_set_player_input(true)
@@ -113,11 +140,15 @@ func close() -> void:
 func _set_player_input(on: bool) -> void:
 	var lc: Node = main.get_node_or_null("Player/LookPivot") if main != null else null
 	if lc != null and "input_enabled" in lc:
+		if not on:
+			_look_before = bool(lc.input_enabled)
+			lc.input_enabled = false
+			return
 		var ws: Node = main.get_node_or_null("WorkstationState")
 		# Only hand looking back if nothing else (the seated workstation) owns it.
-		if on and ws != null and ws.is_in_use():
+		if ws != null and ws.is_in_use():
 			return
-		lc.input_enabled = on
+		lc.input_enabled = _look_before
 
 
 func try_unlock(code: String) -> bool:
@@ -246,6 +277,28 @@ func _build_story_controls(box: VBoxContainer) -> void:
 		var m: String = spec[1]
 		_button(h3, spec[0], func(): se._dev_touch(); se.window.call(m); last_action = "window " + m)
 	var h4 := _row(box)
+	# Round 46: the task-linked wrong reading (prepare a REAL setup, then
+	# trigger; status shows true vs displayed).
+	var hc := _row(box)
+	_button(hc, "Cal: prepare done", func(): se.dev_prepare_cal("normal"); last_action = "calibration done (real)")
+	_button(hc, "Cal: prepare pending", func(): se.dev_prepare_cal("abnormal"); last_action = "calibration pending (real)")
+	_button(hc, "Trigger denial", func(): se.dev_trigger(&"wrong_reading", "normal"); last_action = "workstation denies calibration")
+	_button(hc, "Trigger false AI", func(): se.dev_trigger(&"wrong_reading", "abnormal"); last_action = "assistant false announcement")
+	_button(hc, "Reset", func(): se.dev_cancel(); last_action = "wrong reading reset")
+	# Round 46: the peripheral figure.
+	var hpf := _row(box)
+	_button(hpf, "Peripheral: next fast turn", func(): se._dev_touch(); se.peripheral.force_next = true; last_action = "peripheral armed (turn fast)")
+	_button(hpf, "Show left", func(): se._dev_touch(); se.peripheral.dev_preview = true; se.peripheral.try_show(-1.0); last_action = "peripheral left")
+	_button(hpf, "Show right", func(): se._dev_touch(); se.peripheral.dev_preview = true; se.peripheral.try_show(1.0); last_action = "peripheral right")
+	_button(hpf, "Reset", func(): se.peripheral.dev_reset(); last_action = "peripheral reset")
+	# Round 46: basil care states + the Phase 3 return (preview / reset).
+	var hb := HBoxContainer.new()
+	box.add_child(hb)
+	for bs in [["Basil healthy", 0], ["dry", 1], ["wilting", 2], ["dead", 3]]:
+		var bc: int = bs[1]
+		_button(hb, bs[0], func(): main.get_node("Equipment/QuartersLife").dev_basil_state(bc); last_action = "basil state %d" % bc)
+	_button(hb, "Return preview", func(): se.dev_trigger(&"basil_return"); last_action = "basil return preview")
+	_button(hb, "Reset return", func(): main.get_node("Equipment/QuartersLife").basil_return_reset(); last_action = "basil return reset")
 	_button(h4, "Test investigation (tunnel check)", func(): se._dev_touch(); se._investigated("window_figure"); last_action = "window check")
 	_button(h4, "Handover: release all", func(): main.get_node("DayPlan").day_number = maxi(main.get_node("DayPlan").day_number, 10); last_action = "day >= 10 (all notes)")
 	for cl in [0, 1, 2, 3, -1]:
@@ -425,6 +478,12 @@ func story_text() -> String:
 		lines.append("Investigation state: %s" % (", ".join(inv) if not inv.is_empty() else "nothing observed yet"))
 		if se.get("window") != null:
 			lines.append("Window encounter: stage %s · witnessed day %d · guide days %s · ready %s · observable %s" % [se.window.stage, se.window.witnessed_day, str(se.window.guide_days), se.window.is_ready_now(), se.window.observable()])
+		var dpc: Node = main.get_node_or_null("DayPlan")
+		if dpc != null and "cal_task" in se:
+			lines.append("Calibration: L07 TRUE %s · M02 TRUE %s · workstation shows %s" % ["done" if dpc.is_task_done(&"l07") else "pending", "done" if dpc.is_task_done(&"m02") else "pending", ("%s NOT CALIBRATED (story)" % se.cal_task_shown) if se.cal_task_shown != "" else "the truth"])
+		var qd: Node = main.get_node_or_null("Equipment/QuartersLife")
+		if qd != null and qd.has_method("basil_state_name"):
+			lines.append("Basil: %s%s · died day %d · seen dead %s · return day %d" % [qd.basil_state_name(), " (TRUE: dead)" if qd.basil_dead and qd.basil_return_day >= 0 else "", qd.basil_dead_day, qd.basil_seen_dead, qd.basil_return_day])
 		var clr: Node = main.get_node_or_null("DayPlan/Clearance")
 		if clr != null:
 			lines.append("Clearance: %s (earned %d%s)" % [clr.NAMES[clr.effective()], clr.earned(), " · DEV OVERRIDE" if clr.dev_override >= 0 else ""])
@@ -471,6 +530,12 @@ func _rebuild_events() -> void:
 
 func player_text() -> String:
 	var lines: Array = []
+	# Round 46: every time domain side by side (shift budget vs station clock).
+	var dpt: Node = main.get_node_or_null("DayPlan")
+	if dpt != null and dpt.has_method("time_diagnostics"):
+		var td: Dictionary = dpt.time_diagnostics()
+		lines.append("Time: clock %s · shift %.1f s elapsed / %.1f s left · x%.0f clock rate" % [td["clock"], td["elapsed_s"], td["remaining_s"], td["multiplier"]])
+		lines.append("Time domain: %s · pause: %s · laptop clock +%.0f s · after shift %.0f s" % [td["domain"], td["pause"] if String(td["pause"]) != "" else "none", td["laptop_clock_s"], td["after_shift_s"]])
 	var pc: Node3D = main.get_node_or_null("Player/LookPivot/PitchPivot/Camera3D") as Node3D
 	var br: Node = main.get_node_or_null("Equipment/BreakerPanel")
 	if pc != null:

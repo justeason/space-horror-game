@@ -105,6 +105,11 @@ func duties() -> Array:
 	var pw: Node = _eq("PowerDistribution")
 	if pw != null and not has_power_order and pw.is_overloaded():
 		out.append({"room": &"engineering", "tag": "LOADS", "action": "Reduce Bus A load", "severity": Sev.EMERGENCY, "id": "COND-overload"})
+	# Round 46: story PRESENTATION duties (e.g. a calibration the workstation
+	# denies). Display only -- never DayPlan state.
+	var se: Node = get_tree().get_first_node_in_group(&"story_events") if is_inside_tree() else null
+	if se != null and se.has_method("workstation_overlay"):
+		out += se.workstation_overlay()
 	return out
 
 

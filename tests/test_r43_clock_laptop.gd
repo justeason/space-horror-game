@@ -107,7 +107,11 @@ func _new_day_0800() -> void:
 	var data: Dictionary = main.get_node("SaveGame").collect_state()
 	_check("autosave after waking records zero elapsed shift time", float(data["day_plan"]["shift_elapsed_s"]) == 0.0)
 	ss._sit_up_then_get_up()
-	await create_timer(2.5).timeout
+	# Round 46: the day starts once fully UP (never during the get-up).
+	var t0 := Time.get_ticks_msec()
+	while not ss.is_up() and Time.get_ticks_msec() - t0 < 10000:
+		await process_frame
+	await create_timer(0.5).timeout
 	_check("up and about: the day is active, the clock runs from 08:00 (%s)" % dp.clock_text_hhmm(), dp.day_active and dp.shift_elapsed_s > 0.0 and dp.clock_minutes() < 8 * 60 + 10)
 
 

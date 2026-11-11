@@ -179,7 +179,8 @@ func _holdout() -> void:
 	var early: Dictionary = {}
 	for i in 200:
 		early[hold._pick_kind()] = true
-	_check("wave 1 is walkers only", early.keys() == ["walker"])
+	# Round 46: Easy = the old Hard balance -- wave 1 mostly walkers, at most two early kinds.
+	_check("wave 1 is a small, walker-led table", early.has("walker") and early.size() <= 3)
 	# Wave clear -> shop -> next wave.
 	hold.start_seeded(3)
 	hold._to_spawn = 0

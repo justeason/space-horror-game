@@ -49,8 +49,10 @@ func _placement() -> void:
 	var cam: Camera3D = net.camera("INT-02")
 	var p: Vector3 = cam.global_position
 	var fwd: Vector3 = -cam.global_basis.z
-	_check("INT-02 on the Life Support approach (%.2f, %.2f, %.2f), under the bend ceiling" % [p.x, p.y, p.z], p.z > 8.3 and p.z < 9.9 and p.x > -0.8 and p.x < -0.2 and p.y < 2.6 and p.y > 2.2)
-	_check("faces the Control Room (forward z %.2f)" % fwd.z, fwd.z < -0.95)
+	# Round 46: remounted on the Junction side of the Life Support doorway
+	# header, looking north into the Junction (test_r46_horror: sightlines).
+	_check("INT-02 on the Life Support doorway header (%.2f, %.2f, %.2f), under the ceiling" % [p.x, p.y, p.z], p.z > 6.9 and p.z < 7.4 and p.x > -0.9 and p.x < -0.2 and p.y < 2.6 and p.y > 2.2)
+	_check("faces north into the Junction (forward z %.2f)" % fwd.z, fwd.z < -0.7)
 	_check("sightline: Junction A, corridor, doorway and the seat (physics rays)", net.sees("INT-02", Vector3(-0.2, 1.2, 4.9)) and net.sees("INT-02", Vector3(0, 1.2, 2.9)) and net.sees("INT-02", Vector3(0, 1.2, 2.1)) and net.sees("INT-02", Vector3(0, 1.15, -0.45), 0.4))
 	_check("does NOT look through walls: the Engineering side room is out of sight", not net.sees("INT-02", Vector3(-4.2, 1.2, 5.0)))
 	var arm: CSGBox3D = null

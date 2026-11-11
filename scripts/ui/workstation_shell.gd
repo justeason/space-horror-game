@@ -641,6 +641,8 @@ func _refresh_ops() -> void:
 
 func _duty_details(d: Dictionary) -> Array:
 	var id: String = String(d.get("id", ""))
+	if d.has("details"):
+		return Array(d["details"])
 	if id.begins_with("COND") or id == "DAY1":
 		return [String(d["action"])]
 	for r in screen.work_order_rows():
@@ -795,7 +797,8 @@ func refresh() -> void:
 		_emerg.text = "! %s   %s" % [st.emergency_line(), String(e.get("action", ""))]
 	# Round 42: station TIME in the header; work progress stays a separate
 	# quantity (WORK nn%).
-	_title.text = "DAY %d · %s · %s" % [dp.day_number, dp.clock_text_hhmm(), "REST" if dp.shift_ended else ("WRAP UP" if dp.is_wrapping_up() else "WORK %d%%" % int(round(dp.shift_progress() * 100.0)))]
+	# Round 46: + the REAL shift time left (mm:ss of the 600 s budget).
+	_title.text = "DAY %d · %s · %s" % [dp.day_number, dp.clock_text_hhmm(), "REST" if dp.shift_ended else ("WORK DONE · %s LEFT" % dp.clock_text(dp.shift_remaining_s()) if dp.is_wrapping_up() else "WORK %d%% · %s LEFT" % [int(round(dp.shift_progress() * 100.0)), dp.clock_text(dp.shift_remaining_s())])]
 	_title.add_theme_font_size_override("font_size", fit_font_size(_title.text, 192.0, 14, 9))
 	match page:
 		Page.OPS: _refresh_ops()

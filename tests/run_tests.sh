@@ -181,11 +181,19 @@ TESTS=(
   test_r44_holdout_light
   test_r45_window_access
   test_r45_laptop_station
+  test_r46_shift_timer
+  test_r46_dev_input
+  test_r46_holdout_balance
+  test_r46_life_systems
+  test_r46_horror
 )
 
 if [ "$#" -gt 0 ]; then
   TESTS=("$@")
 fi
+
+# Tests that need a real window (GUI mouse events); see the run loop.
+WINDOWED_TESTS=(test_r46_dev_input test_r46_horror)
 
 overall_status=0
 summary=()
@@ -213,7 +221,14 @@ for name in "${TESTS[@]}"; do
   # no further output for that long. Normal long tests (the 20-day run)
   # keep printing and stay well under the limit.
   tmp_out="$(mktemp -t godot_test_out)"
-  godot --headless --path . --script "$script" > "$tmp_out" 2>&1 &
+  # Round 46: GUI hover / clicks are only delivered with a real window
+  # (headless has no mouse-in-window state), so the few tests that must
+  # click real Controls run windowed (a small window appears briefly).
+  mode_flag="--headless"
+  for w in "${WINDOWED_TESTS[@]}"; do
+    if [ "$w" = "$name" ]; then mode_flag=""; fi
+  done
+  godot $mode_flag --path . --script "$script" > "$tmp_out" 2>&1 &
   pid=$!
   ticks=0
   idle_ticks=0

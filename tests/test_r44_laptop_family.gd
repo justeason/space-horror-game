@@ -175,7 +175,7 @@ func _family() -> void:
 	var opts: Array = scr._mail_opts.get_children()
 	_check("2-4 reply options shown as buttons (%d)" % opts.size(), opts.size() >= 2 and opts.size() <= 4)
 	(opts[1] as Button).pressed.emit()
-	_check("reply recorded (B) in the thread", fm.state("mara_eating") == "replied" and fm.threads["mara_eating"]["choice"] == "B" and scr._mail_text.text.find("You (day 2)") != -1)
+	_check("reply recorded (B) in the thread", fm.state("mara_eating") == "replied" and fm.threads["mara_eating"]["choice"] == "B" and scr._mail_text.text.find("You · day 2") != -1)   # Round 46: one chronological conversation
 	_check("no second send", not fm.reply("mara_eating", "A") and fm.threads["mara_eating"]["choice"] == "B")
 	_check("answer not yet delivered on the same day", not fm.answer_delivered("mara_eating"))
 	dp.day_number = 3

@@ -2215,13 +2215,25 @@ signal consume_finished(kind: String)
 ## Round 45: a REACH target (world) for gestures performed at an object
 ## rather than the mouth ("pour": watering the basil). INF = the mouth.
 var _consume_target: Vector3 = Vector3.INF
-var _pour_fx: CPUParticles3D
+## Post-Round-45: closed-loop aim for the pour -- the SPOUT TIP (where the drops
+## leave the can), not the wrist, is brought over the pot.
+var _pour_corr: Vector3 = Vector3.ZERO
+## Soil line above the pour target (pot centre), where the drops end.
+const POUR_SOIL_UP := 0.03
+
+
+## Time for a drop leaving at `v0` (downward) to fall `h` metres under `g`.
+static func pour_drop_lifetime(h: float, v0: float, g: float) -> float:
+	if h <= 0.0 or g <= 0.0:
+		return 0.05
+	return clampf((-v0 + sqrt(v0 * v0 + 2.0 * g * h)) / g, 0.05, 0.6)
 
 
 func begin_consume(kind: String, duration: float = 2.4, target: Vector3 = Vector3.INF) -> bool:
 	if _rig == null or _pose != Pose.STANDING or _consume_t >= 0.0:
 		return false
 	_consume_target = target
+	_pour_corr = Vector3.ZERO
 	_consume_kind = kind
 	_consume_dur = maxf(duration, 0.6)
 	_consume_t = 0.0
@@ -2269,8 +2281,8 @@ func _pose_consume_arm(delta: float) -> void:
 			ofs = CONSUME_MOUTH_HEAD + Vector3(sin(_consume_t * TAU * 3.2) * 0.03, -0.01, 0.02)
 	var mouth_rig: Vector3 = _rig.bone_pos("Head") + _rig.bone_basis("Head") * ofs
 	if _consume_kind == "pour" and _consume_target != Vector3.INF:
-		# Reach out over the plant (hand ~14 cm above / short of the pot).
-		mouth_rig = _rig.to_local(_consume_target + Vector3(0.0, 0.16, 0.0))
+		# Reach out over the plant (hand ~16 cm above it; see _pour_corr).
+		mouth_rig = _rig.to_local(_consume_target + Vector3(0.0, 0.16, 0.0) + _pour_corr)
 	var hold_rig: Vector3 = (CONSUME_REST + _rig.EYE_POINT).lerp(mouth_rig, k)
 	var blend: float = clampf(minf(u / 0.12, (1.0 - u) / 0.12), 0.0, 1.0)
 	_rig.pose_arm_ik("Right", hold_rig, Vector3(0.9, -1.0, 0.2), blend, deg_to_rad(-80.0) * blend, 0.0)
@@ -2287,7 +2299,18 @@ func _pose_consume_arm(delta: float) -> void:
 		if _consume_kind == "pour":
 			var fx: CPUParticles3D = _consume_prop.get_node_or_null("Drops") as CPUParticles3D
 			if fx != null:
-				fx.emitting = u > 0.4 and u < 0.7
+				var pouring: bool = u > 0.4 and u < 0.7
+				if pouring and not fx.emitting and _consume_target != Vector3.INF:
+					# Drops end where they meet the soil (no particle collision):
+					# lifetime = fall time from the spout to the pot's soil line.
+					fx.lifetime = pour_drop_lifetime(fx.global_position.y - (_consume_target.y + POUR_SOIL_UP), fx.initial_velocity_max, fx.gravity.length())
+				fx.emitting = pouring
+				# Steer the hand so the tilted spout tip sits over the pot
+				# (horizontal error only; bounded so the reach stays natural).
+				if _consume_target != Vector3.INF and k > 0.5:
+					var err: Vector3 = _consume_target - fx.global_position
+					err.y = 0.0
+					_pour_corr = (_pour_corr + err * 0.35).limit_length(0.3)
 	if _consume_t >= _consume_dur:
 		_consume_t = -1.0
 		if _consume_prop != null:

@@ -84,12 +84,18 @@ const ACID_LIFE := 6.0
 const ACID_R := 9.0
 const ACID_DPS := 7.0
 const LURK_WAKE := 70.0
-## Round 44 Priority 11: EASY = the Round 43 balance; HARD = more zombies,
-## faster escalation, earlier variety, deadlier combinations -- not just
-## more health. Rewards scale a little so the harder run pays.
+## Round 46: the Round 44/45 HARD balance is the new EASY (players found it
+## comfortable); the new HARD is a genuinely harder mix -- denser and faster
+## spawns, earlier variety, elites every 3rd wave with a bigger escort, more
+## ranged pressure (spitters / spewers), fewer medkits -- not just health.
+## Rewards scale a little so the harder run pays. BALANCE_VERSION gates the
+## save migration of best scores (see load_state()).
+const BALANCE_VERSION := 2
 const DIFFICULTY := {
-	"easy": {"name": "EASY", "count": 1.0, "interval": 1.0, "unlock_shift": 0, "hp_growth": 0.08, "speed": 1.0, "max_alive": 70, "credits": 1.0, "elite_every": 5},
-	"hard": {"name": "HARD", "count": 1.75, "interval": 0.7, "unlock_shift": 2, "hp_growth": 0.12, "speed": 1.08, "max_alive": 95, "credits": 1.3, "elite_every": 4},
+	"easy": {"name": "EASY", "count": 1.75, "interval": 0.7, "unlock_shift": 2, "hp_growth": 0.12, "speed": 1.08, "max_alive": 95, "credits": 1.3, "elite_every": 4,
+		"ranged": 1.0, "medkits": 1.0, "escort_extra": 0},
+	"hard": {"name": "HARD", "count": 2.5, "interval": 0.45, "unlock_shift": 3, "hp_growth": 0.14, "speed": 1.15, "max_alive": 120, "credits": 1.5, "elite_every": 3,
+		"ranged": 1.8, "medkits": 0.5, "escort_extra": 2},
 }
 const SPIT_RANGE := Vector2(85.0, 135.0)
 const SPIT_CD := 2.6
@@ -104,19 +110,44 @@ const BLAST_DMG := 16.0
 ## spread rad (cone / jitter), pierce (extra targets), ap (armour piercing), cost.
 const WEAPONS := {
 	"pistol": {"name": "SIDEARM", "interval": 0.62, "dmg": 10.0, "range": 140.0, "speed": 260.0, "pellets": 1, "spread": 0.0, "pierce": 0, "ap": false, "cost": 0, "color": Color(1.0, 0.92, 0.45)},
-	"smg": {"name": "BURST CARBINE", "interval": 0.17, "dmg": 4.5, "range": 120.0, "speed": 290.0, "pellets": 1, "spread": 0.14, "pierce": 0, "ap": false, "cost": 60, "color": Color(1.0, 0.75, 0.35)},
-	"shotgun": {"name": "SCATTER GUN", "interval": 0.95, "dmg": 6.0, "range": 85.0, "speed": 240.0, "pellets": 6, "spread": 0.55, "pierce": 0, "ap": false, "cost": 90, "color": Color(1.0, 0.6, 0.3)},
-	"rifle": {"name": "PULSE RIFLE", "interval": 1.1, "dmg": 34.0, "range": 230.0, "speed": 430.0, "pellets": 1, "spread": 0.0, "pierce": 3, "ap": true, "cost": 140, "color": Color(0.85, 0.95, 1.0)},
-	"arc": {"name": "ARC PROJECTOR", "interval": 0.8, "dmg": 13.0, "range": 150.0, "speed": 0.0, "pellets": 1, "spread": 0.0, "pierce": 3, "ap": true, "cost": 260, "color": Color(0.55, 0.85, 1.0)},
+	"smg": {"name": "BURST CARBINE", "interval": 0.17, "dmg": 4.5, "range": 120.0, "speed": 290.0, "pellets": 1, "spread": 0.14, "pierce": 0, "ap": false, "cost": 120, "color": Color(1.0, 0.75, 0.35)},
+	"shotgun": {"name": "SCATTER GUN", "interval": 0.95, "dmg": 6.0, "range": 85.0, "speed": 240.0, "pellets": 6, "spread": 0.55, "pierce": 0, "ap": false, "cost": 170, "color": Color(1.0, 0.6, 0.3)},
+	"rifle": {"name": "PULSE RIFLE", "interval": 1.1, "dmg": 34.0, "range": 230.0, "speed": 430.0, "pellets": 1, "spread": 0.0, "pierce": 3, "ap": true, "cost": 300, "color": Color(0.85, 0.95, 1.0)},
+	# Round 46: ARC = precise, never-missing CHAIN for mobile packs (runners,
+	# swarms): fewer links (3 targets), each jump weaker (ARC_FALLOFF) --
+	# no longer the best answer to everything. Top tier.
+	"arc": {"name": "ARC PROJECTOR", "interval": 0.72, "dmg": 14.0, "range": 150.0, "speed": 0.0, "pellets": 1, "spread": 0.0, "pierce": 2, "ap": true, "cost": 480, "color": Color(0.55, 0.85, 1.0)},
 	# Round 44: MACHETE (emergency melee: a wide swing at everything close)
 	# and LAUNCHER (late unlock: a lobbed grenade, area blast at the target).
-	"machete": {"name": "PLASMA CUTTER", "interval": 0.45, "dmg": 16.0, "range": 26.0, "speed": 0.0, "pellets": 1, "spread": 0.0, "pierce": 0, "ap": false, "cost": 30, "color": Color(0.9, 0.9, 0.85)},
-	"launcher": {"name": "GRAVITY MORTAR", "interval": 1.6, "dmg": 30.0, "range": 175.0, "speed": 170.0, "pellets": 1, "spread": 0.0, "pierce": 0, "ap": true, "cost": 320, "color": Color(1.0, 0.55, 0.25)},
+	"machete": {"name": "PLASMA CUTTER", "interval": 0.45, "dmg": 16.0, "range": 26.0, "speed": 0.0, "pellets": 1, "spread": 0.0, "pierce": 0, "ap": false, "cost": 40, "color": Color(0.9, 0.9, 0.85)},
+	# Round 46: GRAVITY MORTAR = the most expensive weapon, for DENSE waves:
+	# a slow shell (misses fast single targets) whose impact leaves a
+	# GRAVITY WELL that pulls nearby creatures together and slows them,
+	# then the blast. Area denial + clustering nothing else offers.
+	"launcher": {"name": "GRAVITY MORTAR", "interval": 2.1, "dmg": 28.0, "range": 175.0, "speed": 170.0, "pellets": 1, "spread": 0.0, "pierce": 0, "ap": true, "cost": 560, "color": Color(1.0, 0.55, 0.25)},
 }
 const WEAPON_ORDER := ["pistol", "machete", "smg", "shotgun", "rifle", "arc", "launcher"]
+## Round 46: what each weapon is FOR (armory tooltip + equipped line).
+const WEAPON_ROLE := {
+	"pistol": "Reliable all-rounder.",
+	"machete": "Melee sweep: hits everything close.",
+	"smg": "Fast stream: good against swarms.",
+	"shotgun": "Short-range cone: stops a rush.",
+	"rifle": "Piercing long shot: elites and lines.",
+	"arc": "Chain that STUNS fast packs. Weak vs armour.",
+	"launcher": "Gravity well: clears DENSE waves. Weak up close.",
+}
 const SWING_ARC := 1.2           # radians either side of the target direction
 const GRENADE_R := 34.0
-const ARC_JUMP := 62.0
+const ARC_JUMP := 55.0
+const ARC_FALLOFF := 0.75        # Round 46: each chain jump does 75% of the last
+const SEP_CELL := 24.0          # Round 46: > largest contact distance (2 x 11)
+const ARC_STUN := 0.35           # Round 46: seconds a struck creature is held
+const MORTAR_MIN := 45.0         # Round 46: gravity-mortar arming distance
+const WELL_R := 50.0             # Round 46: gravity well (mortar impact)
+const WELL_S := 1.6
+const WELL_PULL := 34.0          # px/s toward the centre
+const WELL_SLOW := 0.45          # speed multiplier inside the well
 
 ## id -> [label, max rank, [costs per rank], per-rank effect text]
 const UPGRADES := {
@@ -144,6 +175,8 @@ var weapon: String = "pistol"
 var difficulty: String = "easy"
 var best_by: Dictionary = {"easy": 0, "hard": 0}
 var best_wave_by: Dictionary = {"easy": 0, "hard": 0}
+## Round 46: records from an older balance (see load_state()).
+var legacy_best: Dictionary = {}
 ## Run state.
 var mode: String = "title"        # title | play | shop | paused | over
 var player := START
@@ -161,6 +194,7 @@ var spits: Array = []             # {pos, vel, life}
 var pickups: Array = []           # {pos, kind: "scrap"|"medkit", value, life}
 var corpses: Array = []           # {pos, kind, t, r, col}
 var beams: Array = []             # {pts, t}
+var wells: Array = []             # Round 46: gravity wells {pos, t}
 var fx: Array = []                # {pos, t, col}
 var acid: Array = []              # {pos, life}
 var grenades: Array = []          # {pos, target, dmg}
@@ -229,13 +263,13 @@ func _ready() -> void:
 		buttons["buy_" + id] = b
 	# Round 45: longer sci-fi names -> a 4-column grid (fits the laptop).
 	_weapon_row = GridContainer.new()
-	_weapon_row.columns = 4
+	_weapon_row.columns = 3
 	_weapon_row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_weapon_row.add_theme_constant_override("h_separation", 3)
 	_weapon_row.add_theme_constant_override("v_separation", 2)
 	_overlay.add_child(_weapon_row)
 	for wid in WEAPON_ORDER:
-		var b := _button(_weapon_row, "", 8, Vector2(104, 15))
+		var b := _button(_weapon_row, "", 8, Vector2(132, 15))
 		b.pressed.connect(func(): weapon_action(wid))
 		buttons["weapon_" + wid] = b
 	_ov_buttons = HBoxContainer.new()
@@ -687,6 +721,7 @@ func start_run() -> void:
 	pickups = []
 	corpses = []
 	beams = []
+	wells = []
 	fx = []
 	acid = []
 	grenades = []
@@ -731,7 +766,7 @@ func _begin_wave(n: int) -> void:
 	_spawn_t = 0.0
 	# Fresh medkits at a few supply points.
 	pickups = pickups.filter(func(p): return p["kind"] != "medkit")
-	for i in mini(2 + n / 3, supply_points.size()):
+	for i in mini(maxi(int(round((2 + n / 3) * float(diff().get("medkits", 1.0)))), 1), supply_points.size()):
 		pickups.append({"pos": supply_points[(n * 2 + i) % supply_points.size()], "kind": "medkit", "value": 25, "life": 9999.0})
 	var newkind: String = ""
 	for k in KINDS:
@@ -760,11 +795,11 @@ func kind_table() -> Array:
 	var t: Array = [["walker", 5.0]]
 	if w >= 2: t.append(["swarm", 1.6])
 	if w >= 3: t.append(["runner", 2.4])
-	if w >= 4: t.append(["spitter", 1.0])
+	if w >= 4: t.append(["spitter", 1.0 * float(diff().get("ranged", 1.0))])
 	if w >= 4: t.append(["lurker", 0.7])
 	if w >= 5: t.append(["brute", minf(0.6 + 0.1 * (w - 5), 1.5)])
 	if w >= 6: t.append(["bloater", 0.8])
-	if w >= 6: t.append(["spewer", 0.7])
+	if w >= 6: t.append(["spewer", 0.7 * float(diff().get("ranged", 1.0))])
 	if w >= 7: t.append(["armored", 0.9])
 	return t
 
@@ -937,7 +972,9 @@ func step(dt: float) -> void:
 		if wave % int(diff()["elite_every"]) == 0 and _to_spawn == 0:
 			# Round 44: elite waves come with a rotating escort.
 			var elite: Dictionary = spawn_zombie("elite")
-			var escort: Array = [["brute", "brute"], ["spitter", "spitter", "runner"], ["bloater", "swarm", "swarm"]][(wave / int(diff()["elite_every"])) % 3]
+			var escort: Array = [["brute", "brute"], ["spitter", "spitter", "runner"], ["bloater", "swarm", "swarm"]][(wave / int(diff()["elite_every"])) % 3].duplicate()
+			for x in int(diff().get("escort_extra", 0)):
+				escort.append(["runner", "armored", "spitter"][(wave + x) % 3])
 			for ek in escort:
 				var ez: Dictionary = spawn_zombie(ek)
 				var ep: Vector2 = (elite["pos"] as Vector2) + Vector2(_rng.randf_range(-20, 20), _rng.randf_range(-20, 20))
@@ -956,6 +993,9 @@ func step(dt: float) -> void:
 			_fire_at(target)
 	_step_bullets(dt)
 	_step_grenades(dt)
+	for wl in wells:
+		wl["t"] = float(wl["t"]) - dt
+	wells = wells.filter(func(wl): return float(wl["t"]) > 0.0)
 	_step_acid(dt)
 	_step_spits(dt)
 	_step_pickups(dt)
@@ -965,6 +1005,13 @@ func step(dt: float) -> void:
 	if hp <= 0.0:
 		_game_over()
 		return
+	# Round 46: only dormant LURKERS left -> they stir and come out (an
+	# ambush stays an ambush; the wave no longer needs a building-by-
+	# building search for the last hidden creature).
+	if _to_spawn == 0 and not zombies.is_empty() and zombies.all(func(z): return bool(z.get("dormant", false))):
+		for z in zombies:
+			z["dormant"] = false
+		_announce("LURKERS STIRRING")
 	# Wave cleared: everything spawned and dead.
 	if _to_spawn == 0 and zombies.is_empty():
 		var bonus: int = int(round((5 + 2 * wave) * float(diff()["credits"])))
@@ -987,6 +1034,11 @@ func step(dt: float) -> void:
 func _step_zombies(dt: float) -> void:
 	for z in zombies:
 		_norm(z)
+		# Round 46: arc-stunned -- no movement, no attack while it lasts.
+		if float(z.get("stun", 0.0)) > 0.0:
+			z["stun"] = float(z["stun"]) - dt
+			z["flash"] = maxf(float(z["flash"]), 0.05)
+			continue
 		var kind: String = z["kind"]
 		var kd: Dictionary = KINDS[kind]
 		var zr: float = float(kd["r"])
@@ -1014,6 +1066,14 @@ func _step_zombies(dt: float) -> void:
 			else:
 				continue
 		var speed: float = float(kd["speed"]) * float(diff()["speed"])
+		# Round 46: inside a gravity well -- dragged toward its centre, slowed.
+		for wl in wells:
+			var wv: Vector2 = (wl["pos"] as Vector2) - zp
+			if wv.length() <= WELL_R and kind != "elite":
+				speed *= WELL_SLOW
+				if wv.length() > 3.0:
+					zp = resolve(zp + wv.normalized() * minf(WELL_PULL * dt, wv.length()), zr)
+					z["pos"] = zp
 		var goal: Vector2 = nav_goal(zp)
 		if kind == "spewer":
 			z["acid_t"] = float(z.get("acid_t", 0.0)) + dt
@@ -1046,6 +1106,19 @@ func _step_zombies(dt: float) -> void:
 		# Steering: aim at a free corner when the straight line is blocked
 		# (re-planned a few times a second).
 		z["steer_t"] = float(z["steer_t"]) - dt
+		# Round 46: STUCK recovery. Planning only around the first blocking
+		# building can aim at a corner that another obstacle blocks: the
+		# creature then pushed into a wall forever and the wave could never
+		# end. If it has not moved for a second while out of reach, it
+		# commits to an ALTERNATIVE detour for a while.
+		z["stuck_t"] = float(z.get("stuck_t", 0.0)) + dt
+		if float(z["stuck_t"]) >= 1.0:
+			var moved: float = zp.distance_to(z.get("stuck_p", zp + Vector2(99, 0)))
+			z["stuck_p"] = zp
+			z["stuck_t"] = 0.0
+			if moved < 4.0 and dist > reach + 4.0 and float(z["fuse"]) < 0.0 and not bool(z.get("dormant", false)):
+				z["steer"] = _detour(zp, goal, zr)
+				z["steer_t"] = 1.4
 		if float(z["steer_t"]) <= 0.0:
 			z["steer_t"] = 0.35
 			z["steer"] = _plan_corner(zp, goal, zr)
@@ -1060,6 +1133,27 @@ func _step_zombies(dt: float) -> void:
 			_hurt(float(kd["dmg"]))
 			if kind in ["brute", "elite"]:
 				player = resolve(player + to.normalized() * 14.0, PLAYER_R)
+
+
+## Round 46: an alternative waypoint for a stuck creature: the reachable
+## corner of the blocking building that is NOT the cheapest one, else a
+## free point to the side of the line to the target.
+func _detour(from: Vector2, to: Vector2, r: float) -> Vector2:
+	var o: Dictionary = _segment_blocked(from, to, r + 1.0)
+	var opts: Array = []
+	if not o.is_empty():
+		var rect: Rect2 = (o["rect"] as Rect2).grow(r + 5.0)
+		for c in [rect.position, Vector2(rect.end.x, rect.position.y), rect.end, Vector2(rect.position.x, rect.end.y)]:
+			if WORLD.has_point(c) and is_free(c, r) and from.distance_to(c) > 6.0:
+				opts.append(c)
+	var side: Vector2 = (to - from).normalized().orthogonal()
+	for sgn in [1.0, -1.0]:
+		var c2: Vector2 = from + side * sgn * 40.0 - (to - from).normalized() * 10.0
+		if WORLD.has_point(c2) and is_free(c2, r):
+			opts.append(c2)
+	if opts.is_empty():
+		return Vector2.INF
+	return opts[_rng.randi() % opts.size()]
 
 
 func _plan_corner(from: Vector2, to: Vector2, r: float) -> Vector2:
@@ -1102,17 +1196,29 @@ func _step_bullets(dt: float) -> void:
 			b["life"] = 0.0
 			fx.append({"pos": prev, "t": 0.1, "col": Color(0.8, 0.8, 0.7)})
 			continue
+		# Round 46: SWEPT hit test along this step's path (prev -> pos). The
+		# old end-point test let fast rounds (PULSE RIFLE: 430 px/s = 7-14 px
+		# a frame) skip straight past small creatures (r 2.6-6.5) -- the hit
+		# rate depended on the frame rate. Hits are taken in path order so
+		# piercing rounds stop at the right creature.
+		var cands: Array = []
 		for z in zombies:
 			_norm(z)
-			if float(z["hp"]) > 0.0 and not (b["hit"] as Dictionary).has(z["id"]) and (b["pos"] as Vector2).distance_to(z["pos"]) <= float(KINDS[z["kind"]]["r"]) + 1.5:
-				_damage_zombie(z, float(b["dmg"]), bool(b["ap"]))
-				(b["hit"] as Dictionary)[z["id"]] = true
-				fx.append({"pos": b["pos"], "t": 0.15, "col": Color(1, 0.9, 0.5)})
-				if int(b["pierce"]) > 0:
-					b["pierce"] = int(b["pierce"]) - 1
-				else:
-					b["life"] = 0.0
-					break
+			if float(z["hp"]) > 0.0 and not (b["hit"] as Dictionary).has(z["id"]):
+				var cp: Vector2 = Geometry2D.get_closest_point_to_segment(z["pos"], prev, b["pos"])
+				if cp.distance_to(z["pos"]) <= float(KINDS[z["kind"]]["r"]) + 1.5:
+					cands.append([prev.distance_squared_to(cp), z])
+		cands.sort_custom(func(x, y): return float(x[0]) < float(y[0]))
+		for cz in cands:
+			var z: Dictionary = cz[1]
+			_damage_zombie(z, float(b["dmg"]), bool(b["ap"]))
+			(b["hit"] as Dictionary)[z["id"]] = true
+			fx.append({"pos": z["pos"], "t": 0.15, "col": Color(1, 0.9, 0.5)})
+			if int(b["pierce"]) > 0:
+				b["pierce"] = int(b["pierce"]) - 1
+			else:
+				b["life"] = 0.0
+				break
 	bullets = bullets.filter(func(b): return float(b["life"]) > 0.0 and WORLD.grow(10).has_point(b["pos"]))
 
 
@@ -1132,6 +1238,7 @@ func _step_grenades(dt: float) -> void:
 
 func _explode(at: Vector2, dmg: float) -> void:
 	fx.append({"pos": at, "t": 0.5, "col": Color(1.0, 0.6, 0.25), "big": GRENADE_R})
+	wells.append({"pos": at, "t": WELL_S})
 	for z in zombies:
 		var d: float = (z["pos"] as Vector2).distance_to(at)
 		if float(z["hp"]) > 0.0 and d <= GRENADE_R:
@@ -1224,11 +1331,19 @@ func _collect_dead() -> void:
 func nearest_zombie() -> Dictionary:
 	var best_d: float = weapon_range()
 	var out: Dictionary = {}
+	var far_d: float = weapon_range()
+	var far: Dictionary = {}
 	for z in zombies:
 		var d: float = player.distance_to(z["pos"])
 		if d <= best_d:
 			best_d = d
 			out = z
+		if d >= MORTAR_MIN and d <= far_d:
+			far_d = d
+			far = z
+	# Round 46: the mortar prefers targets it can ARM on (>= MORTAR_MIN).
+	if weapon == "launcher" and not far.is_empty():
+		return far
 	return out
 
 
@@ -1250,17 +1365,25 @@ func _fire_at(target: Dictionary) -> void:
 		fx.append({"pos": player, "t": 0.15, "col": w["color"], "swing": base})
 		return
 	if weapon == "launcher":
-		grenades.append({"pos": player, "target": tpos, "dmg": damage()})
+		# Round 46: inside the arming distance the shell only half-arms --
+		# the mortar is an area weapon for range, weak when swarmed.
+		var armed: float = 1.0 if player.distance_to(tpos) >= MORTAR_MIN else 0.5
+		grenades.append({"pos": player, "target": tpos, "dmg": damage() * armed})
 		return
 	if weapon == "arc":
 		# Instant bolt chaining to nearby zombies (MULTISHOT adds chain links).
 		var pts: Array = [player]
 		var hit: Array = []
 		var cur: Dictionary = target
+		var link_dmg: float = damage()
 		for j in int(w["pierce"]) + projectiles():
 			if cur.is_empty():
 				break
-			_damage_zombie(cur, damage(), true)
+			_damage_zombie(cur, link_dmg, true)
+			# Round 46: the arc's specialty -- a short STUN on every link
+			# (fast packs, runners, lurkers lose their momentum).
+			cur["stun"] = maxf(float(cur.get("stun", 0.0)), ARC_STUN if j == 0 else ARC_STUN * 0.6)
+			link_dmg *= ARC_FALLOFF
 			hit.append(cur["id"])
 			pts.append(cur["pos"])
 			var nxt: Dictionary = {}
@@ -1288,20 +1411,40 @@ func _fire_at(target: Dictionary) -> void:
 
 ## Cheap pairwise push so zombies never stack into one blob.
 func _separate() -> void:
+	# Round 46: spatial hash (cells larger than any pair's contact distance)
+	# instead of all pairs -- O(n) at the active-enemy cap, not O(n^2).
 	var n: int = zombies.size()
+	var grid: Dictionary = {}
 	for i in n:
-		for j in range(i + 1, n):
-			var a: Dictionary = zombies[i]
-			var b: Dictionary = zombies[j]
-			var d: Vector2 = b["pos"] - a["pos"]
-			var min_d: float = float(KINDS[a["kind"]]["r"]) + float(KINDS[b["kind"]]["r"])
-			if absf(d.x) > min_d or absf(d.y) > min_d:
-				continue
-			var l: float = d.length()
-			if l < min_d and l > 0.001:
-				var push: Vector2 = d / l * (min_d - l) * 0.5
-				a["pos"] -= push
-				b["pos"] += push
+		var p: Vector2 = zombies[i]["pos"]
+		var key := Vector2i(int(floor(p.x / SEP_CELL)), int(floor(p.y / SEP_CELL)))
+		if grid.has(key):
+			grid[key].append(i)
+		else:
+			grid[key] = [i]
+	for i in n:
+		var a: Dictionary = zombies[i]
+		var ap: Vector2 = a["pos"]
+		var ra: float = float(KINDS[a["kind"]]["r"])
+		var ck := Vector2i(int(floor(ap.x / SEP_CELL)), int(floor(ap.y / SEP_CELL)))
+		for ox in [-1, 0, 1]:
+			for oy in [-1, 0, 1]:
+				var cell: Variant = grid.get(ck + Vector2i(ox, oy))
+				if cell == null:
+					continue
+				for j in cell:
+					if j <= i:
+						continue
+					var b: Dictionary = zombies[j]
+					var d: Vector2 = b["pos"] - a["pos"]
+					var min_d: float = ra + float(KINDS[b["kind"]]["r"])
+					if absf(d.x) > min_d or absf(d.y) > min_d:
+						continue
+					var l: float = d.length()
+					if l < min_d and l > 0.001:
+						var push: Vector2 = d / l * (min_d - l) * 0.5
+						a["pos"] -= push
+						b["pos"] += push
 
 
 func _update_camera() -> void:
@@ -1335,6 +1478,8 @@ func _refresh_overlay() -> void:
 		"title":
 			_ov_title.text = "HOLDOUT · %s" % diff()["name"]
 			_ov_text.text = "Hold the colony. WASD moves — your %s fires by itself. Modules can be entered.\n%s best %d (wave %d) · Wallet %d CR" % [WEAPONS[weapon]["name"], diff()["name"], int(best_by.get(difficulty, 0)), int(best_wave_by.get(difficulty, 0)), credits]
+			if legacy_best.has("classic_easy") and int(legacy_best["classic_easy"].get("score", 0)) > 0:
+				_ov_text.text += "\nClassic Easy record (before the rebalance): %d (wave %d)" % [int(legacy_best["classic_easy"]["score"]), int(legacy_best["classic_easy"]["wave"])]
 			show = {"diff_easy": true, "diff_hard": true, "start": true, "shop": true, "desktop": true}
 		"paused":
 			_ov_title.text = "PAUSED"
@@ -1343,6 +1488,7 @@ func _refresh_overlay() -> void:
 		"shop":
 			_ov_title.text = "ARMORY · %d CR" % credits
 			_ov_text.text = message if message != "" else ("Spend credits before wave %d." % (wave + 1) if shop_return == "wave" else "Upgrades and weapons carry over to every run.")
+			_ov_text.text += "\n%s — %s" % [WEAPONS[weapon]["name"], WEAPON_ROLE.get(weapon, "")]
 			show = {"continue": shop_return == "wave", "back": shop_return == "title", "desktop": true}
 			for id in UPGRADE_ORDER:
 				var b: Button = buttons["buy_" + id]
@@ -1359,6 +1505,7 @@ func _refresh_overlay() -> void:
 				else:
 					wb.text = "%s %dCR" % [WEAPONS[wid]["name"], int(WEAPONS[wid]["cost"])]
 				wb.disabled = not unlocked.get(wid, false) and credits < int(WEAPONS[wid]["cost"])
+				wb.tooltip_text = String(WEAPON_ROLE.get(wid, ""))
 		"over":
 			_ov_title.text = "GAME OVER · %s" % diff()["name"]
 			_ov_text.text = "Wave %d · %d kills · Score %d · %s best %d (wave %d)\n+%d CR this run (wallet %d CR)" % [wave, kills, score, diff()["name"], best, best_wave, run_credits, credits]
@@ -1522,6 +1669,12 @@ func _draw_arena() -> void:
 		if view.intersects(lr) and not lm.get("interior", false):
 			var tp: Vector2 = _w2s(lr.get_center()) + Vector2(-float(String(lm["name"]).length()) * 3.0, 3)
 			a.draw_string(font, tp, lm["name"], HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.95, 0.88, 0.6))
+	# Round 46: gravity wells -- a dark swirl with a pale rim, shrinking.
+	for wl in wells:
+		var k: float = float(wl["t"]) / WELL_S
+		a.draw_circle(_w2s(wl["pos"]), WELL_R * (0.6 + 0.4 * k), Color(0.35, 0.25, 0.55, 0.18 * k + 0.05))
+		a.draw_arc(_w2s(wl["pos"]), WELL_R * (0.6 + 0.4 * k), 0.0, TAU, 40, Color(0.75, 0.6, 1.0, 0.6 * k), 1.5)
+		a.draw_arc(_w2s(wl["pos"]), WELL_R * 0.35 * k, float(wl["t"]) * 6.0, float(wl["t"]) * 6.0 + 4.0, 16, Color(0.85, 0.75, 1.0, 0.7 * k), 1.0)
 	# Grenades in flight.
 	for g in grenades:
 		a.draw_circle(_w2s(g["pos"]), 2.6, Color(0.35, 0.4, 0.3))
@@ -1618,7 +1771,11 @@ func _draw_arena() -> void:
 		var bw: float = float(banner.length()) * 6.4 + 20.0
 		a.draw_rect(Rect2(Vector2((a.size.x - bw) * 0.5, HUD_H + 10), Vector2(bw, 17)), Color(0, 0, 0, 0.6 * alpha))
 		a.draw_string(font, Vector2((a.size.x - bw) * 0.5 + 10, HUD_H + 23), banner, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.98, 0.78, 0.32, alpha))
-	# HUD strip: health bar, wave, score, kills, credits, weapon.
+	# HUD strip: health bar, wave, score, kills, credits, weapon. Round 46:
+	# hidden under the armory (its title shows the wallet; the taller
+	# 3-column weapon grid needs the room).
+	if mode == "shop":
+		return
 	a.draw_rect(Rect2(0, 0, a.size.x, HUD_H), Color(0.02, 0.03, 0.03))
 	a.draw_rect(Rect2(2, 3, 80, 8), Color(0.2, 0.05, 0.05))
 	a.draw_rect(Rect2(2, 3, 80.0 * clampf(hp / max_hp(), 0.0, 1.0), 8), Color(0.85, 0.2, 0.15))
@@ -1736,7 +1893,8 @@ func _draw_minimap(a: Control) -> void:
 # ------------------------------------------------------------ save / load
 func state_dict() -> Dictionary:
 	return {"best": best, "best_wave": best_wave, "credits": credits, "ranks": ranks.duplicate(), "runs": runs, "unlocked": unlocked.keys(), "weapon": weapon,
-		"difficulty": difficulty, "best_by": best_by.duplicate(), "best_wave_by": best_wave_by.duplicate()}
+		"difficulty": difficulty, "best_by": best_by.duplicate(), "best_wave_by": best_wave_by.duplicate(),
+		"balance": BALANCE_VERSION, "legacy_best": legacy_best.duplicate()}
 
 
 func load_state(d: Dictionary) -> void:
@@ -1761,6 +1919,15 @@ func load_state(d: Dictionary) -> void:
 	var bw: Dictionary = d.get("best_wave_by", {"easy": best_wave})
 	best_by = {"easy": maxi(int(bb.get("easy", 0)), 0), "hard": maxi(int(bb.get("hard", 0)), 0)}
 	best_wave_by = {"easy": maxi(int(bw.get("easy", 0)), 0), "hard": maxi(int(bw.get("hard", 0)), 0)}
+	legacy_best = (d.get("legacy_best", {}) as Dictionary).duplicate() if d.get("legacy_best", {}) is Dictionary else {}
+	# Round 46 MIGRATION (balance 1 -> 2): the old HARD balance IS the new
+	# EASY, so old Hard records become Easy records; old Easy records were
+	# set in an easier mode that no longer exists -- kept (never deleted)
+	# as a labelled legacy record. Unlocked weapons stay unlocked.
+	if int(d.get("balance", 1)) < BALANCE_VERSION and (best_by["easy"] > 0 or best_by["hard"] > 0):
+		legacy_best["classic_easy"] = {"score": best_by["easy"], "wave": best_wave_by["easy"]}
+		best_by = {"easy": best_by["hard"], "hard": 0}
+		best_wave_by = {"easy": best_wave_by["hard"], "hard": 0}
 	best = int(best_by[difficulty])
 	best_wave = int(best_wave_by[difficulty])
 	acid = []

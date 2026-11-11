@@ -48,10 +48,11 @@ func _corridor_camera() -> void:
 	var cam: Camera3D = net.camera("INT-02")
 	var p: Vector3 = cam.global_position
 	var fwd: Vector3 = -cam.global_basis.z
-	# Round 42: relocated to the Life Support approach (bend ceiling), far
-	# behind the seated technician, looking down the Junction + corridor.
-	_check("INT-02 is mounted on the Life Support approach (z %.2f), under its ceiling" % p.z, p.z > 8.3 and p.z < 9.9 and p.y < 2.6 and absf(p.x) < 1.0)
-	_check("INT-02 looks toward the Control Room (forward z %.2f)" % fwd.z, fwd.z < -0.9)
+	# Round 46: remounted on the JUNCTION side of the Life Support doorway
+	# header, looking north into the Junction (both side openings + the
+	# Control Room approach; see test_r46_horror for the sightlines).
+	_check("INT-02 is mounted on the Life Support doorway header (z %.2f), under the ceiling" % p.z, p.z > 6.9 and p.z < 7.4 and p.y < 2.6 and absf(p.x) < 1.0)
+	_check("INT-02 looks north into the Junction (forward z %.2f)" % fwd.z, fwd.z < -0.7)
 	_check("sees the Control Room doorway", net.sees("INT-02", Vector3(0.0, 1.2, 2.1), 0.3))
 	_check("sees the seated operator position (stool / head height)", net.sees("INT-02", Vector3(0.0, 1.15, -0.25), 0.4))
 	_check("blind spot documented", String(net.info("INT-02")["blind"]).length() > 10)
@@ -114,8 +115,9 @@ func _presence() -> void:
 	await _until(func(): return se.presence_visible(), 6.0)
 	_check("after watching INT-02 a while: a presence on the feed", se.presence_visible())
 	var pn: Node3D = se.presence_node()
+	await _until(func(): return pn.travelled > 1.6, 4.0)      # out on the Junction floor
 	var p: Vector3 = pn.global_position + Vector3(0, 1.2, 0)
-	_check("it stands in the corridor / behind the operator, seen by INT-02", net.sees("INT-02", p, 0.5) and p.z > -0.35)
+	_check("it is in the Junction (Round 46 crossing), seen by INT-02", net.sees("INT-02", p, 0.5) and p.z > -0.35)
 	var lay_ok := true
 	for m in pn.find_children("*", "VisualInstance3D", true, false):
 		lay_ok = lay_ok and (m as VisualInstance3D).layers == se.CAMERA_ONLY
@@ -147,7 +149,7 @@ func _presence() -> void:
 	se.armed_for_day = -1
 	se._arm_today()
 	_check("cooldown: not armed the next day", not se.is_armed(&"corridor_presence"))
-	_check("no station-AI announcement (events never call the assistant)", not FileAccess.get_file_as_string("res://scripts/story/story_events.gd").contains("station_ai"))
+	_check("no station-AI announcement (events never call the assistant)", _only_false_announcement())
 
 
 func _window() -> void:
@@ -171,7 +173,8 @@ func _window() -> void:
 	_check("gazing out of the port: the views start to disagree (%s)" % od.active_mode, od.active_mode == "displaced")
 	var bag_d: Node3D = od._objs["bag_direct"]
 	var bag_c: Node3D = od._objs["bag_camera"]
-	_check("window-only bag by the mast, camera-only bag by the hatch", bag_d.visible and bag_c.visible and bag_d.global_position.distance_to(bag_c.global_position) > 3.0)
+	# Round 46: the maintenance case on bracket A for the eyes, on bracket B for the cameras.
+	_check("window-only case on bracket A, camera-only case on bracket B", bag_d.visible and bag_c.visible and bag_d.global_position.distance_to(bag_c.global_position) > 1.5 and absf(bag_d.global_position.x - bag_c.global_position.x) < 0.05)
 	_check("EXT-03 never renders the window-only object", net.camera("EXT-03").cull_mask & od.DIRECT_ONLY == 0)
 	od._left = 0.05
 	await create_timer(0.4).timeout
@@ -193,6 +196,14 @@ func _until(cond: Callable, seconds: float) -> void:
 	var t0 := Time.get_ticks_msec()
 	while not cond.call() and Time.get_ticks_msec() - t0 < int(seconds * 1000.0):
 		await process_frame
+
+
+## Round 46: story code never makes the assistant EXPLAIN anything; its one
+## assistant call is the deliberate false "calibration complete" line
+## (the task-linked wrong reading, abnormal variant).
+func _only_false_announcement() -> bool:
+	var src: String = FileAccess.get_file_as_string("res://scripts/story/story_events.gd")
+	return src.count("station_ai") == 1 and src.count("say_key(") == 1 and src.contains("story_cal_premature")
 
 
 func _check(name: String, cond: bool) -> void:

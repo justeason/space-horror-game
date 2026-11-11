@@ -46,7 +46,8 @@ func _modes() -> void:
 	_check("HARD: more zombies per wave (%d vs %d)" % [h.wave_size(3), easy_n], h.wave_size(3) >= easy_n + 6)
 	_check("HARD: faster spawning (%.2f vs %.2f s)" % [h.spawn_interval(), easy_iv], h.spawn_interval() < easy_iv * 0.8)
 	_check("HARD: more variety earlier (wave 3: %d vs %d kinds)" % [h.kind_table().size(), easy_kinds], h.kind_table().size() > easy_kinds)
-	_check("HARD: bounded alive cap (%d)" % h.max_alive(), h.max_alive() > 70 and h.max_alive() <= 100)
+	# Round 46: the new HARD cap is 120 (step cost measured in test_r46_holdout_balance).
+	_check("HARD: bounded alive cap (%d)" % h.max_alive(), h.max_alive() > 95 and h.max_alive() <= 120)
 	h.start_seeded(2)
 	h.score = 500
 	h.hp = 0.0
@@ -62,7 +63,9 @@ func _modes() -> void:
 	_check("difficulty + per-mode bests saved", h.difficulty == "hard" and int(h.best_by["hard"]) >= 500)
 	var legacy := {"best": 321, "credits": 5}
 	h.load_state(legacy)
-	_check("a Round 43 save loads its best as the EASY best", h.difficulty == "easy" and int(h.best_by["easy"]) == 321)
+	# Round 46: a Round 43 record was set in the old EASY balance, which no
+	# longer exists -- kept (not lost) as the Classic Easy record.
+	_check("a Round 43 save keeps its best (as the Classic Easy record)", h.difficulty == "easy" and int(h.legacy_best.get("classic_easy", {}).get("score", 0)) == 321)
 
 
 func _buildings() -> void:

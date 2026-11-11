@@ -73,6 +73,10 @@ func _stream(kind: StringName) -> AudioStream:
 		match kind:
 			&"fan":
 				s = mech._tone(1.6, func(t, i): return (sin(t * TAU * (60.0 + 40.0 * t)) * 0.35 + (fmod(sin(float(i) * 3.1) * 917.0, 1.0) - 0.5) * 0.12) * minf(t * 3.0, 1.0) * (1.0 - t * 0.4))
+			&"cal_confirm":
+				# Round 46: a calibration instrument's own two-tone confirm
+				# (learned in ordinary play; a false announcement lacks it).
+				s = mech._tone(0.42, func(t, _i): return sin(t * 0.42 * TAU * (880.0 if t < 0.5 else 1320.0)) * 0.22 * (1.0 if fmod(t, 0.5) < 0.38 else 0.0))
 			&"creak":
 				s = mech._tone(0.7, func(t, i): return sin(t * TAU * (140.0 - 60.0 * t)) * 0.3 * pow(1.0 - t, 2.0) + (fmod(sin(float(i) * 7.7) * 311.0, 1.0) - 0.5) * 0.08 * (1.0 - t))
 			_:

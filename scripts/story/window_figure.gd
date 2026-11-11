@@ -23,9 +23,12 @@ extends Node3D
 
 signal finished
 const DIRECT_ONLY := 1 << 19
-const REACT_S := 0.55
-const RETREAT_S := 0.8
-const RETREAT_DIST := 0.75
+## Round 46: a longer, multi-step, readable sequence (the 0.55 s version
+## read as "one standing shadow" at the real viewing distance).
+const REACT_S := 1.15
+const RETREAT_S := 0.9
+const RETREAT_DIST := 1.15
+const FIRST_MOVE_AT := 1.2         # idle: the small first movement begins
 
 var state: String = "gone"
 var t: float = 0.0
@@ -41,9 +44,10 @@ var _mat: StandardMaterial3D
 
 func _ready() -> void:
 	_mat = StandardMaterial3D.new()
-	_mat.albedo_color = Color(0.03, 0.03, 0.035)
-	_mat.roughness = 0.95
-	_mat.metallic = 0.0
+	# Round 46: an UNSHADED near-black silhouette against the lit tunnel wall
+	# -- its articulated outline is what reads at ~4 m, not its shading.
+	_mat.albedo_color = Color(0.015, 0.015, 0.018)
+	_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_hips = _joint(self, Vector3(0, 0.88, 0))
 	_part(_hips, CapsuleMesh, Vector3(0, -0.45, 0), 0.13, 0.9)          # legs (one shape, indistinct)
 	_spine = _joint(_hips, Vector3(0, 0.05, 0))
@@ -121,6 +125,8 @@ func is_in_frame() -> bool:
 
 
 func _pose_reset() -> void:
+	if _hips != null:
+		_hips.position = Vector3(0, 0.88, 0)
 	for n in [_hips, _spine, _chest, _neck, _head]:
 		if n != null:
 			n.rotation = Vector3.ZERO
@@ -137,45 +143,72 @@ func _process(delta: float) -> void:
 
 
 ## Deterministic pose for the current state at time `tt` (tests drive it).
+##   idle     still; after FIRST_MOVE_AT the head tilts slowly over (16 deg)
+##            and the near shoulder drops -- the "small initial movement";
+##   react    0.00-0.12 a twitch (head jerks), 0.12-0.36 FROZEN in that
+##            twitch, 0.36-1.15 the SHUDDER: the head snaps side to side
+##            (up to ~60 deg, too fast), the chest twists and lurches
+##            sideways, one shoulder hikes and its arm jerks up, the other
+##            hangs dead -- asymmetric;
+##   retreat  an abrupt SIDEWAYS slide out of the port's frame (along the
+##            tunnel), accelerating, leaning away with the head LAGGING
+##            behind -- still turned toward the window -- arms trailing.
 func step_pose(tt: float) -> void:
 	match state:
 		"idle":
 			_pose_reset()
-			# Almost still -- slightly wrong: head off level, one shoulder low.
-			_spine.rotation.x = sin(tt * 0.7) * 0.015
-			_head.rotation.x = deg_to_rad(7.0) + sin(tt * 0.45) * 0.02
+			var m: float = smoothstep(FIRST_MOVE_AT, FIRST_MOVE_AT + 1.4, tt)
+			_spine.rotation.x = sin(tt * 0.7) * 0.012
+			_head.rotation.x = deg_to_rad(7.0 + 16.0 * m)
 			_head.rotation.y = deg_to_rad(4.0)
 			_arms[1][0].rotation.x = deg_to_rad(4.0)
 			_arms[-1][0].rotation.x = deg_to_rad(-2.0)
+			_chest.rotation.x = deg_to_rad(-5.0) * m
 		"react":
 			var u: float = clampf(tt / REACT_S, 0.0, 1.0)
-			# Two violent, too-fast lateral snaps of the head; chest and spine
-			# convulse in opposite directions; one arm flicks up.
-			var snap: float = sin(u * TAU * 2.0) * (1.0 - u * 0.3)
-			_head.rotation.x = deg_to_rad(38.0) * snap
-			_head.rotation.z = deg_to_rad(-22.0) * absf(snap)
-			_neck.rotation.x = deg_to_rad(-12.0) * snap
-			_chest.rotation.x = deg_to_rad(-16.0) * sin(u * TAU * 3.0)
-			_spine.rotation.x = deg_to_rad(10.0) * sin(u * TAU * 3.0 + 1.2)
-			_spine.rotation.z = deg_to_rad(9.0) * u
-			_arms[1][0].rotation.x = deg_to_rad(-75.0) * smoothstep(0.1, 0.35, u) * (1.0 - smoothstep(0.7, 1.0, u) * 0.4)
-			_arms[1][1].rotation.x = deg_to_rad(-40.0) * smoothstep(0.2, 0.4, u)
-			_arms[-1][0].rotation.x = deg_to_rad(8.0) * snap
+			var rt: float = tt
+			_pose_reset()
+			_head.rotation.x = deg_to_rad(23.0)
+			if rt < 0.12:
+				var k: float = rt / 0.12
+				_head.rotation.x = deg_to_rad(23.0 + 22.0 * k)
+				_neck.rotation.z = deg_to_rad(-10.0) * k
+			elif rt < 0.36:
+				_head.rotation.x = deg_to_rad(45.0)            # frozen mid-twitch
+				_neck.rotation.z = deg_to_rad(-10.0)
+			else:
+				var v: float = (rt - 0.36) / (REACT_S - 0.36)
+				var amp: float = 1.0 - v * 0.35
+				var snap: float = sign(sin(v * TAU * 3.5)) * pow(absf(sin(v * TAU * 3.5)), 0.35) * amp   # hard snaps
+				_head.rotation.x = deg_to_rad(60.0) * snap
+				_head.rotation.z = deg_to_rad(-28.0) * absf(snap)
+				_neck.rotation.x = deg_to_rad(-18.0) * snap
+				_chest.rotation.x = deg_to_rad(-26.0) * sin(v * TAU * 2.5)
+				_chest.rotation.y = deg_to_rad(18.0) * sin(v * TAU * 2.0 + 0.6)
+				_spine.rotation.x = deg_to_rad(14.0) * sin(v * TAU * 2.5 + 1.1)
+				_spine.rotation.z = deg_to_rad(10.0) * v
+				_hips.position.z = 0.07 * sin(v * TAU * 3.0)               # lurches sideways
+				_arms[1][0].rotation.x = deg_to_rad(-110.0) * smoothstep(0.0, 0.25, v)
+				_arms[1][1].rotation.x = deg_to_rad(-55.0) * smoothstep(0.1, 0.3, v)
+				_arms[-1][0].rotation.x = deg_to_rad(6.0) * snap
 			if u >= 1.0:
 				state = "retreat"
 				t = 0.0
 		"retreat":
 			var v: float = clampf(tt / RETREAT_S, 0.0, 1.0)
 			var travel: float = v * v * v                        # accelerating
-			position = _base + Vector3(-0.08 * travel, 0.0, RETREAT_DIST * travel)
-			# Leans back past balance, shoulders lead, arms trail unevenly.
-			_hips.rotation.z = deg_to_rad(-10.0) * v
-			_spine.rotation.z = deg_to_rad(-24.0) * smoothstep(0.0, 0.5, v)
-			_chest.rotation.y = deg_to_rad(28.0) * v
-			_head.rotation.x = deg_to_rad(-30.0) * v + sin(v * 40.0) * 0.08 * (1.0 - v)
-			_arms[1][0].rotation.z = deg_to_rad(55.0) * v
-			_arms[-1][0].rotation.z = deg_to_rad(-15.0) * v
-			_arms[-1][1].rotation.x = deg_to_rad(-70.0) * v
+			_pose_reset()
+			position = _base + Vector3(-0.1 * travel, 0.0, RETREAT_DIST * travel)
+			_hips.rotation.z = deg_to_rad(-14.0) * v
+			_spine.rotation.z = deg_to_rad(-28.0) * smoothstep(0.0, 0.4, v)
+			_chest.rotation.y = deg_to_rad(32.0) * v
+			# The head lags: it stays turned back toward the window.
+			_neck.rotation.y = deg_to_rad(-40.0) * v
+			_head.rotation.y = deg_to_rad(-35.0) * v
+			_head.rotation.x = deg_to_rad(30.0) - deg_to_rad(20.0) * v
+			_arms[1][0].rotation.z = deg_to_rad(65.0) * v
+			_arms[-1][0].rotation.z = deg_to_rad(-20.0) * v
+			_arms[-1][1].rotation.x = deg_to_rad(-75.0) * v
 			if v >= 1.0:
 				visible = false
 				state = "gone"

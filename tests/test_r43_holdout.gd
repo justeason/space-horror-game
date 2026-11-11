@@ -79,7 +79,9 @@ func _enemies() -> void:
 	h.start_seeded(3)
 	_check("nine enemy kinds + elite with different stats (R44: + lurker, spewer)", h.KINDS.size() == 10 and h.KINDS["runner"]["speed"] > h.KINDS["walker"]["speed"] and h.KINDS["brute"]["hp"] > 3.0 * h.KINDS["walker"]["hp"] and h.KINDS["swarm"]["r"] < h.KINDS["walker"]["r"])
 	h.wave = 1
-	_check("wave 1 table: walkers only", h.kind_table().size() == 1)
+	# Round 46: the old Hard balance is the new Easy (variety unlocks 2 waves
+	# earlier) -- wave 1 is still a small, mostly-walker table.
+	_check("wave 1 table: walkers + at most two early kinds (R46 Easy)", h.kind_table().size() <= 3 and h.kind_table()[0][0] == "walker")
 	h.wave = 7
 	var seen: Dictionary = {}
 	for i in 400:
@@ -165,12 +167,12 @@ func _enemies() -> void:
 	_check("armored: %.1f from normal rounds vs %.1f from AP" % [plain, 100.0 - float(ar["hp"])], plain < 5.0 and 100.0 - float(ar["hp"]) >= 9.9)
 	# Elite on every fifth wave.
 	h.start_seeded(4)
-	h._begin_wave(5)
+	h._begin_wave(int(h.diff()["elite_every"]))      # Round 46: Easy elites every 4th wave
 	h._to_spawn = 1
 	h._spawn_t = 0.0
 	h._fire_t = 999.0
 	h.step(0.05)
-	_check("wave 5 ends with an ELITE + banner", h.zombies.any(func(z): return z["kind"] == "elite") and h.banner.find("ELITE") != -1)
+	_check("an elite wave ends with an ELITE + banner", h.zombies.any(func(z): return z["kind"] == "elite") and h.banner.find("ELITE") != -1)
 
 
 func _weapons_upgrades() -> void:

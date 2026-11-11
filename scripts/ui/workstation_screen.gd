@@ -475,7 +475,7 @@ func _refresh_work_orders() -> void:
 		lines.append(("> " if i == _wo_sel else "  ") + _day_plan.format_row(rows[i]))
 	lines.append("")
 	if _day_plan.has_method("shift_report_lines"):
-		lines.append("SHIFT ENDED — rest in your bunk" if _day_plan.shift_ended else ("SHIFT WORK DONE — wrap up" if _day_plan.is_wrapping_up() else "SHIFT %d%% done" % int(round(_day_plan.shift_progress() * 100.0))))
+		lines.append("SHIFT ENDED — rest in your bunk" if _day_plan.shift_ended else ("WORK DONE — rest when ready" if _day_plan.is_wrapping_up() else "SHIFT %d%% done" % int(round(_day_plan.shift_progress() * 100.0))))
 	if _workday_status != "":
 		lines.append(_workday_status)
 	if _wo_details and not rows.is_empty():

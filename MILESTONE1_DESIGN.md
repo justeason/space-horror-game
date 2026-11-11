@@ -10662,12 +10662,232 @@ When the shift ends, a warm glow comes on over the bunk: a wordless "go to bed" 
 
 ## J. Localization
 - New bilingual: access messages, clearance announcements, window
-  thoughts, record thoughts, TODAY's labels. English-only (documented):
-  journal sentences, letters, handover notes, station records, Holdout,
+  thoughts, record thoughts, TODAY's labels (journal: see post-R45
+  below). English-only (documented): letters, handover notes, station records, Holdout,
   developer panel, smoke test.
 
 ## K. Limitations
 - The figure is a primitive-shape silhouette (no skinned rig). Through
   the Control Room port it is small. Guided walk is a straight line (desk
-  slides; ~3 s cap). Watering drops land just beside the pot. Gate signs
+  slides; ~3 s cap). Gate signs
   are English unless the language is Chinese. Not manually playtested.
+
+## Post-Round-45 polish — basil watering aim
+- The pot sat at the BACK of the desk (z 2.25), out of arm's reach from
+  anywhere a body can stand (desk front z 1.92, stool at x 3.64-3.96), so
+  the arm saturated and the drops fell beside the pot. Now:
+  - the pot sits near the desk's front edge, between task lamp and
+    notebook (`QuartersLife.BASIL_LOCAL`, one constant for model, leaves,
+    label and the pour target);
+  - clicked from further than arm's length (0.55 m), the body first takes
+    a short real step up to the desk (the guided walk; any movement key
+    cancels and abandons the pour; free-walking only);
+  - closed-loop aim: the hand is steered until the SPOUT TIP (where the
+    drops leave) is over the pot, not the wrist;
+  - drop lifetime = fall time from the spout to the soil line (no
+    particle collision), so drops end at the plant instead of falling
+    through the desk.
+- Tests (test_r45_laptop_station): step-up happens, cancel abandons the
+  pour, spout within 5 cm of the pot centre (measured 3.8 cm), drops end
+  within 4 cm of the soil (2.2 cm).
+
+## Post-Round-45 polish — bilingual journal
+- Journal pages follow the game language (Simplified Chinese tables for
+  every sentence source: first jobs, shift summaries, emergencies,
+  letters, observations, checks, contradicting records, milestones, quiet
+  days; "第N天" day labels and the typing hint).
+- Saves unchanged: entries keep their English text and are rendered from
+  their stable KEY; two sources now also store an `arg` (shift job count,
+  letter recipient) -- older saves without it are parsed from the English.
+- A page takes the language active when it is composed and is never
+  rewritten afterwards (typed position stays valid); the next page follows
+  a new language. Mara / Dev keep their names (letters are English-only);
+  Mum -> 妈妈. Laptop app titles stay English (documented).
+- Tests (test_r45_laptop_station, isolated journal instance): Chinese page
+  from real events, no English mixed in, labels, English saves, old-save
+  rendering, no rewrite on language change.
+
+# Round 46 — horror presentation, true 10-minute shifts, Holdout rebalance, developer-panel input, consequences, demo builds
+
+(Includes the post-Round-45 basil-aim and bilingual-journal work above.)
+
+## A. Shift timer — root causes and time-domain rules
+- Measured against a monotonic clock (Time.get_ticks_usec): the budget
+  itself ran at real time (ratio 0.999-1.000 at 30/60/120 FPS and
+  variable frames). The "countdown runs fast" came from:
+  1. finishing the required work ENDED the shift 45 s later (most days
+     were far shorter than 600 s);
+  2. the new day started counting when the sit-up / get-up animation
+     began (2-3 s a day);
+  3. the only shift indicator was "WORK nn%" -- job progress, which jumps.
+- Rules now: ACTIVE SHIFT BUDGET = exactly GameConfig.SHIFT_DURATION_S
+  (600) of eligible time; counts while up and about (walking, working,
+  workstation, equipment); does NOT count while waking / getting up
+  (SleepState.is_up()), asleep, paused, or with the personal laptop
+  focused (the laptop hold; an emergency still refuses that focus).
+  New day / new game: 08:00, elapsed 0. Work done early -> "WORK DONE ·
+  mm:ss LEFT"; resting early is the player's choice (rest_early(), no
+  clock jump). The station clock (08:00 -> 23:00 over the budget, x90)
+  and the laptop's real-pace clock are unchanged; headers show "WORK nn%
+  · mm:ss LEFT". Developer PLAYER tab: clock, elapsed, remaining, pause
+  reasons, multiplier, time domain.
+
+## B. Holdout difficulty + weapon economy
+- New EASY = the Round 44/45 HARD values exactly. New HARD: x2.5 wave
+  size, 0.45 spawn interval, variety 3 waves early, x1.15 speed, elites
+  every 3rd wave + 2 extra escorts, x1.8 ranged weight, half the medkits,
+  120 active cap. Measured (deterministic sim, tests/holdout_sim.gd): wave
+  4 in 30 s -> ~1.35x creatures, ~1.7x peak alive, ~2.4x ranged; a
+  simple bot still clears 4 waves.
+- Weapons (tiered): Sidearm 0 · Plasma Cutter 40 · Burst Carbine 120 ·
+  Scatter Gun 170 · Pulse Rifle 300 · Arc Projector 480 · Gravity Mortar
+  560. ARC: 3-target chain, each jump 75%, every strike STUNS (0.35 s) ->
+  controls fast scattered packs (0 damage taken vs 9 spread runners) but
+  weak against armoured crowds. MORTAR: slow shell + GRAVITY WELL (pulls
+  + slows) -> best on dense waves (20 armoured in 9.7 s vs arc 21.7 s),
+  weak close (arming distance 45 px: half damage inside) and vs a lone
+  elite (29 s vs rifle 13.6 s). RIFLE = single target. Roles in the
+  armory tooltips + equipped line. Top tier ~ 4 waves of saving on Easy.
+- Bugs found by the sim and fixed: fast rounds tunnelled through small
+  creatures (end-point hit test; now swept along the path, path order);
+  creatures stuck forever on a corner hidden by a second obstacle (stuck
+  recovery picks an alternative detour); lone dormant lurkers made a wave
+  a building-by-building search (they now stir and come out).
+  Separation pass is a spatial hash: 2.8 ms/step at the 120 cap.
+- Save migration (balance 1 -> 2): old Hard records -> Easy (same balance);
+  old Easy records kept as "Classic Easy record"; unlocks/credits kept.
+
+## C. Junction camera + crossing figure (corridor presence)
+- INT-02 remounted on the JUNCTION side of the Life Support doorway header
+  (-0.65, 2.42, 7.12), 52 deg vertical (~82 deg horizontal) -- verified by
+  rays + renders: Communications opening, Engineering opening, Junction
+  floor and the Control Room approach. (2 m back, the doorway frame hid
+  both side openings; a first remount stared into the clearance sign.)
+- A reusable jointed APPARITION (apparition.gd: legs with knees and feet,
+  arms, head; procedural slightly-wrong gait -- a hitch every other step,
+  one arm still, head off level) walks out of the Communications opening,
+  across the Junction (a too-smooth head turn mid-way; longer in the
+  abnormal variant), into the Engineering opening: ~7.6 s, ~5.5 s on the
+  feed, camera-only, on corridor centrelines through the open doorways.
+- Story: walking to the Junction within 4 min = a physical check
+  ("Nobody. Just the doorways."); ACCESS log: "Neither the Communications
+  nor the Engineering door logged anyone"; CAMERA log: motion, no tag.
+
+## D. Window / camera mismatch — the "floating square"
+- Root causes: (1) the "tool bag" was an orange box + strap in mid-air;
+  (2) _layer_all OR-ed the EXTERIOR bit into the story layers -- a layer
+  bit renders if ANY bit matches, so both copies showed in BOTH views.
+- Now: an exterior MAINTENANCE CASE (ribbed shell, hazard end caps,
+  handle, latches, "MAINT KIT") normally clamped on SERVICE BRACKET A on
+  the airlock tunnel's east wall (faces the Control Room port and EXT-03);
+  bracket B is a second, empty bracket. Anomaly: eyes/port see it on A,
+  cameras on B (A empty). Exactly one story layer per copy; the sun (and a
+  small service lamp) light the story layers. Decor: no collision.
+  (Developer note: this is the intended contradiction.)
+- The same OR bug made the hatch-handle anomaly's turning copy visible to
+  the eye; fixed the same way.
+
+## E. Developer panel input (F8)
+- Root cause: WorkstationState._input consumed EVERY mouse event while
+  seated, before the GUI -- pausing "fixed" it only because that handler
+  stops while paused. Now the panel OWNS the mouse while open (group
+  mouse_overlay; a full-screen blocker under it); the workstation steps
+  aside; Esc closes only the panel; closing restores the previous look /
+  mouse state (seated stays seated, a focused laptop stays focused,
+  walking gets mouse-look back). Verified windowed (headless has no GUI
+  mouse delivery) and proven failing on the Round 45 code.
+
+## F. Task-linked wrong reading
+- NORMAL: after a real calibration (L07 sensors / M02 signal) the
+  workstation lists "SENSORS NOT CALIBRATED" (Life Support WARNING,
+  "Last calibration: none on record") -- the instrument's own plate says
+  CALIBRATED, the task stays done, no order reopens, the log keeps the
+  completion. Going to the instrument = the check ("It says calibrated.
+  Right here."). ABNORMAL: the assistant (story-only line) announces a
+  calibration nobody did; the plate says CAL DUE. A real completion is
+  confirmed by the instrument's own two-tone beep (learned in normal
+  play). Developer: prepare done / pending, trigger either, reset, true
+  vs displayed state on the STORY tab.
+
+## G. Hatch handle
+- EXT-02 re-aimed at the outer hatch's handle (44 deg lens): the hatch
+  and walkway stay in frame. The lever is longer/thicker with a dark tip
+  over a matte-black dial plate with LOCKED / OPEN ticks; the anomaly turn
+  catches part-way (a jolt), forces on toward OPEN (82 deg), holds, drops
+  back. Camera-only copy; the real latch / pressure never change.
+
+## H. Inner voice + everyday thoughts
+- Voice: dry and close (no room reverb; 140 Hz-3.4 kHz band, +2.5 dB low-
+  mid warmth, -2 dB presence), -11 dB, slower; while it speaks, Ambient /
+  SFX dip 5 dB via an Amplify effect (player bus volumes untouched).
+  Caption: italic, no quotation marks, softer colour, fades. Captions-only
+  where no local voice exists.
+- Everyday thoughts (EN/ZH): repair, breakfast, dinner, tea, basil, back
+  from EVA, a letter's answer, shift end -- at most 2 a day, one per
+  context, ~45 % deterministic chance, rotating lines.
+
+## I. Peripheral figure
+- After a FAST head turn (>= 170 deg/s, >= 45 deg swept) the apparition
+  (eyes-only) stands near the edge of the view on the side turned away
+  from, at a validated floor spot (authored doorways / corridor edges /
+  far sides, else sampled along the edge ray) with floor, body clearance
+  and a clear line to head + hips. Gone when the gaze returns (20 deg) or
+  after 0.55 s. Phase >= 2, not day 1, free walking only, once a day,
+  never the last two rooms; reduced effects: never closer than 4 m. In
+  1.2 m corridors the view's edge is a wall -- it simply does not appear.
+
+## J. Window figure (Chapter One climax)
+- Root causes of "one standing shadow": seen from the observation spot
+  the tunnel port was a ~30 px box at the Control Room port's rim and the
+  figure stood behind its frame for an oblique viewer.
+- Fixes: tunnel port 0.78 x 0.60 m; observation spot moved so the sight
+  line crosses the Control Room port's centre; figure placed ON that line
+  0.45 m behind the glass, unshaded black against the brightened tunnel
+  wall; a gentle FOCUS (squint) narrows the view while staring (never with
+  reduced effects). Sequence: still -> slow head tilt -> twitch -> frozen
+  beat -> shudder (head snaps ~60 deg, chest twists/lurches, one arm up)
+  -> abrupt sideways retreat with the head lagging -> behind the frame.
+- Guided walk: real Control Room navigation (A* on a capsule-validated
+  grid, string-pulled), any movement key cancels the whole route.
+
+## K. Messages, consequences, pacing
+- ONE conversation per person (stable contact ids), chronological,
+  scrollable, opened at the newest message; replies answer the oldest
+  unanswered letter. Saves unchanged (old per-letter threads display
+  merged). Consequences: a letter left 2+ days changes the next one's tone
+  (Mara); an unanswered letter brings a follow-up (Mum, day 7); a job left
+  open overnight escalates to WARNING and the morning note says so.
+- Basil: HEALTHY -> DRY -> WILTING -> DEAD after 3 unwatered days; one
+  step better per watered day; dead = watering refused, chore removed.
+  Phase 3 return (story): only after it really died and was seen dead, on
+  a later day; presentation only (true history kept); "I thought that
+  plant was dead."; developer preview never saved.
+- Pacing tiers: subtle (note, mismatch, calibration, peripheral, records,
+  letters, basil) / medium (phantom airlock, crossing, hatch) / major
+  (window). An ordinary day between medium events; the window encounter
+  never shares a day with a medium one; at most one armed event a day.
+
+## L. Builds
+- Official 4.7.2 templates (SHA-512 checked). macOS universal release:
+  exported, smoke test ALL PASSED in its own user folder
+  (SatelliteMaintenanceHorrorDemo), developer panel absent. Windows x86-64
+  preset added and EXPORTED (PE32+, embedded pck) -- NOT run on Windows
+  (needs a Windows machine). Nothing published; no tag.
+
+## M. Tests / verification
+- New: test_r46_shift_timer, test_r46_dev_input (windowed),
+  test_r46_holdout_balance (+ tests/holdout_sim.gd), test_r46_life_systems,
+  test_r46_horror (windowed). run_tests.sh WINDOWED_TESTS runs the two
+  GUI/aspect-dependent tests with a real window.
+- Renders (scratchpad r46/out): time diagnostics, Holdout waves/weapons/
+  armory, INT-02 crossing sequence, mismatch views, F8 seated hover +
+  click, calibration contradiction, hatch handle, peripheral near/far/
+  left/right/gone, window-figure sequence, messages, basil states,
+  regressions.
+
+## N. Limitations
+- Not manually playtested. Windows build not run. Figures are primitive
+  jointed silhouettes (no skinned rig). The window figure is still a
+  small silhouette at ~4 m (focus helps). Laptop app titles, letters,
+  handover notes, Holdout and the workstation stay English. The basil
+  cannot be replanted (dead stays dead unless the story returns it).

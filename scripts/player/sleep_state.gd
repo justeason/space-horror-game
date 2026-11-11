@@ -463,6 +463,12 @@ func is_lying_in_bed() -> bool:
 	return _lying
 
 
+## Round 46: fully UP -- standing and free (not lying, sleeping, sitting or
+## mid get-up). The day's shift budget only starts counting from here.
+func is_up() -> bool:
+	return _state == State.AWAKE and not _lying
+
+
 ## Player (eye) position that rests the lying body's pelvis on the mattress.
 func _lying_eye_position() -> Vector3:
 	var hips: Node3D = _player_body.get_node_or_null("LyingPose/Hips")
@@ -607,6 +613,9 @@ func begin_sleep() -> void:
 	if _day_plan != null and _day_plan.has_method("can_sleep") and not _day_plan.can_sleep():
 		_task_message(_day_plan.sleep_refusal())
 		return
+	# Round 46: work done before the budget ran out -> resting is a choice.
+	if _day_plan != null and _day_plan.has_method("rest_early"):
+		_day_plan.rest_early()
 	_state = State.SLEEPING
 	_interaction_controller.interactions_enabled = false
 	_free_body.set_active(false)

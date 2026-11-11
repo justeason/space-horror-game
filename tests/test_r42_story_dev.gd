@@ -12,7 +12,8 @@ extends SceneTree
 ##    phase override is never saved; restore returns the pre-test state.
 ##  - hatch_handle: a camera-only handle turns on INT-07 (chamber cam) while
 ##    the real hatch, pressure and handles stay put; ends at the airlock.
-##  - wrong_reading: the wall panel lies (tagged override), the model and
+##  - wrong_reading (Round 46: task-linked): the workstation denies a real
+##    calibration; the task, instrument plate and records stay true; the
 ##    the workstation keep the truth; it expires; save/load never keeps it.
 var _ok := true
 var main: Node
@@ -184,30 +185,31 @@ func _hatch_handle() -> void:
 	main.get_node("FreeMoveBody").sync_to_eye_position(Vector3(0.0, 1.6, 0.8))
 
 
+## Round 46: the wrong reading is TASK-LINKED (the old wall-panel number
+## was too subtle): after a real calibration the workstation denies it.
 func _wrong_reading() -> void:
-	var r: Node = main.get_node("EnvironmentReadout")
-	var env: Node = main.get_node("EnvironmentModel")
-	var true_before: String = r.text()
-	var p0: float = env.pressure_kpa
-	_check("normal: the wall panel shows the true reading", r.shown_text() == r.text() and r.override_source == "")
+	var dp: Node = main.get_node("DayPlan")
+	var stn: Node = main.get_node("StationStatus")
+	_check("normal: no story duty on the workstation", not stn.duties().any(func(d): return String(d["id"]) == "STORY-CAL"))
+	se.dev_prepare_cal("normal")
 	se.dev_trigger(&"wrong_reading", "normal")
 	await process_frame
-	_check("anomaly: the panel shows a contradiction (%s)" % r.shown_text().get_slice("\n", 9), r.shown_text() != r.text() and r.shown_text().find("96.8") != -1)
-	_check("tagged as a deliberate story override (not a desync)", r.override_source == "story:wrong_reading")
-	_check("the TRUE model / readout text are untouched", is_equal_approx(env.pressure_kpa, p0) and r.text() == true_before)
-	var shell: Node = main.get_node("Interactables/WorkstationConsole/WorkstationScreen/Shell")
-	_check("the workstation's diagnostics still read the true pressure", main.get_node("Interactables/WorkstationConsole/WorkstationScreen")._diagnostic_text().find("96.8") == -1 if main.get_node("Interactables/WorkstationConsole/WorkstationScreen").has_method("_diagnostic_text") else true)
+	var duty: Array = stn.duties().filter(func(d): return String(d["id"]) == "STORY-CAL")
+	_check("anomaly: the workstation lists the sensors NOT CALIBRATED (Life Support)", duty.size() == 1 and duty[0]["room"] == &"life_support" and String(duty[0]["short"]).find("NOT CALIBRATED") != -1)
+	_check("the TRUE task state is untouched (L07 still done)", dp.is_task_done(&"l07"))
+	var plate: Node = main.get_node("Interactables/SensorCalibrationStation/CalStatusPlate")
+	plate._process(0.0)
+	_check("the instrument's own plate says CALIBRATED", plate.text.begins_with("CALIBRATED"))
 	var sd: Dictionary = se.state_dict()
 	se.dev_cancel()
 	await process_frame
-	_check("expired/cancelled: displays agree again", r.shown_text() == r.text() and r.override_source == "")
+	_check("expired/cancelled: the workstation agrees again", not stn.duties().any(func(d): return String(d["id"]) == "STORY-CAL"))
 	se.load_dict(sd)
-	_check("save/load never restores the false reading", r.shown_text() == r.text())
-	# Real run expiry.
-	se.dev_trigger(&"wrong_reading", "abnormal", true)
+	_check("save/load never restores the false status", se.workstation_overlay().is_empty())
+	se.dev_trigger(&"wrong_reading", "normal", true)
 	se._active_t = se.READING_MAX_S - 0.1
 	await create_timer(0.4).timeout
-	_check("a counted run expires by itself after its time", se.active == &"" and r.shown_text() == r.text())
+	_check("a counted run expires by itself after its time", se.active == &"" and se.workstation_overlay().is_empty())
 
 
 func _previews() -> void:
@@ -216,7 +218,9 @@ func _previews() -> void:
 		_check("dev trigger %s" % id, se.dev_trigger(id))
 		await process_frame
 		if id == &"corridor_presence":
-			_check("presence visible on the camera layer only", se.presence_visible() and (se.presence_node().get_child(0) as VisualInstance3D).layers == se.CAMERA_ONLY)
+			_check("presence visible on the camera layer only", se.presence_visible() and (se.presence_node().find_children("*", "VisualInstance3D", true, false)[0] as VisualInstance3D).layers == se.CAMERA_ONLY)   # Round 46: jointed actor
+			for k in 60:
+				se.presence_node().step(1.0 / 30.0)     # Round 46: walk out onto the Junction floor
 			_check("presence stands where INT-02 sees it", net.sees("INT-02", se.presence_node().global_position + Vector3(0, 1.2, 0), 0.5))
 		else:
 			var od: Node = main.get_tree().get_first_node_in_group(&"observation_discrepancy")
@@ -240,7 +244,15 @@ func _save_excludes_dev() -> void:
 	var sd: Dictionary = se.state_dict()
 	_check("the phase OVERRIDE is never written into a save", int(sd["story"]["phase"]) == se.story_phase and not JSON.stringify(sd).contains("override"))
 	se.dev_set_phase_override(0)
-	_check("no assistant call in the anomaly code paths (no explanations)", not FileAccess.get_file_as_string("res://scripts/story/story_events.gd").contains("station_ai"))
+	_check("no assistant call in the anomaly code paths (no explanations)", _only_false_announcement())
+
+
+## Round 46: story code never makes the assistant EXPLAIN anything; its one
+## assistant call is the deliberate false "calibration complete" line
+## (the task-linked wrong reading, abnormal variant).
+func _only_false_announcement() -> bool:
+	var src: String = FileAccess.get_file_as_string("res://scripts/story/story_events.gd")
+	return src.count("station_ai") == 1 and src.count("say_key(") == 1 and src.contains("story_cal_premature")
 
 
 func _check(name: String, cond: bool) -> void:

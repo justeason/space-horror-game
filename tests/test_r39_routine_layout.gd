@@ -86,7 +86,7 @@ func _routine() -> void:
 	_check("a MEAL routine row (Living Quarters) is part of the day", rows.size() == 1 and rows[0]["room"] == &"living_quarters" and not rows[0]["done"] and rows[0]["progress"] == "0/2")
 	_check("the routine counts against completion", not dp.required_work_complete() or dp.order_rows().size() > 1)
 	var p0: float = dp.shift_progress()
-	_check("shift progress is a share of today's work ('%s'), not a clock" % dp.shift_status_text(), dp.shift_status_text().ends_with("%") and p0 > 0.0 and p0 < 1.0)
+	_check("shift progress is a share of today's work ('%s'), not a clock" % dp.shift_status_text(), dp.shift_status_text().find("WORK %d%%" % int(round(p0 * 100.0))) != -1 and p0 > 0.0 and p0 < 1.0)
 	var stn: Node = main.get_node("StationStatus")
 	_check("the map marks the Quarters (routine)", int(stn.room_severity(&"living_quarters")) >= 1)
 	# Eat at the galley: a visible gesture with the actual meal pouch.
@@ -115,10 +115,15 @@ func _shift() -> void:
 	dp.workday = 0
 	dp.cargo_duty = ""
 	await create_timer(0.3).timeout
-	_check("required work complete -> WRAP UP (no shift end yet)", dp.is_wrapping_up() and not dp.shift_ended and dp.shift_status_text().find("WRAP UP") != -1)
+	# Round 46: work done no longer ends the shift 45 s later -- the shift
+	# runs its full 600 s budget (resting early is the player's choice).
+	_check("required work complete -> WORK DONE (no shift end yet)", dp.is_wrapping_up() and not dp.shift_ended and dp.shift_status_text().find("WORK DONE") != -1)
 	dp.shift_elapsed_s = dp.work_done_at_s + dp.WRAP_UP_S + 0.1
 	await create_timer(0.2).timeout
-	_check("after the wrap-up the shift ends (bunk expected)", dp.shift_ended and dp.bed_required() and dp.shift_status_text().find("REST") != -1)
+	_check("Round 46: ...and still no shift end after the old 45 s wrap-up", not dp.shift_ended)
+	dp.shift_elapsed_s = dp.shift_duration_s()
+	await create_timer(0.2).timeout
+	_check("at the end of the budget the shift ends (bunk expected)", dp.shift_ended and dp.bed_required() and dp.shift_status_text().find("REST") != -1)
 	await create_timer(1.8).timeout
 	_check("Round 40: a warm glow comes on over the bunk (wordless 'go to bed')", q.bunk_glow_energy() > 0.5)
 	_check("not tired yet inside the grace period", dp.tiredness() == 0.0 and is_equal_approx(dp.movement_factor(), 1.0))

@@ -30,6 +30,9 @@ var speed_scale: float = 1.0
 ## a slower pace, cancelled by ANY movement key; INF = none.
 var guide_target: Vector3 = Vector3.INF
 var guide_cancelled: bool = false
+## Round 46: further waypoints after guide_target (navigation around
+## furniture); consumed in order, cleared on cancel.
+var guide_path: Array = []
 ## Round 39/40/41: EVA free-floating. Round 41 control scheme (playtest
 ## feedback: "too complicated"): AIM AND PUSH.
 ##   W  -- the suit's jets push gently along the CAMERA's aim (look where
@@ -165,6 +168,7 @@ func _physics_process(delta: float) -> void:
 	input_dir = input_dir.normalized()
 	if input_dir != Vector2.ZERO and guide_target != Vector3.INF:
 		guide_target = Vector3.INF          # the player takes over at once
+		guide_path = []
 		guide_cancelled = true
 
 	var yaw: float = look_pivot.global_rotation.y if look_pivot else 0.0
@@ -177,8 +181,8 @@ func _physics_process(delta: float) -> void:
 	if guide_target != Vector3.INF:
 		var to: Vector3 = guide_target - current_eye_position()
 		to.y = 0.0
-		if to.length() < 0.12:
-			guide_target = Vector3.INF
+		if to.length() < 0.12 or (not guide_path.is_empty() and to.length() < 0.22):
+			guide_target = guide_path.pop_front() if not guide_path.is_empty() else Vector3.INF
 		else:
 			wish_dir = to.normalized()
 			guide_scale = 0.55

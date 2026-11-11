@@ -12,7 +12,7 @@ extends Node
 ## written; the phase decides tone only. The player's own typed Personal
 ## Log is untouched (it lives on as PRIVATE NOTES inside the Journal app).
 
-var entries: Array = []            # [{key, day, t, text, kind}]
+var entries: Array = []            # [{key, day, t, text, kind, arg}]
 var _keys: Dictionary = {}
 ## Round 45 Priorities 14-15: the INTERACTIVE journal. One PAGE per day,
 ## composed only from that day's real entries (above); the player "writes"
@@ -47,7 +47,7 @@ const SHIFT := [
 	"Day %d finished. %s The fans sound like rain if you let them.",
 ]
 const OBSERVED := {
-	"corridor_presence": "I saw something on the corridor camera. Someone behind my chair. When I turned round, the passage was empty.",
+	"corridor_presence": "Someone walked across the Junction on the corridor camera. Out of Comms, into Engineering. I was the only one awake.",
 	"window_mismatch": "The window and the camera didn't agree about the hull outside. I looked twice.",
 	"wrong_reading": "The wall panel said the pressure was low. The workstation said it wasn't.",
 	"hatch_handle": "A knock from the airlock. On the chamber camera the hatch lever moved.",
@@ -56,9 +56,11 @@ const OBSERVED := {
 	"access_ghost": "The access log says someone went into a room today. I don't think it was me.",
 	"family_misremember": "Mara's letter mentions something I don't remember telling her.",
 	"window_figure": "I thought I saw someone behind the airlock tunnel port. It moved wrong. Then it was gone.",
+	"basil_return": "The basil is green again. I watched it die. I haven't watered it since.",
+	"peripheral_figure": "Turned round too fast and thought someone was standing at the edge of the room. Nobody.",
 }
 const CHECKED := {
-	"corridor_presence": "Looked behind me. Nothing. Just the doorway.",
+	"corridor_presence": "Went to the Junction. Nobody. Just the doorways.",
 	"hatch_handle": "Went to the airlock. The lever was down, exactly as it should be.",
 	"wrong_reading": "Compared the panel with the workstation. They still disagreed.",
 	"phantom_cycle": "Went to the airlock. Pressure normal, both hatches as I left them.",
@@ -75,6 +77,120 @@ const CONTRA := {
 }
 
 
+# ------------------------------------------------- Simplified Chinese
+## Post-Round-45: the journal follows the game language. Entries keep their
+## English text (saves unchanged); a page is rendered from each entry's KEY
+## in the language active when the page is composed -- and, like a real
+## diary, an already-composed page is never rewritten.
+const ZH_FIRST_JOB := {
+	"vent": "今天第一次清理通风格栅。灰尘像灰色的毛毡一样剥落下来。",
+	"breaker": "第一次复位断路器。照手册说的，先找到了原因。",
+	"seal": "清理了外舱门的密封圈。关门的声音听得出不一样。",
+	"data": "把一个数据模块送过了整个空间站。感觉像个快递员。",
+	"thermal": "热成像巡检完成。冷点正好在图上标的位置。",
+	"power": "平衡了电源母线。数字终于都是绿色的了。",
+	"antenna": "第一次出舱。那颗星球很大，也很安静。",
+	"lens": "清理了船体外的一个摄像头镜头。严格来说，它一直在看着我。",
+	"solar_clean": "擦了一块太阳能板。奇怪的活儿，像在擦太阳的镜子。",
+	"solar_coupler": "重新安装了一个太阳能耦合器。戴着手套，每颗螺栓都大了一倍。",
+	"solar_hinge": "松开了一个卡住的太阳能铰链。翼板像门一样转开了。",
+	"patch_bay": "在通讯跳线架里找到了那个松动的插头。小东西，大区别。",
+	"emerg_lights": "测试了枢纽舱的应急灯。有一盏坏了，换掉了。",
+	"junction_panel": "测量了枢纽配电盘。有一个接头松了。",
+	"backup_rx": "备用接收机测试。B 通道噪声很大，记录下来了。",
+}
+const ZH_SHIFT := [
+	"第%d天结束。%s今晚空间站更安静了。",
+	"第%d天。%s吃了饭，看了仪表，没什么可报告的。",
+	"第%d天结束了。%s手上一股触点清洁剂的味道。",
+	"第%d天完成。%s如果仔细听，风扇的声音像下雨。",
+]
+const ZH_OBSERVED := {
+	"corridor_presence": "走廊摄像头里有人穿过了枢纽舱。从通讯舱出来，进了工程舱。可醒着的只有我一个。",
+	"window_mismatch": "舷窗和摄像头对船体外面的样子说法不一致。我看了两遍。",
+	"wrong_reading": "墙上的面板说气压偏低。工作站说没有。",
+	"hatch_handle": "气闸那边传来敲击声。舱室摄像头里，舱门把手动了。",
+	"note_extra_item": "今天的便条里有一行我不认得。后来它就不见了。",
+	"phantom_cycle": "我听到气闸在循环。我没有启动它。",
+	"access_ghost": "门禁记录说今天有人进了一个房间。我觉得那不是我。",
+	"family_misremember": "Mara 的信里提到一件我不记得告诉过她的事。",
+	"window_figure": "我好像看到气闸通道的观察窗后面有人。它动得不对劲。然后就不见了。",
+	"basil_return": "罗勒又绿了。我亲眼看着它死掉的。之后我一次都没浇过水。",
+	"peripheral_figure": "转身太快，以为屋子边上站着一个人。没人。",
+}
+const ZH_CHECKED := {
+	"corridor_presence": "我去了枢纽舱。没有人。只有那几个门洞。",
+	"hatch_handle": "去了气闸。把手是放下的，完全正常。",
+	"wrong_reading": "把面板和工作站对比了一下。它们还是对不上。",
+	"phantom_cycle": "去了气闸。气压正常，两道舱门都和我离开时一样。",
+	"access_ghost": "去看了。什么都没动，什么都没少。",
+	"window_figure": "我去了通道。空的。玻璃很干净。宇航服还在老地方。",
+}
+const ZH_CONTRA := {
+	"note_archive": "便条存档说那张便条从没被修改过。",
+	"airlock_log": "气闸日志在那个时间没有任何循环记录。一条都没有。",
+	"access_log": "门禁记录里有那一条。我不在那里。",
+	"environment_log": "环境日志显示全天气压正常。",
+	"sent_mail": "我寄出的信写的是我记得的内容。不是她引用的那句。",
+	"camera_log": "摄像头什么都没拍到。只有我。",
+}
+const ZH_MILESTONE := {
+	"phase_2": "我现在熟悉这里了。也许正因为这样，小事才显得格外突出。",
+	"phase_3": "我开始把每件事的时间都记下来。以防万一。",
+	"chapter_1": "全都写下来了。不管那是什么，它现在已经在日志里了。",
+}
+const ZH_QUIET := ["没发生什么事。空间站一切照常运转。", "普通的一天。吃饭，干活，盯着仪表。", "很安静。我喜欢安静。"]
+
+
+static func _zh() -> bool:
+	return String(preload("res://scripts/station/game_settings.gd").get_value("language")).begins_with("zh")
+
+
+func _day_label(day: int) -> String:
+	return ("第%d天" % day) if _zh() else ("DAY %d" % day)
+
+
+## The sentence for one entry in the current language (English = as saved).
+func entry_text(e: Dictionary) -> String:
+	var en: String = String(e.get("text", ""))
+	if not _zh():
+		return en
+	var key: String = String(e.get("key", ""))
+	var head: String = key.get_slice(":", 0)
+	var rest: String = key.substr(head.length() + 1)
+	var arg: String = String(e.get("arg", ""))
+	var zh: String = ""
+	match head:
+		"shift":
+			var n: int = int(arg) if arg != "" else _count_from_en(en)
+			var what: String = "很平静。" if n == 0 else ("完成了一项工作。" if n == 1 else "完成了%d项工作。" % n)
+			zh = pick(ZH_SHIFT, key) % [int(rest), what]
+		"first":
+			zh = String(ZH_FIRST_JOB.get(rest, "第一次完成%s工作。慢慢上手了。" % rest.replace("_", " ")))
+		"emergency":
+			zh = "今天电源过载报警。我可不想习惯这种声音。"
+		"reply":
+			var who: String = arg if arg != "" else en.trim_prefix("Wrote back to ").trim_suffix(".")
+			zh = "给%s回了信。" % String({"Mum": "妈妈"}.get(who, who))
+		"obs":
+			zh = String(ZH_OBSERVED.get(rest, ""))
+		"check":
+			zh = String(ZH_CHECKED.get(rest, ""))
+		"contra":
+			zh = String(ZH_CONTRA.get(rest.get_slice(":", 1), "记录和我看到的对不上。"))
+		"ms":
+			zh = String(ZH_MILESTONE.get(rest, ""))
+	return zh if zh != "" else en
+
+
+static func _count_from_en(en: String) -> int:
+	if en.find("Closed one job") != -1:
+		return 1
+	var rx := RegEx.create_from_string("Closed (\\d+) jobs")
+	var m := rx.search(en)
+	return int(m.get_string(1)) if m != null else 0
+
+
 func _ready() -> void:
 	add_to_group(&"journal")
 	add_to_group(&"r35_equipment")
@@ -89,13 +205,13 @@ func has(key: String) -> bool:
 
 
 ## Writes one entry for `key` (once, ever). Returns true when written.
-func write(key: String, text: String, kind: String = "day", day: int = -1) -> bool:
+func write(key: String, text: String, kind: String = "day", day: int = -1, arg: String = "") -> bool:
 	if _keys.has(key) or text == "":
 		return false
 	var dp: Node = _dp()
 	var d: int = day if day > 0 else (int(dp.day_number) if dp != null else 1)
 	_keys[key] = true
-	entries.append({"key": key, "day": d, "t": dp.clock_text_hhmm() if dp != null and dp.has_method("clock_text_hhmm") else "", "text": text, "kind": kind})
+	entries.append({"key": key, "day": d, "t": dp.clock_text_hhmm() if dp != null and dp.has_method("clock_text_hhmm") else "", "text": text, "kind": kind, "arg": arg})
 	return true
 
 
@@ -106,7 +222,7 @@ static func pick(arr: Array, key: String) -> String:
 # ------------------------------------------------------------- sources
 func on_shift_summary(day: int, closed: int) -> void:
 	var what: String = "Quiet one." if closed == 0 else ("Closed one job." if closed == 1 else "Closed %d jobs." % closed)
-	write("shift:%d" % day, pick(SHIFT, "shift:%d" % day) % [day, what], "day", day)
+	write("shift:%d" % day, pick(SHIFT, "shift:%d" % day) % [day, what], "day", day, str(closed))
 
 
 func on_order_closed(type: String) -> void:
@@ -118,7 +234,7 @@ func on_emergency(day: int) -> void:
 
 
 func on_letter(conv: String, to: String) -> void:
-	write("reply:" + conv, "Wrote back to %s." % to, "family")
+	write("reply:" + conv, "Wrote back to %s." % to, "family", -1, to)
 
 
 func on_observed(event_id: String) -> void:
@@ -162,13 +278,14 @@ func compose(day: int) -> Dictionary:
 	for e in todays:
 		if p["keys"].size() >= MAX_SENTENCES:
 			break
-		var t: String = String(e["text"])
+		var t: String = entry_text(e)
+		var stop: String = "。" if _zh() else ". "
 		if String(e["kind"]) == "day" and String(p["text"]) != "":
-			t = t.get_slice(". ", 1) if t.find(". ") != -1 else t
-		p["text"] = (String(p["text"]) + " " + t).strip_edges()
+			t = t.substr(t.find(stop) + stop.length()) if t.find(stop) != -1 else t
+		p["text"] = (String(p["text"]) + ("" if _zh() else " ") + t).strip_edges()
 		p["keys"].append(e["key"])
 	if String(p["text"]) == "":
-		p["text"] = pick(["Nothing much happened. The station hummed along.", "Ordinary day. Ate, worked, watched the gauges.", "Quiet. I like quiet."], "quiet:%d" % day)
+		p["text"] = pick(ZH_QUIET if _zh() else ["Nothing much happened. The station hummed along.", "Ordinary day. Ate, worked, watched the gauges.", "Quiet. I like quiet."], "quiet:%d" % day)
 		p["keys"].append("quiet:%d" % day)
 	return p
 
@@ -207,16 +324,16 @@ func page_lines(day: int) -> Array:
 	var out: Array = []
 	var cur: Dictionary = pending_page(day)
 	if not cur.is_empty():
-		out.append("DAY %d" % int(cur["day"]))
+		out.append(_day_label(int(cur["day"])))
 		out.append(String(cur["text"]).left(int(cur["typed"])) + "_")
 		out.append("")
-		out.append("(type any keys to write)" if int(cur["typed"]) == 0 else "")
+		out.append(("（按任意键书写）" if _zh() else "(type any keys to write)") if int(cur["typed"]) == 0 else "")
 	var done: Array = pages.filter(func(p): return page_done(p) and String(p["text"]) != "")
 	done.reverse()
 	for p in done.slice(0, 4):
-		out.append("DAY %d — %s" % [int(p["day"]), p["text"]])
+		out.append("%s — %s" % [_day_label(int(p["day"])), p["text"]])
 	if out.is_empty():
-		out.append("Nothing to write yet.")
+		out.append("还没有可写的。" if _zh() else "Nothing to write yet.")
 	return out
 
 
@@ -239,7 +356,7 @@ func load_dict(d: Dictionary) -> void:
 	for e in Array(d.get("entries", [])):
 		if e is Dictionary and String(e.get("key", "")) != "" and not _keys.has(String(e["key"])):
 			_keys[String(e["key"])] = true
-			entries.append({"key": String(e["key"]), "day": int(e.get("day", 1)), "t": String(e.get("t", "")), "text": String(e.get("text", "")), "kind": String(e.get("kind", "day"))})
+			entries.append({"key": String(e["key"]), "day": int(e.get("day", 1)), "t": String(e.get("t", "")), "text": String(e.get("text", "")), "kind": String(e.get("kind", "day")), "arg": String(e.get("arg", ""))})
 	pages = []
 	for p in Array(d.get("pages", [])):
 		if p is Dictionary:

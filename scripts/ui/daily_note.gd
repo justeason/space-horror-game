@@ -38,6 +38,10 @@ static func build(dp: Node, q: Node, handover_done: bool = false) -> Dictionary:
 	# jobs, compactly (DayPlan rows; no second task list).
 	if dp != null:
 		var open_rows: Array = dp.order_rows().filter(func(r): return not r.get("done", false) and String(r.get("id", "")) != "MEAL")
+		# Round 46: what the last shift left unresolved -- escalated today.
+		var carried: Array = open_rows.filter(func(r): return bool(r.get("escalated", false)))
+		if not carried.is_empty():
+			header.append("Unresolved from yesterday (now WARNING): %s" % ", ".join(carried.slice(0, 3).map(func(r): return "%s (%s)" % [r["tag"], dp.ROOM_SHORT.get(StringName(r.get("room", &"")), "?")])))
 		if not open_rows.is_empty():
 			var tags: Array = open_rows.slice(0, 4).map(func(r): return "%s (%s)" % [r["tag"], dp.ROOM_SHORT.get(StringName(r.get("room", &"")), "?")])
 			header.append("Jobs: %s%s" % [", ".join(tags), "" if open_rows.size() <= 4 else " +%d" % (open_rows.size() - 4)])
@@ -63,7 +67,8 @@ static func build(dp: Node, q: Node, handover_done: bool = false) -> Dictionary:
 		else:
 			items.append({"id": "work", "label": "Work orders %d/%d" % [done, rows.size()], "done": done == rows.size()})
 	items.append({"id": "dinner", "label": "Dinner (after the shift)", "done": bool(rs.get("dinner", false))})
-	items.append({"id": "basil", "label": "Water the basil", "done": bool(rs.get("basil", false))})
+	if not bool(rs.get("basil_dead", false)):      # Round 46: no chore for a dead plant
+		items.append({"id": "basil", "label": "Water the basil", "done": bool(rs.get("basil", false))})
 	var status: String = ""
 	if dp != null and dp.has_method("clock_text_hhmm"):
 		status = " · %s · %s" % [dp.clock_text_hhmm(), "REST" if dp.shift_ended else "WORK %d%%" % int(round(dp.shift_progress() * 100.0))]
@@ -75,7 +80,7 @@ static func build(dp: Node, q: Node, handover_done: bool = false) -> Dictionary:
 ## Round 45: Simplified Chinese for TODAY's fixed labels (the note's free
 ## text lines stay English -- documented).
 const ZH := {"Review handover": "查看交接记录", "Brush teeth": "刷牙", "Breakfast": "早餐", "Drink water": "喝水", "Station check-in": "工作站签到",
-	"Dinner (after the shift)": "晚餐（下班后）", "Water the basil": "给罗勒浇水", "Check the observation port": "检查观察窗", "— TODAY —": "— 今日 —", "Priority: ": "优先：", "Jobs: ": "工作：", "Cargo: ": "货运：", "Supplies: ": "补给：", "Reminder: ": "提醒："}
+	"Dinner (after the shift)": "晚餐（下班后）", "Water the basil": "给罗勒浇水", "Check the observation port": "检查观察窗", "— TODAY —": "— 今日 —", "Priority: ": "优先：", "Jobs: ": "工作：", "Cargo: ": "货运：", "Supplies: ": "补给：", "Reminder: ": "提醒：", "Unresolved from yesterday (now WARNING): ": "昨日遗留（已升级为警告）："}
 
 
 static func _zh() -> bool:
@@ -87,7 +92,7 @@ static func tr_label(t: String) -> String:
 		return t
 	if ZH.has(t):
 		return ZH[t]
-	for k in ["Priority: ", "Jobs: ", "Cargo: ", "Supplies: ", "Reminder: "]:
+	for k in ["Priority: ", "Jobs: ", "Cargo: ", "Supplies: ", "Reminder: ", "Unresolved from yesterday (now WARNING): "]:
 		if t.begins_with(k):
 			return ZH[k] + t.substr(k.length())
 	if t.begins_with("Work orders "):

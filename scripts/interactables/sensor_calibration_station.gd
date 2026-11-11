@@ -72,6 +72,8 @@ func _ready() -> void:
 		_day_plan.register_service_rearm(_day_plan.Workday.CALIBRATION, _rearm_for_service)
 	_build_gauges()
 	_refresh_gauges()
+	# Round 46: the instrument's own true calibration status.
+	preload("res://scripts/interactables/cal_status_plate.gd").attach(self, &"l07", _day_plan, Vector3(0, 0.27, 0.115))
 
 
 # ======================================================================

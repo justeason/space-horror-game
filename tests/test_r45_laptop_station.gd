@@ -33,6 +33,7 @@ func _init() -> void:
 	main.get_node("StationAI").set_enabled(false)
 	await _close_and_clock()
 	await _journal()
+	_journal_zh()
 	_handover()
 	await _toggles()
 	await _basil()
@@ -140,6 +141,35 @@ func _journal() -> void:
 	scr.set_editing(false)
 
 
+## Post-Round-45: the journal follows the game language (isolated instance).
+func _journal_zh() -> void:
+	var GS = load("res://scripts/station/game_settings.gd")
+	var old_lang: String = String(GS.get_value("language"))
+	GS._values["language"] = "zh_CN"
+	var j2: Node = load("res://scripts/story/journal.gd").new()
+	j2.on_order_closed("vent")
+	j2.on_shift_summary(1, 2)
+	j2.on_letter("mum_sleep", "Mum")
+	j2.on_observed("window_figure")
+	var pg: Dictionary = j2.compose(1)
+	var t: String = String(pg["text"])
+	_check("Chinese: the page is written in Chinese from the same real events", t.find("通风格栅") != -1 and t.find("完成了2项工作") != -1 and t.find("妈妈") != -1 and t.find("观察窗") != -1)
+	_check("...no English sentences mixed in", t.find(" the ") == -1 and t.find("Wrote") == -1 and t.find("Closed") == -1)
+	_check("...day label and hint in Chinese", String(j2.page_lines(1)[0]) == "第1天" and "（按任意键书写）" in j2.page_lines(1))
+	_check("...saved entries keep their English text (saves unchanged)", String(j2.entries[0]["text"]).find("vent grille") != -1)
+	var old_save := {"entries": [{"key": "shift:2", "day": 2, "t": "", "text": "Day 2 done. Closed 3 jobs. The station's quieter tonight.", "kind": "day"}]}
+	j2.load_dict(old_save)
+	_check("...an older save (no stored count) still renders correctly", j2.entry_text(j2.entries[0]).find("完成了3项工作") != -1)
+	j2.load_dict({"entries": [{"key": "first:vent", "day": 1, "t": "", "text": "First vent grille today. The dust comes off like grey felt.", "kind": "work"}]})
+	var zh_page: String = String(j2.compose(1)["text"])
+	GS._values["language"] = "en"
+	_check("...a composed page is never rewritten when the language changes", String(j2.compose(1)["text"]) == zh_page)
+	j2.write("first:seal", "Cleaned the outer hatch seal. You can hear the difference when it closes.", "work", 2)
+	_check("...and the next page follows the new language", String(j2.compose(2)["text"]).find("hatch seal") != -1 and String(j2.page_lines(2)[0]).begins_with("DAY"))
+	GS._values["language"] = old_lang
+	j2.free()
+
+
 func _handover() -> void:
 	var Files = scr.Files
 	dp.day_number = 1
@@ -222,17 +252,66 @@ func _toggles() -> void:
 func _basil() -> void:
 	var q: Node = main.get_node("Equipment/QuartersLife")
 	var body: Node = main.get_node("Player/PlayerBody")
-	main.get_node("FreeMoveBody").sync_to_eye_position(Vector3(3.5, 1.6, 1.5))
+	var fbw: Node = main.get_node("FreeMoveBody")
+	for i in 240:                        # walking control back after the workstation
+		if fbw.active:
+			break
+		await physics_frame
+	fbw.sync_to_eye_position(Vector3(3.5, 1.6, 1.5))
 	for i in 4: await physics_frame
 	q.basil_day = -1
+	# Walking off during the step-up abandons the pour (no water, nothing stuck).
 	q.on_part(&"basil")
-	await process_frame
+	await physics_frame
+	var stepping: bool = fbw.guide_target != Vector3.INF
+	var ek := InputEventKey.new()
+	ek.keycode = KEY_S
+	ek.physical_keycode = KEY_S
+	ek.pressed = true
+	Input.parse_input_event(ek)
+	for i in 6: await physics_frame
+	ek.pressed = false
+	Input.parse_input_event(ek)
+	for i in 6: await physics_frame
+	_check("a movement key during the step-up cancels it: no pour, no water, nothing pending", stepping and fbw.guide_target == Vector3.INF and not body.is_consuming() and q._pending == "" and not q.basil_watered_today())
+	fbw.sync_to_eye_position(Vector3(3.5, 1.6, 1.5))
+	for i in 4: await physics_frame
+	# Click it the way a player does: LOOKING at the pot.
+	var player: Node3D = main.get_node("Player")
+	var lp: Node3D = player.get_node("LookPivot")
+	var eye0: Vector3 = main.get_node("FreeMoveBody").current_eye_position()
+	var to_pot: Vector3 = q._basil_pos() - eye0
+	lp.rotation.y = atan2(-to_pot.x, -to_pot.z) - player.rotation.y
+	lp._target_yaw = lp.rotation.y
+	for i in 4: await physics_frame
+	q.on_part(&"basil")
+	for i in 120:
+		if body.is_consuming():
+			break
+		await physics_frame
+	var eye1: Vector3 = main.get_node("FreeMoveBody").current_eye_position()
+	_check("clicked from across the desk: a short real step toward the pot first (%.2f m)" % Vector2(eye1.x - eye0.x, eye1.z - eye0.z).length(), Vector2(eye1.x - eye0.x, eye1.z - eye0.z).length() > 0.1)
 	_check("watering is a gesture: the 'pour' with a watering can", body.is_consuming() and body._consume_kind == "pour" and body._consume_prop != null and body._consume_prop.get_node_or_null("Drops") != null)
 	_check("...not instant (plant updates when the pour finishes)", not q.basil_watered_today())
+	var pot: Vector3 = q._basil_pos()
+	var worst: float = 0.0
+	var samples: int = 0
+	var drop_end_err: float = 0.0
 	for i in 60:
 		if not body.is_consuming():
 			break
+		var fx: CPUParticles3D = body._consume_prop.get_node_or_null("Drops") as CPUParticles3D if body._consume_prop != null else null
+		if fx != null and fx.emitting and body.consume_progress() > 0.5:
+			var d: Vector3 = fx.global_position - pot
+			d.y = 0.0
+			worst = maxf(worst, d.length())
+			samples += 1
+			var lt: float = fx.lifetime
+			var fall: float = fx.initial_velocity_max * lt + 0.5 * fx.gravity.length() * lt * lt
+			drop_end_err = maxf(drop_end_err, absf((fx.global_position.y - fall) - (pot.y + body.POUR_SOIL_UP)))
 		await create_timer(0.1).timeout
+	_check("the spout is over the pot while it pours (worst %.3f m, %d samples)" % [worst, samples], samples > 0 and worst < 0.05)
+	_check("drops end at the soil, not through the desk (err %.3f m)" % drop_end_err, samples > 0 and drop_end_err < 0.04)
 	_check("watered after the pour; prop gone", q.basil_watered_today() and body._consume_prop == null)
 
 
@@ -241,7 +320,8 @@ func _holdout() -> void:
 	_check("space presentation: colony landmarks (%s)" % str(h.landmark_names()), "CREW HAB" in h.landmark_names() and "BIODOME" in h.landmark_names() and "MED BAY" in h.landmark_names())
 	_check("sci-fi weapon names, same ids", h.WEAPONS["pistol"]["name"] == "SIDEARM" and h.WEAPONS["rifle"]["name"] == "PULSE RIFLE" and h.WEAPONS["arc"]["name"] == "ARC PROJECTOR")
 	h.load_state({"best": 77, "credits": 5, "unlocked": ["pistol", "rifle"], "weapon": "rifle"})
-	_check("an older save loads (weapon ids unchanged)", h.weapon == "rifle" and h.unlocked.has("rifle") and int(h.best_by["easy"]) == 77)
+	# Round 46: a pre-rebalance Easy record is kept as the Classic Easy record.
+	_check("an older save loads (weapon ids unchanged)", h.weapon == "rifle" and h.unlocked.has("rifle") and int(h.legacy_best.get("classic_easy", {}).get("score", 0)) == 77)
 	h.start_seeded(1)
 	_check("gameplay intact: same buildings / doors / enemies", h.buildings.size() == 3 and h.KINDS.size() == 10)
 

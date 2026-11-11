@@ -29,10 +29,21 @@ extends Node
 ## TODAY lists "Check the observation port" -- an ordinary duty that brings
 ## the player there. Nothing is lost by cancelling.
 
-const FIGURE_POS := Vector3(-4.78, 0.0, 2.5)
+## Round 46: ON the line of sight from the observation spot through the
+## tunnel port (0.6 m behind the glass), turned to face the Control Room --
+## it used to stand square behind the port, i.e. at the frame's edge for an
+## oblique viewer, mostly hidden.
+const FIGURE_POS := Vector3(-4.72, 0.0, 2.65)
+const FIGURE_YAW_DEG := 19.6
+## Gentle FOCUS while staring at the far port (squinting): the field of
+## view narrows so the figure's movement reads. Never with reduced effects.
+const FOCUS_FOV_K := 0.42
+const FOCUS_S := 0.7
 const PORT_CENTRE := Vector3(-1.2, 1.5, 1.4)       # Control Room port (glass plane x -1.2)
 const PORT_R := 0.30
-const OBS_SPOT := Vector3(-0.45, 1.6, 1.45)
+## Round 46: from here the sight line to the tunnel port passes through the
+## CENTRE of the Control Room port (it grazed the rim from z 1.45).
+const OBS_SPOT := Vector3(-0.45, 1.6, 1.13)
 const CONTROL_RECT := Rect2(-1.15, -1.1, 2.3, 3.1)   # x, z of the Control Room interior
 const GAZE_DOT := 0.996
 const GAZE_S := 0.6
@@ -69,6 +80,7 @@ func _spawn_figure() -> void:
 	figure = load("res://scripts/story/window_figure.gd").new()
 	figure.name = "WindowFigure"
 	figure.position = FIGURE_POS
+	figure.rotation_degrees.y = FIGURE_YAW_DEG
 	_main().add_child(figure)
 	figure.finished.connect(_on_figure_gone)
 
@@ -89,6 +101,9 @@ func is_ready_now() -> bool:
 	if stage != "locked" or witnessed_day >= 0 or _day() <= 1:
 		return false
 	if int(_se.story_phase) < 2 and int(_se.dev_phase_override) < 2:
+		return false
+	# Round 46 pacing: the major moment never shares a day with a medium one.
+	if _se.has_method("medium_played_on") and _se.medium_played_on(_day()):
 		return false
 	var p2: int = int(_se.get("phase2_day"))
 	var noticed: bool = int(_se.seen_count()) >= 1 or Array(_se.evidence).any(func(e): return String(e["kind"]) == "observation" and String(e["event"]) != "window_figure")
@@ -162,9 +177,37 @@ func _thought(id: String, en: String, zh: String) -> void:
 
 
 # ---------------------------------------------------------------- loop
+var focus_k: float = 1.0          # 1 = normal view; FOCUS_FOV_K = focused
+var _base_fov: float = -1.0
+
+
+## Round 46: while the technician stares at the far port during the
+## encounter, the view narrows a little (eased, never snapping); released
+## as soon as they look away or it is over. Reduced effects: never.
+func _update_focus(delta: float) -> void:
+	var c: Camera3D = _cam()
+	if c == null:
+		return
+	var want: float = 1.0
+	if stage in ["showing", "reacting"] and figure.visible and not bool(preload("res://scripts/station/game_settings.gd").get_value("reduce_effects")):
+		var to: Vector3 = (FIGURE_POS + Vector3(0, 1.5, 0) - c.global_position).normalized()
+		if (-c.global_basis.z).dot(to) > 0.985:
+			want = FOCUS_FOV_K
+	if want < 1.0 and _base_fov < 0.0:
+		_base_fov = c.fov
+	if _base_fov < 0.0:
+		return
+	focus_k = move_toward(focus_k, want, delta * (1.0 - FOCUS_FOV_K) / FOCUS_S)
+	c.fov = _base_fov * focus_k
+	if focus_k >= 1.0 and want >= 1.0:
+		c.fov = _base_fov
+		_base_fov = -1.0
+
+
 func _process(delta: float) -> void:
 	if figure == null:
 		return
+	_update_focus(delta)
 	if stage == "locked" and is_ready_now():
 		stage = "ready"
 	match stage:
@@ -258,9 +301,125 @@ func start_guidance(force: bool = false) -> bool:
 	var fb: Node = _main().get_node("FreeMoveBody")
 	if "guide_target" in fb:
 		fb.guide_cancelled = false
-		fb.guide_target = OBS_SPOT
+		# Round 46: a real route around the desk / console (never a straight
+		# line that slides along furniture).
+		var route: Array = route_to(fb.current_eye_position(), OBS_SPOT)
+		if route.is_empty():
+			_show_marker()                   # no safe walk: guidance by marker only
+			_guiding = false
+			return true
+		fb.guide_target = route[0]
+		fb.guide_path = route.slice(1)
 	_ease_view.call_deferred()
 	return true
+
+
+# ------------------------------------------- Round 46: Control Room navigation
+## A* over a 0.25 m grid of the Control Room floor: a node exists where the
+## technician's capsule (r 0.3, 1.8 m) fits; an edge exists where a capsule
+## SWEEP between the two nodes is clear. The path is then pulled tight (any
+## waypoint whose neighbours see each other is dropped). Eye-height points.
+const NAV_STEP := 0.25
+const NAV_R := 0.3
+
+
+func _capsule_free(sp: PhysicsDirectSpaceState3D, a: Vector3, b: Vector3, exclude: Array, leaving: bool = false) -> bool:
+	var cap := CapsuleShape3D.new()
+	cap.radius = NAV_R
+	cap.height = 1.6
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = cap
+	q.collision_mask = 1
+	q.exclude = exclude
+	q.transform = Transform3D(Basis(), Vector3(a.x, 0.95, a.z))
+	if not sp.intersect_shape(q, 1).is_empty():
+		if not leaving:
+			return false
+		# The technician may be touching furniture where they stand: a
+		# leg that LEAVES must end clear and move away (judged at the far end).
+		q.transform = Transform3D(Basis(), Vector3(b.x, 0.95, b.z))
+		return sp.intersect_shape(q, 1).is_empty()
+	if a.distance_to(b) < 0.001:
+		return true
+	q.motion = Vector3(b.x - a.x, 0.0, b.z - a.z)
+	var r: PackedFloat32Array = sp.cast_motion(q)
+	return r.size() == 2 and r[0] >= 0.999
+
+
+func route_to(from_eye: Vector3, to_eye: Vector3) -> Array:
+	var c: Camera3D = _cam()
+	if c == null:
+		return []
+	var sp: PhysicsDirectSpaceState3D = c.get_world_3d().direct_space_state
+	var fb: CollisionObject3D = _main().get_node_or_null("FreeMoveBody") as CollisionObject3D
+	var ex: Array = [fb.get_rid()] if fb != null else []
+	var y: float = to_eye.y
+	var a := Vector3(from_eye.x, y, from_eye.z)
+	var b := Vector3(to_eye.x, y, to_eye.z)
+	if _capsule_free(sp, a, b, ex, true):
+		return [b]
+	# Grid nodes inside the room.
+	var nodes: Array = []
+	var x := CONTROL_RECT.position.x + NAV_STEP * 0.5
+	while x < CONTROL_RECT.end.x:
+		var z := CONTROL_RECT.position.y + NAV_STEP * 0.5
+		while z < CONTROL_RECT.end.y:
+			var p := Vector3(x, y, z)
+			if _capsule_free(sp, p, p, ex):
+				nodes.append(p)
+			z += NAV_STEP
+		x += NAV_STEP
+	nodes.append(a)
+	nodes.append(b)
+	var start: int = nodes.size() - 2
+	var goal: int = nodes.size() - 1
+	# A*.
+	var open: Array = [start]
+	var g: Dictionary = {start: 0.0}
+	var came: Dictionary = {}
+	while not open.is_empty():
+		var cur: int = open[0]
+		var best_f: float = INF
+		for n in open:
+			var f: float = float(g[n]) + (nodes[n] as Vector3).distance_to(b)
+			if f < best_f:
+				best_f = f
+				cur = n
+		if cur == goal:
+			break
+		open.erase(cur)
+		for j in nodes.size():
+			if j == cur:
+				continue
+			var d: float = (nodes[j] as Vector3).distance_to(nodes[cur])
+			if d > NAV_STEP * 1.5 and not (j == goal and d < 0.6) and not (cur == start and d < 0.6):
+				continue
+			var ng: float = float(g[cur]) + d
+			if ng < float(g.get(j, INF)) and _capsule_free(sp, nodes[cur], nodes[j], ex, cur == start):
+				g[j] = ng
+				came[j] = cur
+				if not open.has(j):
+					open.append(j)
+	if not came.has(goal):
+		return []
+	var path: Array = [nodes[goal]]
+	var k: int = goal
+	while came.has(k):
+		k = came[k]
+		path.push_front(nodes[k])
+	# String-pull: keep only turning points.
+	var tight: Array = [path[0]]
+	var i := 0
+	while i < path.size() - 1:
+		var far: int = i + 1
+		for j in range(path.size() - 1, i, -1):
+			if _capsule_free(sp, path[i], path[j], ex, i == 0):
+				far = j
+				break
+		tight.append(path[far])
+		i = far
+	tight.pop_front()                   # the start point itself
+	return tight
 
 
 func dev_guide() -> void:
@@ -303,6 +462,7 @@ func _stop_guidance() -> void:
 	var fb: Node = _main().get_node_or_null("FreeMoveBody")
 	if fb != null and "guide_target" in fb:
 		fb.guide_target = Vector3.INF
+		fb.guide_path = []
 	if _guide_tw != null and _guide_tw.is_valid():
 		_guide_tw.kill()
 	if _marker != null:

@@ -1126,13 +1126,19 @@ func _ensure_mail_ui() -> void:
 	var right := VBoxContainer.new()
 	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_mail_box.add_child(right)
+	# Round 46: the conversation SCROLLS (newest at the bottom, opened at the
+	# bottom; the mouse wheel goes back through the whole history).
+	_mail_scroll = ScrollContainer.new()
+	_mail_scroll.name = "MailScroll"
+	_mail_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_mail_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	right.add_child(_mail_scroll)
 	_mail_text = Label.new()
 	_mail_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_mail_text.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_mail_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_mail_text.add_theme_font_size_override("font_size", 11)
 	_mail_text.add_theme_color_override("font_color", Color(0.82, 0.9, 0.86))
-	_mail_text.clip_text = true
-	right.add_child(_mail_text)
+	_mail_scroll.add_child(_mail_text)
 	_mail_opts = VBoxContainer.new()
 	_mail_opts.add_theme_constant_override("separation", 2)
 	right.add_child(_mail_opts)
@@ -1157,21 +1163,41 @@ func _build_mail() -> void:
 		c.get_parent().remove_child(c)
 		c.queue_free()
 	var fm: Node = _family()
+	# Round 46: ONE conversation per person (contact list), not one per letter.
 	if fm != null:
-		var convs: Array = fm.available()
-		convs.reverse()
-		for conv in convs:
-			var unread: bool = fm.state(conv) == "unread" or (fm.answer_delivered(conv) and not bool(fm.threads.get(conv, {}).get("answer_read", false)))
-			_mail_button(_mail_list, "%s%s · %s" % ["● " if unread else "", fm.CONVERSATIONS[conv]["short"], fm.CONVERSATIONS[conv]["subject"]], open_thread.bind(conv), "Thread_" + conv)
-	_mail_button(_mail_list, "Older mail", open_thread.bind("_older"), "Thread_older")
+		for cid in fm.contacts_available():
+			_mail_button(_mail_list, "%s%s" % ["● " if fm.contact_unread(cid) else "", fm.CONTACTS[cid]], open_contact.bind(cid), "Contact_" + cid)
+	_mail_button(_mail_list, "Older mail", open_contact.bind("_older"), "Thread_older")
 	_mail_button(_mail_list, "Sent letters ›", func(): _show_view(&"mail_sent"), "Thread_sent")
-	if mail_open == "" and fm != null and not fm.available().is_empty():
-		mail_open = fm.available().back()
+	if mail_open == "" and fm != null and not fm.contacts_available().is_empty():
+		# Open the person with something new, else the most recent one.
+		var pick: String = ""
+		for cid in fm.contacts_available():
+			if fm.contact_unread(cid):
+				pick = cid
+		mail_open = pick if pick != "" else fm.contact_of(fm.available().back())
 	_fill_thread()
 
 
+var _mail_scroll: ScrollContainer
+
+
+func scroll_mail_to_end() -> void:
+	if _mail_scroll != null and is_inside_tree():
+		await get_tree().process_frame
+		if _mail_scroll != null:
+			_mail_scroll.scroll_vertical = int(_mail_scroll.get_v_scroll_bar().max_value)
+
+
+func open_contact(cid: String) -> void:
+	mail_open = cid
+	_build_mail()
+
+
+## (Round 44 name) opening a letter opens its sender's conversation.
 func open_thread(conv: String) -> void:
-	mail_open = conv
+	var fm: Node = _family()
+	mail_open = fm.contact_of(conv) if fm != null and fm.CONVERSATIONS.has(conv) else conv
 	_build_mail()
 
 
@@ -1180,16 +1206,20 @@ func _fill_thread() -> void:
 	for c in _mail_opts.get_children():
 		_mail_opts.remove_child(c)
 		c.queue_free()
-	if mail_open == "_older" or mail_open == "" or fm == null or not fm.CONVERSATIONS.has(mail_open):
+	if mail_open == "_older" or mail_open == "" or fm == null or not fm.CONTACTS.has(mail_open):
 		_mail_text.text = "\n".join(messages_lines())
 		return
-	fm.mark_read(mail_open)
-	if is_inside_tree():
-		get_tree().call_group(&"story_events", &"on_letter_opened", mail_open)
-	_mail_text.text = "\n".join(fm.thread_lines(mail_open))
-	if fm.state(mail_open) != "replied":
-		for o in fm.options(mail_open):
-			_mail_button(_mail_opts, "Reply: %s" % o["text"], send_reply.bind(mail_open, String(o["id"])), "Reply_" + String(o["id"]))
+	for conv in fm.contact_convs(mail_open):
+		fm.mark_read(conv)
+		if is_inside_tree():
+			get_tree().call_group(&"story_events", &"on_letter_opened", conv)
+	# Newest at the bottom, like any messenger -- opened scrolled to it.
+	_mail_text.text = "\n".join(fm.contact_lines(mail_open))
+	scroll_mail_to_end()
+	var pend: String = fm.pending_conv(mail_open)
+	if pend != "":
+		for o in fm.options(pend):
+			_mail_button(_mail_opts, "Reply: %s" % o["text"], send_reply.bind(pend, String(o["id"])), "Reply_" + String(o["id"]))
 	_refresh_unread()
 
 

@@ -28,7 +28,9 @@ func _init() -> void:
 	# Exterior geometry.
 	var ext: Node = main.get_node("Exterior")
 	_check("exterior hull plating built from the real outer walls (%d panels)" % ext.panel_count, ext.panel_count > 40)
-	_check("the sun lights only the exterior layer", ext.sun.light_cull_mask == (1 << 11))
+	# Round 46: + the two story layers (camera-only / eye-only objects outside
+	# are lit like the hull) -- never the interior layer.
+	_check("the sun lights the exterior (+ story) layers, never the interior", ext.sun.light_cull_mask == ((1 << 11) | (1 << 18) | (1 << 19)) and ext.sun.light_cull_mask & 1 == 0)
 	var inside_hits := 0
 	for p in ext.get_node("Hull").get_children():
 		var q: Vector3 = (p as Node3D).global_position

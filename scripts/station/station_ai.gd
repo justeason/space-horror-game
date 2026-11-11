@@ -79,6 +79,10 @@ const LINES := {
 	&"filter_missing": [Prio.SAFETY, "You need a clean filter cartridge from Storage for this step.", "这一步需要储藏室的新滤芯。"],
 	&"filter_dispose": [Prio.INSTRUCT, "Dispose of the used cartridge in the Storage disposal unit.", "将旧滤芯丢入储藏室的回收装置。"],
 	&"filter_done": [Prio.INFO, "Filter service complete.", "滤芯维护完成。"],
+	# Round 46: STORY ONLY (the task-linked wrong reading, abnormal variant):
+	# never used by the normal assistant, which stays reliable.
+	&"story_cal_premature": [Prio.INFO, "Pressure sensor calibration complete. Readings nominal.", "压力传感器校准完成。读数正常。"],
+	&"story_cal_premature_m02": [Prio.INFO, "Signal chain calibration complete.", "信号链校准完成。"],
 	&"calib_intro": [Prio.INSTRUCT, "Sensor calibration: bring both coupled chambers into range and hold them steady.", "传感器校准：将两个耦合腔调入范围并保持稳定。"],
 	&"coolant_intro": [Prio.INSTRUCT, "Coolant routing: re-route flow at the valve manifold as the work order describes.", "冷却液路由：按工单说明在阀门组重新分配流向。"],
 	&"comms_intro": [Prio.INSTRUCT, "Communications check: run the routine signal check at the comms console.", "通信检查：在通信台进行例行信号检查。"],

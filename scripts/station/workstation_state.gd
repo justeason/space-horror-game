@@ -219,6 +219,11 @@ func _on_stand_settled() -> void:
 func _input(event: InputEvent) -> void:
 	if not _in_use or not (event is InputEventMouse):
 		return
+	# Round 46: an open overlay (F8 developer panel) owns the mouse -- this
+	# handler used to swallow EVERY mouse event before the GUI saw it, so
+	# the panel had no hover / clicks while seated (only pausing "fixed" it).
+	if _overlay_owns_mouse():
+		return
 	var px: Variant = screen_pixel_at(event.position)
 	get_viewport().set_input_as_handled()
 	if px == null:
@@ -227,6 +232,13 @@ func _input(event: InputEvent) -> void:
 	ev.position = px
 	ev.global_position = px
 	_screen.push_input(ev)
+
+
+func _overlay_owns_mouse() -> bool:
+	for n in get_tree().get_nodes_in_group(&"mouse_overlay"):
+		if n.has_method("owns_mouse") and n.owns_mouse():
+			return true
+	return false
 
 
 ## SubViewport pixel under a window position, or null when off-screen.

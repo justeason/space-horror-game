@@ -94,6 +94,8 @@ var _noise_scale: float = 1.0
 ## authored rest pose/_frequency/_gain var defaults (which already
 ## match _PROFILES[0]) and gets a real sync on first interact()/nudge.
 func _ready() -> void:
+	# Round 46: the instrument's own true calibration status.
+	preload("res://scripts/interactables/cal_status_plate.gd").attach(self, &"m02", _day_plan, Vector3(0, 0.32, 0.13))
 	# Round 30: this collider is a hover/click volume, not a physical
 	# surface -- carry_system.gd's placement solver ignores the group.
 	add_to_group(&"placement_proxy")

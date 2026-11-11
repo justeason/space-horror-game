@@ -33,7 +33,9 @@ const CAMERAS := [
 	["INT-08", "COMMS", &"communications", "CamComms", [Vector3(3.22, 2.95, 8.12), Vector3(1.4, 1.0, 6.3)], false, "the alcove behind the camera"],
 	# Round 42: RETIRED (not built) -- the id stays reserved, never reused.
 	["EXT-01", "HULL OVERVIEW", &"", "CamExtHull", [Vector3(9.0, 10.5, -19.0), Vector3(-3.0, 0.5, -2.5)], true, "the south faces of the modules"],
-	["EXT-02", "AIRLOCK HATCH", &"airlock", "CamExtAirlock", [Vector3(-3.45, 3.05, -3.75), Vector3(-4.8, 0.9, -2.75)], true, "directly beneath the camera mount"],
+	# Round 46: EXT-02 framed on the outer hatch's dogging handle (narrower
+	# lens, FEED_FOV) so its lever reads on the feed.
+	["EXT-02", "AIRLOCK HATCH", &"airlock", "CamExtAirlock", [Vector3(-3.45, 3.05, -3.75), Vector3(-4.78, 0.78, -2.67)], true, "directly beneath the camera mount"],
 	["EXT-03", "OBSERVATION", &"control_room", "CamExtObservation", [Vector3(-1.62, 3.25, 2.92), Vector3(-3.6, 1.0, 0.2)], true, "the walkway behind the antenna mast"],
 	["EXT-04", "ANTENNA A1", &"airlock", "CamExtAntenna", [Vector3(-4.12, 2.55, 2.45), Vector3(-2.85, 0.75, 0.75)], true, "the far side of the feed box"],
 	# Round 41: the solar truss / left wing, from the airlock roof.
@@ -49,6 +51,16 @@ const CAMERAS := [
 ## EXT-05 (the solar truss route). Still only the displayed feed renders.
 ## Round 42: EXT-01 (hull overview) retired from surveillance -- 7 feeds.
 ## Remaining ids are NOT renumbered (events / tasks refer to them).
+## Round 46: INT-02 remounted on the JUNCTION side of the Life Support
+## doorway header (in front of the clearance sign), looking north into the
+## Main Junction. Verified with physics rays + renders: it sees the
+## Communications-side opening (NE), the Engineering-side opening (SW), the
+## open Junction floor and the Control Room approach (a 74 deg spread;
+## 52 deg vertical FOV = ~82 deg horizontal, an ordinary wide CCTV lens --
+## no fisheye). From its old spot 2 m back in the walkway the doorway frame
+## hid both side openings.
+const FEED_FOV := {"EXT-02": 44.0}
+const REMOUNT := {"INT-02": [Vector3(-0.65, 2.42, 7.12), Vector3(-0.79, 0.7, 4.52), 52.0]}
 const CURATED := ["INT-02", "INT-04", "INT-05", "INT-07", "EXT-02", "EXT-03", "EXT-05"]
 const RETIRED := ["EXT-01"]
 ## Round 42 Priority 8: feed resolutions. Only a DEMANDED feed renders;
@@ -76,6 +88,11 @@ func _ready() -> void:
 		var vp: SubViewport = null
 		if c[4] == null:
 			vp = surv.get_node_or_null(c[3]) if surv != null else null
+			if vp != null and REMOUNT.has(c[0]):
+				var rm: Array = REMOUNT[c[0]]
+				var rc: Camera3D = vp.get_node("Camera3D")
+				rc.look_at_from_position(rm[0], rm[1], Vector3.UP)
+				rc.fov = float(rm[2])
 		else:
 			vp = CAM_SCENE.instantiate()
 			vp.name = c[3]
@@ -86,7 +103,7 @@ func _ready() -> void:
 				add_child(vp)
 			var cam: Camera3D = vp.get_node("Camera3D")
 			cam.current = true
-			cam.fov = 78.0 if c[5] else 72.0
+			cam.fov = float(FEED_FOV.get(c[0], 78.0 if c[5] else 72.0))
 			cam.far = 900.0 if c[5] else 80.0
 			cam.look_at_from_position(c[4][0], c[4][1], Vector3.UP)
 		if vp == null:

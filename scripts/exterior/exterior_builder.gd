@@ -209,13 +209,16 @@ func _build_space() -> void:
 	atmo.layers = EXTERIOR
 	atmo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(atmo)
-	# The sun lights ONLY the exterior layer.
+	# The sun lights the exterior layer -- and (Round 46) the two story
+	# layers, so a camera-only / eye-only object outside is lit like the
+	# hull it sits on (layers decide visibility; the hull's shadows keep
+	# the sun off anything indoors).
 	sun = DirectionalLight3D.new()
 	sun.name = "Sun"
 	sun.light_color = Color(1.0, 0.97, 0.92)
 	sun.light_energy = 1.6
 	sun.layers = EXTERIOR
-	sun.light_cull_mask = EXTERIOR
+	sun.light_cull_mask = EXTERIOR | (1 << 18) | (1 << 19)
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 60.0
 	sun.rotation_degrees = Vector3(-38, 130, 0)
@@ -869,7 +872,9 @@ func _separate_light_layers() -> void:
 # ======================================================================
 const TUNNEL_PORT_WALL := "AirlockTunnelEastWall"
 const TUNNEL_PORT_CENTRE := Vector3(-4.3, 1.55, 2.5)     # on the wall's centre plane
-const TUNNEL_PORT_SIZE := Vector2(0.5, 0.42)             # (z width, y height)
+## Round 46: enlarged (was 0.50 x 0.42) -- from the Control Room port the
+## figure's movement must read at ~4 m; still a small reinforced port.
+const TUNNEL_PORT_SIZE := Vector2(0.78, 0.6)             # (z width, y height)
 var tunnel_port: Node3D
 
 
@@ -949,9 +954,11 @@ func _build_tunnel_port(geo: Node) -> void:
 	# A dim tunnel light behind the port (interior only).
 	var tl := OmniLight3D.new()
 	tl.name = "TunnelPortLight"
-	tl.position = Vector3(-0.5, 0.75, 0.2)
+	# Round 46: it lights the tunnel's FAR wall (behind the figure as seen
+	# from the Control Room), so a figure there is a crisp dark silhouette.
+	tl.position = Vector3(-1.05, 0.55, 0.45)
 	tl.light_color = Color(0.85, 0.9, 1.0)
-	tl.light_energy = 0.45
-	tl.omni_range = 1.8
+	tl.light_energy = 1.5
+	tl.omni_range = 2.3
 	tl.light_cull_mask = 0xFFFFF & ~EXTERIOR
 	tunnel_port.add_child(tl)

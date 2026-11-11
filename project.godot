@@ -29,11 +29,11 @@ general/text_to_speech=true
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
-[rendering]
-
-environment/defaults/default_clear_color=Color(0.02, 0.02, 0.03, 1)
-textures/vram_compression/import_etc2_astc=true
-
 [editor]
 
 export/convert_text_resources_to_binary=false
+
+[rendering]
+
+textures/vram_compression/import_etc2_astc=true
+environment/defaults/default_clear_color=Color(0.02, 0.02, 0.03, 1)

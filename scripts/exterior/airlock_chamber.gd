@@ -218,13 +218,55 @@ func _door(name: String, hinge: Vector3, extend_sign: float, face_col: Color, po
 		hp.add_child(knob)
 		# A yellow dogging LEVER across the wheel: its angle is the latch
 		# position, readable at a glance (and on camera).
+		# Round 46: longer and thicker, with a dark end cap -- a silhouette a
+		# camera can read at a distance (the hatch itself is unchanged).
 		var lever := MeshInstance3D.new()
 		var lbm := BoxMesh.new()
-		lbm.size = Vector3(0.34, 0.035, 0.022)
+		lbm.size = Vector3(0.46, 0.05, 0.026)
 		lever.mesh = lbm
-		lever.position = Vector3(0, 0, zf * 0.02)
-		lever.material_override = _mat(Color(0.95, 0.75, 0.12), 0.3)
+		lever.position = Vector3(0, 0, zf * 0.022)
+		lever.material_override = _mat(Color(0.98, 0.78, 0.1), 0.3)
 		hp.add_child(lever)
+		var tip := MeshInstance3D.new()
+		var tbm := BoxMesh.new()
+		tbm.size = Vector3(0.06, 0.07, 0.03)
+		tip.mesh = tbm
+		tip.position = Vector3(0.22, 0, zf * 0.024)
+		tip.material_override = _mat(Color(0.1, 0.1, 0.11), 0.3)
+		hp.add_child(tip)
+		# Round 46: a fixed, matte-black DIAL PLATE behind the handle with
+		# LOCKED (lever level) and OPEN (lever upright) ticks: high contrast
+		# for the moving yellow lever, and its angle reads at a glance.
+		var dial := MeshInstance3D.new()
+		var dbm := BoxMesh.new()
+		dbm.size = Vector3(0.56, 0.56, 0.008)
+		dial.mesh = dbm
+		dial.position = hp.position + Vector3(0, 0, -zf * 0.012)
+		dial.material_override = _mat(Color(0.05, 0.05, 0.055), 0.9)
+		body.add_child(dial)
+		for tk in [[0.0, Color(0.3, 0.9, 0.4), "LOCKED"], [90.0, Color(0.95, 0.3, 0.2), "OPEN"]]:
+			var tick := MeshInstance3D.new()
+			var tkm := BoxMesh.new()
+			tkm.size = Vector3(0.07, 0.022, 0.006)
+			tick.mesh = tkm
+			var ang: float = deg_to_rad(float(tk[0]))
+			tick.position = hp.position + Vector3(cos(ang) * 0.25, sin(ang) * 0.25, zf * 0.0)
+			tick.rotation.z = ang
+			tick.material_override = _mat(tk[1], 0.4)
+			body.add_child(tick)
+			var tl := Label3D.new()
+			tl.text = String(tk[2])
+			tl.font_size = 22
+			tl.pixel_size = 0.0013
+			tl.position = hp.position + Vector3(cos(ang) * 0.25 - (0.0 if tk[0] == 90.0 else 0.0), sin(ang) * 0.25 + (0.035 if tk[0] == 90.0 else -0.035), zf * 0.01)
+			tl.rotation_degrees.y = 180.0 if zf < 0.0 else 0.0
+			tl.modulate = tk[1]
+			body.add_child(tl)
+			if zf < 0.0:
+				tick.layers = 1 | (1 << 11)
+				tl.layers = 1 | (1 << 11)
+		if zf < 0.0:
+			dial.layers = 1 | (1 << 11)
 		# The outer hatch's exterior face is part of the sunlit exterior.
 		if zf < 0.0 and not porthole:
 			for v in [hp] + hp.find_children("*", "VisualInstance3D", true, false):

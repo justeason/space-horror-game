@@ -233,7 +233,12 @@ func _poll_day_active() -> void:
 	if day_active:
 		return
 	var ss: Node = get_node_or_null(^"../SleepState")
-	if ss == null or not ss.has_method("is_lying_in_bed") or (not ss.is_lying_in_bed() and not ss.is_sleeping()):
+	# Round 46: the day starts when the technician is actually UP -- not when
+	# the sit-up / staged get-up animation begins (that cost 2-3 s a day).
+	var up: bool = ss == null or not ss.has_method("is_lying_in_bed") or (not ss.is_lying_in_bed() and not ss.is_sleeping())
+	if up and ss != null and ss.has_method("is_up"):
+		up = ss.is_up()
+	if up:
 		day_active = true
 		clock_hold_changed.emit(clock_paused())
 
@@ -335,8 +340,17 @@ func shift_status_text() -> String:
 	if shift_ended:
 		return "DAY %d · %s · REST" % [day_number, clock_text_hhmm()]
 	if is_wrapping_up():
-		return "DAY %d · %s · WRAP UP" % [day_number, clock_text_hhmm()]
-	return "DAY %d · %s · WORK %d%%" % [day_number, clock_text_hhmm(), int(round(shift_progress() * 100.0))]
+		return "DAY %d · %s · WORK DONE · %s LEFT" % [day_number, clock_text_hhmm(), clock_text(shift_remaining_s())]
+	return "DAY %d · %s · WORK %d%% · %s LEFT" % [day_number, clock_text_hhmm(), int(round(shift_progress() * 100.0)), clock_text(shift_remaining_s())]
+
+
+## Round 46 developer diagnostics: every time domain, side by side.
+func time_diagnostics() -> Dictionary:
+	var domain: String = "rest (after shift)" if shift_ended else ("waking" if not day_active else ("laptop: budget held, clock real-pace" if _holds.has(&"laptop") and _holds.size() == 1 else ("held" if not _holds.is_empty() else "active shift")))
+	return {"clock": clock_text_hhmm(), "elapsed_s": shift_elapsed_s, "remaining_s": shift_remaining_s(),
+		"pause": ", ".join(clock_hold_reasons().map(func(r): return String(r))),
+		"multiplier": CLOCK_DAY_SPAN_MIN * 60.0 / maxf(shift_duration_s(), 1.0), "domain": domain,
+		"laptop_clock_s": laptop_clock_s, "after_shift_s": awake_after_shift_s}
 
 
 # ======================================================================
@@ -391,8 +405,11 @@ func _poll_work_complete() -> void:
 			_notify("Work complete. Wrap up, then rest.")
 			work_complete.emit(day_number)
 			_ai_event(&"work_complete")
-		elif shift_elapsed_s - work_done_at_s >= WRAP_UP_S:
-			_end_shift()
+		# Round 46: finishing the work NO LONGER ends the shift 45 s later
+		# (that made most days far shorter than the 600 s budget -- the
+		# reported "countdown runs fast"). The shift ends at exactly
+		# shift_duration_s() of eligible time; once the work is done the
+		# technician MAY choose to rest early (can_sleep / rest_early).
 	else:
 		work_done_at_s = -1.0        # new work appeared (e.g. an emergency)
 
@@ -740,8 +757,13 @@ func order_rows() -> Array:
 		var eq: Node = order_equipment(StringName(o["type"]))
 		var nx: Dictionary = eq.order_next() if eq != null else {}
 		var sev: int = maxi(int(eq.order_severity()) if eq != null and eq.has_method("order_severity") else 1, 1)
+		# Round 46 consequence: a job left open overnight is more serious now
+		# (at least a WARNING, a little more urgent) -- recoverable: finish it.
+		var escalated: bool = int(o.get("carried_from", -1)) > 0 and int(o.get("emergency", false)) == 0
+		if escalated:
+			sev = maxi(sev, 2)
 		rows.append({"id": o["id"], "tag": ORDER_TYPES[StringName(o["type"])]["tag"], "action": nx.get("action", "Check equipment"), "short": nx.get("short", ""), "room": nx.get("room", &""),
-			"progress": eq.order_progress() if eq != null else "", "done": false, "priority": int(o["priority"]) + (3 if sev >= 3 else 0), "carried": int(o.get("carried_from", -1)) > 0, "type": o["type"], "severity": sev, "emergency": bool(o.get("emergency", false))})
+			"progress": eq.order_progress() if eq != null else "", "done": false, "priority": int(o["priority"]) + (3 if sev >= 3 else 0) + (1 if escalated else 0), "carried": int(o.get("carried_from", -1)) > 0, "escalated": escalated, "type": o["type"], "severity": sev, "emergency": bool(o.get("emergency", false))})
 	if cargo_duty == "open":
 		var c: Dictionary = cargo_step()
 		rows.append({"id": "CARGO", "tag": "CARGO", "action": c.get("action", "Receive shipment"), "short": c.get("short", "CARGO"), "room": c.get("room", &"airlock"), "progress": "", "done": false, "priority": 1, "carried": false, "severity": 1})
@@ -801,7 +823,17 @@ static func clock_text(seconds: float) -> String:
 
 
 func can_sleep() -> bool:
-	return shift_ended
+	return shift_ended or is_wrapping_up()
+
+
+## Round 46: going to bed once the required work is done ends the shift
+## by choice (the remaining budget is simply not used; the clock does not
+## jump). Quiet: the technician is already at the bunk.
+func rest_early() -> void:
+	if shift_ended or not is_wrapping_up():
+		return
+	log_event("Rested early — work done")
+	_end_shift(true)
 
 
 func sleep_refusal() -> String:
@@ -816,12 +848,15 @@ func end_shift_now() -> void:
 		_end_shift()
 
 
-func _end_shift() -> void:
+func _end_shift(quiet: bool = false) -> void:
 	shift_ended = true
 	if not shift_reported:
 		shift_reported = true
 		shift_history.append({"day": day_number, "report": shift_report_lines()})
 		log_event("Daily shift ended")
+	if quiet:
+		shift_ended_signal.emit(day_number)
+		return
 	if _eva_active():
 		_notify("Shift over. Finish safely and come back in through the airlock.")
 	else:
