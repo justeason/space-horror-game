@@ -117,6 +117,7 @@ func _build() -> void:
 				if c is Node3D:
 					_avoid.append((c as Node3D).global_position)
 	_avoid.append_array([Vector3(-5.3, 1.0, 1.05), Vector3(-4.41, 1.35, -1.2), Vector3(-4.42, 1.25, -1.88)])
+	_avoid.append(Vector3(-4.4, 1.55, 2.5))     # Round 45: airlock-tunnel port
 	var geo: Node = root.get_node_or_null("Geometry")
 	if geo == null:
 		return

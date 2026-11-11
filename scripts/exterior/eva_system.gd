@@ -393,6 +393,13 @@ func on_part(id: StringName) -> void:
 		&"locker":
 			if outside or (_airlock() != null and _airlock().sequence != ""):
 				return
+			# Round 45: suiting up needs EVA clearance (taking it OFF never does).
+			var clr: Node = get_tree().get_first_node_in_group(&"clearance")
+			if not suited and clr != null and not clr.allows("eva"):
+				var ml: Label = get_node_or_null(^"../Player/HUD/TaskMessageLabel") as Label
+				preload("res://scripts/ui/hud_message.gd").show(ml, get_instance_id(), clr.refusal("eva"), 2.5)
+				_sfx(&"fail")
+				return
 			if suited and not _in_station_air():
 				return
 			set_suited(not suited)

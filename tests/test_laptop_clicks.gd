@@ -47,8 +47,8 @@ func _init() -> void:
 	await _cursor_click(screen, lap, screen.button(&"journal_notes"))
 	_check("clicking Journal > Notes opens the zoomed private-notes editor", ss.is_editing() and screen.current_view() == &"log")
 	await create_timer(0.6).timeout
-	await _cursor_click(screen, lap, screen.button(&"back"))
-	_check("[Save & Back] returns to the desktop", ss.is_laptop_open() and not ss.is_editing())
+	await _key(KEY_ESCAPE)          # Round 45: Esc steps back (Save & Back retired)
+	_check("Esc steps back to the desktop (laptop still open)", ss.is_laptop_open() and not ss.is_editing())
 	await create_timer(0.6).timeout
 	# Round 39: clicking the open screen anywhere (not on an icon) zooms in.
 	for i in 3:
@@ -56,8 +56,8 @@ func _init() -> void:
 	await _click()
 	_check("Round 39: clicking the open screen (no icon) zooms in on the desktop", ss.is_editing() and screen.current_view() == &"home")
 	await create_timer(0.6).timeout
-	await _cursor_click(screen, lap, screen.button(&"back"))
-	_check("...and [Save & Back] zooms out again", ss.is_laptop_open() and not ss.is_editing())
+	await _key(KEY_ESCAPE)          # Round 45: Esc steps back (Save & Back retired)
+	_check("...and Esc zooms out again", ss.is_laptop_open() and not ss.is_editing())
 	await create_timer(0.4).timeout
 
 	# ---- Click the on-screen Personal Log button. ----
@@ -74,8 +74,8 @@ func _init() -> void:
 		await process_frame
 	_check("typing goes into the log", screen.get_entry_text().ends_with("hi"))
 	await create_timer(0.6).timeout   # editor zoom settles
-	await _cursor_click(screen, lap, screen.button(&"back"))
-	_check("clicking [Back] (with the cursor) returns to the laptop desktop", ss.is_laptop_open() and not ss.is_editing())
+	await _key(KEY_ESCAPE)          # Round 45: Esc steps back (Save & Back retired)
+	_check("Esc returns to the laptop desktop", ss.is_laptop_open() and not ss.is_editing())
 	_check("...and the entry was kept", lv._saved_entry.ends_with("hi"))
 	await create_timer(0.4).timeout
 

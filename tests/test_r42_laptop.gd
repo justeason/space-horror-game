@@ -50,7 +50,8 @@ func _personal_log() -> void:
 		_check("log editor fits the screen (%d chars): editor right edge %.0f <= %d" % [txt.length(), right, lw], vb.size.x <= lw - 20 and right <= lw - 8 and te.wrap_mode != TextEdit.LINE_WRAPPING_NONE)
 	var bar: Control = scr.get_node("Control/VBox/AppBar")
 	_check("menu bar (with Save / Save & Back / Close) never wider than the screen (%.0f)" % bar.get_combined_minimum_size().x, bar.get_combined_minimum_size().x <= scr.layout_size().x - 24)
-	_check("Save and Back stay visible while editing", scr._buttons[&"save"].visible and scr._buttons[&"back"].visible)
+	# Round 45: one close action -- CLOSE LAPTOP (notes autosave); no Save / Save & Back.
+	_check("CLOSE LAPTOP stays visible while editing (Save / Save & Back retired)", scr._buttons[&"close"].visible and not scr._buttons[&"save"].visible and not scr._buttons[&"back"].visible)
 	scr.set_editing(false)
 
 

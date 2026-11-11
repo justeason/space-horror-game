@@ -40,6 +40,13 @@ func _ready() -> void:
 	sg.name = "MenuSaveSlots"
 	add_child(sg)
 	show_main()
+	# Round 45: exported-build smoke test (only with SMH_SMOKE_TEST=1).
+	var Smoke = load("res://scripts/station/smoke_test.gd")
+	if Smoke.wanted() and get_tree().root.get_node_or_null("SmokeTest") == null:
+		var st: Node = Smoke.new()
+		st.name = "SmokeTest"
+		get_tree().root.add_child.call_deferred(st)
+		st.run.call_deferred(self)
 
 
 func _clear() -> void:

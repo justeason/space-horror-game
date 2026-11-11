@@ -73,7 +73,7 @@ const FILES := {
 	"Entertainment": [
 		{"name": "Cargo Drop", "date": "2026-09-12", "type": "app", "app": "game"},
 		{"name": "Holdout", "date": "2026-09-28", "type": "app", "app": "holdout"},
-		{"name": "readme_holdout.txt", "date": "2026-09-28", "type": "txt", "text": "HOLDOUT\nSurvive the town. WASD moves; your weapon\nfires by itself at the nearest zombie.\nKills, waves and scrap pay credits; spend them\nin the ARMORY on upgrades and new weapons.\nP pauses. Playing pauses the shift clock."},
+		{"name": "readme_holdout.txt", "date": "2026-09-28", "type": "txt", "text": "HOLDOUT\nA spaceman holds an abandoned moon colony\nagainst things that came out of the dark.\nWASD moves; your weapon fires by itself.\nKills, waves and scrap pay credits; spend them\nin the ARMORY. Modules can be entered. P pauses."},
 		{"name": "readme_cargo_drop.txt", "date": "2026-09-12", "type": "txt", "text": "CARGO DROP\nPack falling cargo loads into the bay.\nA full row is shipped. New, awkward loads\nappear as the level rises.\nArrows move, Up turns, Down soft-drops,\nSpace drops, P pauses. Playing pauses the shift clock."},
 	],
 }
@@ -291,3 +291,33 @@ static func _puff(img: Image, ctr: Vector2, r: float) -> void:
 				var shade: float = clampf((float(y) - ctr.y) / r * 0.5 + 0.5, 0.0, 1.0)
 				var cloud := Color(1.0, 1.0, 1.0).lerp(Color(0.86, 0.9, 0.95), shade)
 				img.set_pixel(x, y, img.get_pixel(x, y).lerp(cloud, a))
+
+
+# ======================================================================
+# Round 45 Priorities 17-18: the previous technician's SHIFT NOTE ARCHIVE.
+# A FINITE set written during THEIR rotation (dated September, rotation 4)
+# -- nobody is writing new ones. One more becomes available each station
+# day (note k on day k); earlier ones never disappear. Mostly ordinary;
+# a few lines only matter later (the airlock-tunnel port, seen across the
+# courtyard from the Control Room window).
+# ======================================================================
+const HANDOVER_NOTES := [
+	["2026-09-15", "SHIFT NOTE · R.V. · rotation 4, day 33\nFilter housing L-3 at 60%. Fine for a week.\nBreaker B-02 tripped once at 14:20. Reset, no cause found.\nStock: 16GA wire, 4 left. Order more.\nBasil: alive. Barely."],
+	["2026-09-16", "SHIFT NOTE · R.V. · day 34\nComms retuned after the morning solar fault. Holds at 63.\nCleaned the outer hatch seal; grit from the last cargo.\nThe galley timer is slow. Still."],
+	["2026-09-17", "SHIFT NOTE · R.V. · day 35\nQuiet shift. Vent grille in Life Support cleaned.\nINT-02 drifted left after the power cycle. Nudged it back.\nDreamt about the house again."],
+	["2026-09-18", "SHIFT NOTE · R.V. · day 36\nThermal survey: TB-A terminal 2 runs warm. Torqued it.\nCargo day. Seal checked after.\nThe fans changed pitch at 03:00 and woke me up."],
+	["2026-09-19", "SHIFT NOTE · R.V. · day 37\nCoolant manifold OK. Storage audit: 2 spare filters.\nHeard the airlock latch at 22:40. Log shows nothing. Thermal, probably.\n(Writing it down anyway.)"],
+	["2026-09-20", "SHIFT NOTE · R.V. · day 38\nSolar wing L hinge stiff again. EVA if it gets worse.\nSent Mum the photo of the planet. She says it looks cold."],
+	["2026-09-21", "SHIFT NOTE · R.V. · day 39\nEVA: freed the L hinge. Tether A1 -> L3. Fine.\nFrom outside, the airlock tunnel port looked dark.\nI'd left the light on. Checked after: it was on."],
+	["2026-09-22", "SHIFT NOTE · R.V. · day 40\nRoutine rounds. All readings match.\nI keep looking at the tunnel port from the Control Room window.\nNothing there. Of course."],
+	["2026-09-23", "SHIFT NOTE · R.V. · day 41\nB-03 overload, my fault: two loads at once.\nNew rule: one load at a time.\nThe corridor camera is the one I watch most."],
+	["2026-09-24", "SHIFT NOTE · R.V. · day 42\nLast full shift. Handover tomorrow.\nIf you're reading this: the station is good. Trust the labels.\nSleep properly. Don't stand at the window too long."],
+]
+
+
+## Released archive notes on `day` (note k needs day >= k), as file records.
+static func handover_records(day: int) -> Array:
+	var out: Array = []
+	for k in mini(day, HANDOVER_NOTES.size()):
+		out.append({"name": "shift_note_%02d.txt" % (k + 1), "date": HANDOVER_NOTES[k][0], "type": "txt", "text": HANDOVER_NOTES[k][1], "handover": k + 1})
+	return out

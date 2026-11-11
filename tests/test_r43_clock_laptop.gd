@@ -46,7 +46,8 @@ func _clock_holds() -> void:
 		var a: float = dp.shift_elapsed_s
 		await create_timer(0.8).timeout
 		_check("%s open on the focused laptop: shift clock held (%.3f -> %.3f)" % [app, a, dp.shift_elapsed_s], scr.entertainment_hold and dp.is_held(&"laptop") and absf(dp.shift_elapsed_s - a) < 0.0001)
-		_check("%s: the laptop clock shows PAUSED" % app, scr._clock.text.find("PAUSED") != -1)
+		# Round 45: the station clock keeps running on the laptop (no PAUSED label).
+		_check("%s: a normal running clock (no PAUSED label)" % app, scr._clock.text.find("PAUSED") == -1)
 		scr.set_editing(false)
 		await process_frame
 		await process_frame

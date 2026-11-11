@@ -90,7 +90,7 @@ func _focus_pause() -> void:
 	ss.begin_editing()
 	await create_timer(1.0).timeout
 	var data: Dictionary = main.get_node("SaveGame").collect_state()
-	_check("a save taken during focus stores no hold", not JSON.stringify(data["day_plan"]).contains("laptop"))
+	_check("a save taken during focus stores no hold", not JSON.stringify(data["day_plan"]).contains("_holds"))
 	# Bedtime grace is paused too.
 	dp.end_shift_now()
 	var aw: float = dp.awake_after_shift_s
@@ -156,7 +156,8 @@ func _journal() -> void:
 	scr._on_app(&"journal_notes")
 	_check("the old Personal Log lives on as PRIVATE NOTES, untouched", scr.current_view() == &"log" and scr.get_entry_text() == "Typed by the player, day 3.")
 	scr.open_app(&"journal")
-	_check("Journal view shows entries newest first", scr._report.text.find("JOURNAL") == 0 and scr._report.text.find("DAY") != -1)
+	# Round 45: the Journal shows today's page to write + finished pages.
+	_check("Journal view shows dated pages", scr._report.text.find("DAY") != -1)
 	scr.open_app(&"home")
 
 

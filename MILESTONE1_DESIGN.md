@@ -10532,3 +10532,142 @@ When the shift ends, a warm glow comes on over the bunk: a wordless "go to bed" 
   Holdout zombies use door waypoints + corner steering (no full
   pathfinding); a zombie can still hug furniture briefly. Hull lamps keep
   small lit pools in eclipse by design. Not manually playtested.
+
+# Round 45 — Chapter One progression, story-driven access, the window encounter, interactive journal, handover archive, laptop clock, functional console, space Holdout, first exported build
+
+## A. Chapter One (sections, never fixed to calendar days)
+- ORIENTATION (day 1: bunk, laptop, handover, Control Room, check-in) ->
+  ROUTINE WORK (Engineering / Life Support / Storage open) -> EXPANDED
+  RESPONSIBILITY (Comms, then EVA, by real job counts) -> FIRST DOUBTS
+  (records / sounds / camera / note anomalies, unchanged gating) ->
+  INVESTIGATION (records, checks, journal) -> WINDOW ENCOUNTER (climax) ->
+  AFTERMATH (tunnel check, ACCESS / CAMERA records, journal, end card).
+- Chapter One completes once the window encounter was witnessed and
+  followed up (a physical check or a contradicting record) or the next
+  morning; a quiet fallback after 8 phase-2 days. Phase 3 is not forced.
+
+## B. Story-driven access (`scripts/station/clearance.gd`)
+- L0 ORIENTATION (Quarters, Control, corridor, Junction), L1 MAINTENANCE
+  (Engineering, Life Support, Storage, airlock tunnel as a passage), L2
+  SPECIALIST (Communications), L3 EVA (suit locker + airlock cycling).
+- Topology inspected: Storage only through Engineering / Life Support, the
+  airlock tunnel only through Engineering -> three physical gates at the
+  Junction openings (own collision layer 1<<9: the body collides, geometry
+  sweeps don't) with red / green signs facing the Junction; EVA gated at
+  its machines ("TRAINING REQUIRED — EVA").
+- Earned from real progress: L1 after the day-1 check-in (or day 2), L2
+  after 3 jobs (or day 4), L3 after 6 jobs at L2 (or day 7); never lowers;
+  announced (assistant line, access log), map rooms dim while locked.
+- DayPlan never schedules an order / main workday behind a gate
+  (`allows_order`, `_workday_allowed`), so no mandatory job, part or tool
+  is out of reach (6 simulated days: 0 violations). Old saves compute
+  their (high) level. Developer override is transient.
+
+## C. Second observation window
+- A reinforced port in the AIRLOCK TUNNEL's east wall (z 2.5, 0.50 x 0.42
+  m): a real CSG cut, the hull plate split around it, exterior frame +
+  sun hood (exterior layer) and interior frame, bolts, faintly tinted
+  glass with a collision pane (the leak sweep still sees a sealed hull),
+  a dim tunnel light. Line of sight from the Control Room port crosses
+  the courtyard left of antenna mast A1 (verified by physics ray + renders).
+  Through the port it is small and distant, as intended.
+
+## D. Window figure + encounter (`window_figure.gd`, `window_encounter.gd`)
+- A jointed, matte-black, faceless figure (hips, spine, shoulder girdle,
+  neck, head, two-segment arms), DIRECT-only layer (eye + Control Room
+  portal camera; never surveillance feeds). Procedural animation: almost-
+  still idle (head a few degrees off level, one shoulder low) -> 0.55 s
+  convulsion (head snaps sideways twice, spine / chest opposite, one arm
+  flicks up) -> 0.8 s accelerating lean-back slide out of the frame along
+  the tunnel -> hidden. Limbs stay attached (joint offsets constant).
+- READY (phase 2, one anomaly noticed or 2 quiet phase-2 days, not day 1)
+  vs OBSERVABLE (eye in the Control Room, ray through the port glass,
+  nothing solid outside): the figure only appears when observable; away =
+  pending. CUE in the Control Room: a hull tick + "Wait a second… what's
+  that?". Direct gaze (~5 deg, 0.6 s) triggers the reaction.
+- GUIDANCE (cued, ignored 20 s, safe: free-walking, no laptop / workstation
+  / focused view / EVA / emergency; once per day): the view eases toward
+  the far port (1.6 s) while the body walks a few real steps (normal
+  physics); any WASD cancels instantly (no camera control afterwards).
+  Reduced visual effects: no camera / body control, thought + a "◂ window"
+  marker. Two ignored days -> TODAY lists "Check the observation port".
+- After: thoughts ("That movement wasn't normal.", "Was someone standing
+  there?"), observation evidence + journal; going to the tunnel port =
+  check; ACCESS / CAMERA records = contradiction ("Nobody was logged in
+  the tunnel. Nobody but me."). Developer panel: Prepare, Cue, Go to spot,
+  Spawn, Gaze react, Guide, Reset, Test investigation.
+
+## E. Laptop
+- ONE close action: CLOSE LAPTOP (amber, always visible); closing from any
+  state saves the private notes (letters / journal / games save
+  themselves). Save / Save & Back retired; Esc steps back without closing.
+- Clock: the STATION CLOCK keeps running while the laptop is focused at
+  real pace (DayPlan.laptop_clock_s; no PAUSED label), the SHIFT BUDGET
+  stays held. Active day mapping 08:00 -> 23:00 over shift_duration_s();
+  overtime continues; past midnight the display wraps (00:30) without a
+  new day; station-log entries sort by real station minutes.
+- JOURNAL: one page per day composed only from that day's real entries
+  (bounded, 5 sentences); any ordinary key writes 3 more characters
+  (held keys throttled; Backspace / Esc / chords ignored); typed position
+  saved; a finished page never restarts. TODAY = operations only;
+  JOURNAL = reflection only.
+- SHIFT HANDOVER archive: 10 notes from the previous technician's
+  rotation (September), note k released on day k, unread badge, TODAY
+  "Review handover" ticks itself, read state saved. A few lines mention the
+  tunnel port ("Don't stand at the window too long").
+
+## F. Workstation + console
+- Operations: one short action per duty ("CHECK IN AT THE WORKSTATION"),
+  NEXT line short, compact cabin line; full sentences, detail lines and
+  "(live sensors)" only in DETAIL mode. Diagnostics default "T1 24V OK /
+  T2 11V LOW / T2 OPEN CIRCUIT"; full readout in DETAIL. Locked rooms dim.
+- Physical toggles (audited: four were decorative): DIAG (detail mode),
+  COMMS (routes the REAL backup receiver; the rack lever moves the switch
+  too), E-TEST (drives the REAL Junction emergency-light test), LIGHTING
+  (Control Room main light 0.9 / 0.3 screen mode), MONITOR (camera monitor
+  power: "MONITOR OFF"). Levers / lamps always match their state; saved.
+
+## G. Basil
+- A real gesture: the hand reaches over the pot with a small watering can,
+  tips it, a short trickle of droplets, returns; the plant updates when the
+  pour finishes.
+
+## H. Holdout space retheme (presentation only)
+- Moon colony: regolith with craters, lit walkways, rovers, energy
+  barriers, pipe runs, crystal formations, beacon lamps, white research-
+  module roofs with domes. Landmarks: CREW HAB, FUEL DEPOT, OBSERVATORY,
+  HANGAR, BIODOME, LANDING PAD; interiors HAB MODULE / MED BAY / MESS
+  HALL. Spaceman (white suit, gold visor). Original creatures per kind
+  (same behaviours). Weapons: SIDEARM, PLASMA CUTTER, BURST CARBINE,
+  SCATTER GUN, PULSE RIFLE, ARC PROJECTOR, GRAVITY MORTAR (ids unchanged:
+  saves load). Armory weapons in a 4-column grid.
+
+## I. Exported demo
+- Official 4.7.2 export templates (SHA-512 verified against the release's
+  SHA512-SUMS) — macOS template installed. Project settings: ETC2/ASTC
+  import (required for universal/arm64), exported builds use their own
+  user folder (`config/custom_user_dir_name.template` =
+  SatelliteMaintenanceHorrorDemo), and
+  `editor/export/convert_text_resources_to_binary=false`.
+- ROOT CAUSE of the first export's crash (SIGSEGV after New Game): the
+  text->binary scene conversion dropped the NodePath overrides main.tscn
+  sets on nodes inside the instanced Player scene (every focused view's
+  paths came through empty -> null cascade). With conversion off the
+  release build runs.
+- Release smoke test (SMH_SMOKE_TEST=1, refuses to run outside the demo's
+  own folder): main menu, New Game, day 1 at 08:00, movement, laptop
+  focus + CLOSE LAPTOP + clock, workstation, save -> read -> load,
+  developer panel absent, audio — ALL PASSED (RELEASE build, demo folder).
+  Not uploaded; no tag.
+
+## J. Localization
+- New bilingual: access messages, clearance announcements, window
+  thoughts, record thoughts, TODAY's labels. English-only (documented):
+  journal sentences, letters, handover notes, station records, Holdout,
+  developer panel, smoke test.
+
+## K. Limitations
+- The figure is a primitive-shape silhouette (no skinned rig). Through
+  the Control Room port it is small. Guided walk is a straight line (desk
+  slides; ~3 s cap). Watering drops land just beside the pot. Gate signs
+  are English unless the language is Chinese. Not manually playtested.

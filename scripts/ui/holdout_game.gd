@@ -66,18 +66,18 @@ const BASE_MAGNET := 22.0
 const ZOOM := 1.6                            # screen px per world px (readable sprites)
 
 const KINDS := {
-	"walker": {"hp": 20.0, "speed": 21.0, "dmg": 8.0, "r": 5.0, "credits": 2, "color": Color(0.45, 0.72, 0.35), "wave": 1},
-	"swarm": {"hp": 5.0, "speed": 36.0, "dmg": 3.0, "r": 2.6, "credits": 1, "color": Color(0.62, 0.78, 0.5), "wave": 2},
-	"runner": {"hp": 11.0, "speed": 41.0, "dmg": 6.0, "r": 4.0, "credits": 3, "color": Color(0.8, 0.82, 0.3), "wave": 3},
-	"spitter": {"hp": 16.0, "speed": 19.0, "dmg": 4.0, "r": 5.0, "credits": 5, "color": Color(0.35, 0.75, 0.7), "wave": 4},
-	"brute": {"hp": 75.0, "speed": 13.0, "dmg": 18.0, "r": 8.0, "credits": 8, "color": Color(0.55, 0.35, 0.65), "wave": 5},
-	"bloater": {"hp": 26.0, "speed": 15.0, "dmg": 0.0, "r": 7.0, "credits": 6, "color": Color(0.75, 0.55, 0.4), "wave": 6},
-	"armored": {"hp": 40.0, "speed": 17.0, "dmg": 10.0, "r": 6.0, "credits": 7, "color": Color(0.55, 0.6, 0.65), "wave": 7},
-	"elite": {"hp": 380.0, "speed": 15.0, "dmg": 24.0, "r": 11.0, "credits": 30, "color": Color(0.7, 0.3, 0.3), "wave": 5},
+	"walker": {"hp": 20.0, "speed": 21.0, "dmg": 8.0, "r": 5.0, "credits": 2, "color": Color(0.78, 0.72, 0.9), "wave": 1},
+	"swarm": {"hp": 5.0, "speed": 36.0, "dmg": 3.0, "r": 2.6, "credits": 1, "color": Color(0.35, 0.95, 0.9), "wave": 2},
+	"runner": {"hp": 11.0, "speed": 41.0, "dmg": 6.0, "r": 4.0, "credits": 3, "color": Color(0.9, 0.3, 0.25), "wave": 3},
+	"spitter": {"hp": 16.0, "speed": 19.0, "dmg": 4.0, "r": 5.0, "credits": 5, "color": Color(0.4, 0.8, 0.35), "wave": 4},
+	"brute": {"hp": 75.0, "speed": 13.0, "dmg": 18.0, "r": 8.0, "credits": 8, "color": Color(0.25, 0.5, 0.55), "wave": 5},
+	"bloater": {"hp": 26.0, "speed": 15.0, "dmg": 0.0, "r": 7.0, "credits": 6, "color": Color(0.85, 0.4, 0.7), "wave": 6},
+	"armored": {"hp": 40.0, "speed": 17.0, "dmg": 10.0, "r": 6.0, "credits": 7, "color": Color(0.75, 0.55, 0.3), "wave": 7},
+	"elite": {"hp": 380.0, "speed": 15.0, "dmg": 24.0, "r": 11.0, "credits": 30, "color": Color(0.75, 0.15, 0.2), "wave": 5},
 	# Round 44: LURKER waits dormant INSIDE buildings and ambushes; SPEWER
 	# leaves acid puddles behind it (area denial: keep moving).
-	"lurker": {"hp": 24.0, "speed": 48.0, "dmg": 10.0, "r": 4.5, "credits": 6, "color": Color(0.5, 0.45, 0.6), "wave": 4},
-	"spewer": {"hp": 30.0, "speed": 16.0, "dmg": 5.0, "r": 6.0, "credits": 7, "color": Color(0.6, 0.75, 0.2), "wave": 6},
+	"lurker": {"hp": 24.0, "speed": 48.0, "dmg": 10.0, "r": 4.5, "credits": 6, "color": Color(0.3, 0.2, 0.4), "wave": 4},
+	"spewer": {"hp": 30.0, "speed": 16.0, "dmg": 5.0, "r": 6.0, "credits": 7, "color": Color(0.75, 0.85, 0.25), "wave": 6},
 }
 const ACID_EVERY := 1.4
 const ACID_LIFE := 6.0
@@ -103,15 +103,15 @@ const BLAST_DMG := 16.0
 ## id -> stats: interval s, dmg per hit, range px, speed px/s, pellets,
 ## spread rad (cone / jitter), pierce (extra targets), ap (armour piercing), cost.
 const WEAPONS := {
-	"pistol": {"name": "PISTOL", "interval": 0.62, "dmg": 10.0, "range": 140.0, "speed": 260.0, "pellets": 1, "spread": 0.0, "pierce": 0, "ap": false, "cost": 0, "color": Color(1.0, 0.92, 0.45)},
-	"smg": {"name": "SMG", "interval": 0.17, "dmg": 4.5, "range": 120.0, "speed": 290.0, "pellets": 1, "spread": 0.14, "pierce": 0, "ap": false, "cost": 60, "color": Color(1.0, 0.75, 0.35)},
-	"shotgun": {"name": "SHOTGUN", "interval": 0.95, "dmg": 6.0, "range": 85.0, "speed": 240.0, "pellets": 6, "spread": 0.55, "pierce": 0, "ap": false, "cost": 90, "color": Color(1.0, 0.6, 0.3)},
-	"rifle": {"name": "RIFLE", "interval": 1.1, "dmg": 34.0, "range": 230.0, "speed": 430.0, "pellets": 1, "spread": 0.0, "pierce": 3, "ap": true, "cost": 140, "color": Color(0.85, 0.95, 1.0)},
-	"arc": {"name": "ARC COIL", "interval": 0.8, "dmg": 13.0, "range": 150.0, "speed": 0.0, "pellets": 1, "spread": 0.0, "pierce": 3, "ap": true, "cost": 260, "color": Color(0.55, 0.85, 1.0)},
+	"pistol": {"name": "SIDEARM", "interval": 0.62, "dmg": 10.0, "range": 140.0, "speed": 260.0, "pellets": 1, "spread": 0.0, "pierce": 0, "ap": false, "cost": 0, "color": Color(1.0, 0.92, 0.45)},
+	"smg": {"name": "BURST CARBINE", "interval": 0.17, "dmg": 4.5, "range": 120.0, "speed": 290.0, "pellets": 1, "spread": 0.14, "pierce": 0, "ap": false, "cost": 60, "color": Color(1.0, 0.75, 0.35)},
+	"shotgun": {"name": "SCATTER GUN", "interval": 0.95, "dmg": 6.0, "range": 85.0, "speed": 240.0, "pellets": 6, "spread": 0.55, "pierce": 0, "ap": false, "cost": 90, "color": Color(1.0, 0.6, 0.3)},
+	"rifle": {"name": "PULSE RIFLE", "interval": 1.1, "dmg": 34.0, "range": 230.0, "speed": 430.0, "pellets": 1, "spread": 0.0, "pierce": 3, "ap": true, "cost": 140, "color": Color(0.85, 0.95, 1.0)},
+	"arc": {"name": "ARC PROJECTOR", "interval": 0.8, "dmg": 13.0, "range": 150.0, "speed": 0.0, "pellets": 1, "spread": 0.0, "pierce": 3, "ap": true, "cost": 260, "color": Color(0.55, 0.85, 1.0)},
 	# Round 44: MACHETE (emergency melee: a wide swing at everything close)
 	# and LAUNCHER (late unlock: a lobbed grenade, area blast at the target).
-	"machete": {"name": "MACHETE", "interval": 0.45, "dmg": 16.0, "range": 26.0, "speed": 0.0, "pellets": 1, "spread": 0.0, "pierce": 0, "ap": false, "cost": 30, "color": Color(0.9, 0.9, 0.85)},
-	"launcher": {"name": "LAUNCHER", "interval": 1.6, "dmg": 30.0, "range": 175.0, "speed": 170.0, "pellets": 1, "spread": 0.0, "pierce": 0, "ap": true, "cost": 320, "color": Color(1.0, 0.55, 0.25)},
+	"machete": {"name": "PLASMA CUTTER", "interval": 0.45, "dmg": 16.0, "range": 26.0, "speed": 0.0, "pellets": 1, "spread": 0.0, "pierce": 0, "ap": false, "cost": 30, "color": Color(0.9, 0.9, 0.85)},
+	"launcher": {"name": "GRAVITY MORTAR", "interval": 1.6, "dmg": 30.0, "range": 175.0, "speed": 170.0, "pellets": 1, "spread": 0.0, "pierce": 0, "ap": true, "cost": 320, "color": Color(1.0, 0.55, 0.25)},
 }
 const WEAPON_ORDER := ["pistol", "machete", "smg", "shotgun", "rifle", "arc", "launcher"]
 const SWING_ARC := 1.2           # radians either side of the target direction
@@ -192,7 +192,7 @@ var _ov_title: Label
 var _ov_text: Label
 var _ov_buttons: HBoxContainer
 var _shop_grid: GridContainer
-var _weapon_row: HBoxContainer
+var _weapon_row: GridContainer
 var buttons: Dictionary = {}
 
 
@@ -224,15 +224,18 @@ func _ready() -> void:
 	_shop_grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_overlay.add_child(_shop_grid)
 	for id in UPGRADE_ORDER:
-		var b := _button(_shop_grid, "", 8, Vector2(140, 16))
+		var b := _button(_shop_grid, "", 8, Vector2(134, 15))
 		b.pressed.connect(func(): buy(id))
 		buttons["buy_" + id] = b
-	_weapon_row = HBoxContainer.new()
-	_weapon_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	_weapon_row.add_theme_constant_override("separation", 3)
+	# Round 45: longer sci-fi names -> a 4-column grid (fits the laptop).
+	_weapon_row = GridContainer.new()
+	_weapon_row.columns = 4
+	_weapon_row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_weapon_row.add_theme_constant_override("h_separation", 3)
+	_weapon_row.add_theme_constant_override("v_separation", 2)
 	_overlay.add_child(_weapon_row)
 	for wid in WEAPON_ORDER:
-		var b := _button(_weapon_row, "", 8, Vector2(82, 16))
+		var b := _button(_weapon_row, "", 8, Vector2(104, 15))
 		b.pressed.connect(func(): weapon_action(wid))
 		buttons["weapon_" + wid] = b
 	_ov_buttons = HBoxContainer.new()
@@ -299,8 +302,8 @@ func build_map() -> void:
 	for x in [520.0, 1300.0]:
 		roads.append(Rect2(x - 22, 0, 44, WORLD.size.y))
 	# Named landmark buildings (solid; bullets stop).
-	for spec in [["MOTEL", Rect2(120, 110, 230, 120)], ["FUEL STOP", Rect2(1390, 120, 170, 90)],
-			["CHAPEL", Rect2(130, 420, 120, 150)], ["BUS DEPOT", Rect2(1420, 950, 260, 130)]]:
+	for spec in [["CREW HAB", Rect2(120, 110, 230, 120)], ["FUEL DEPOT", Rect2(1390, 120, 170, 90)],
+			["OBSERVATORY", Rect2(130, 420, 120, 150)], ["HANGAR", Rect2(1420, 950, 260, 130)]]:
 		_solid(spec[1], "building")
 		landmarks.append({"name": spec[0], "rect": spec[1]})
 	# Plain buildings fill the blocks (never the plaza around START).
@@ -310,7 +313,7 @@ func build_map() -> void:
 	_build_interiors()
 	# Park (west of the plaza): fence with a gap + trees.
 	var park := Rect2(600, 420, 230, 160)
-	landmarks.append({"name": "PARK", "rect": park})
+	landmarks.append({"name": "BIODOME", "rect": park})
 	for seg in [Rect2(park.position.x, park.position.y, park.size.x, 3), Rect2(park.position.x, park.end.y - 3, park.size.x * 0.4, 3),
 			Rect2(park.end.x - park.size.x * 0.4, park.end.y - 3, park.size.x * 0.4, 3), Rect2(park.position.x, park.position.y, 3, park.size.y)]:
 		obstacles.append({"rect": seg, "kind": "fence", "solid_bullets": false})
@@ -318,7 +321,7 @@ func build_map() -> void:
 		trees.append({"pos": Vector2(park.position.x + 40 + (i % 3) * 72 + rng.randf_range(-10, 10), park.position.y + 35 + (i / 3) * 45 + rng.randf_range(-8, 8)), "r": rng.randf_range(9, 13)})
 	# The plaza's dry fountain (solid; north of the start point).
 	trees.append({"pos": START + Vector2(0, -70), "r": 16.0, "fountain": true})
-	landmarks.append({"name": "PLAZA", "rect": Rect2(START - Vector2(40, 98), Vector2(80, 14))})
+	landmarks.append({"name": "LANDING PAD", "rect": Rect2(START - Vector2(40, 98), Vector2(80, 14))})
 	# Scattered trees on verges.
 	for p in [Vector2(80, 700), Vector2(380, 760), Vector2(1120, 420), Vector2(1730, 900), Vector2(1080, 760), Vector2(60, 360), Vector2(1580, 260)]:
 		trees.append({"pos": p, "r": rng.randf_range(8, 12)})
@@ -363,17 +366,17 @@ const DOOR := 24.0
 func _build_interiors() -> void:
 	buildings = []
 	# HOUSE: living room, bedroom, small kitchen.
-	_interior("HOUSE", Rect2(120, 950, 200, 150), "house", [["n", 0.25], ["e", 0.75]],
+	_interior("HAB MODULE", Rect2(120, 950, 200, 150), "house", [["n", 0.25], ["e", 0.75]],
 		[Rect2(200, 950, WALL, 36), Rect2(200, 1010, WALL, 90), Rect2(206, 1030, 50, WALL), Rect2(280, 1030, 40, WALL)],
 		[[Rect2(128, 995, 10, 40), "sofa", false], [Rect2(142, 1045, 26, 18), "table", false], [Rect2(262, 1052, 40, 26), "bed", false], [Rect2(298, 958, 14, 32), "wardrobe", true], [Rect2(212, 960, 30, 10), "counter", false]],
 		[Vector2(300, 1090), Vector2(230, 1000)])
 	# PHARMACY: three shelf aisles, a counter, a back store room.
-	_interior("PHARMACY", Rect2(640, 110, 150, 110), "store", [["s", 0.3]],
+	_interior("MED BAY", Rect2(640, 110, 150, 110), "store", [["s", 0.3]],
 		[Rect2(758, 110, WALL, 40), Rect2(758, 176, WALL, 44)],
 		[[Rect2(664, 128, 8, 56), "shelf", true], [Rect2(694, 128, 8, 56), "shelf", true], [Rect2(724, 128, 8, 56), "shelf", true], [Rect2(650, 198, 30, 8), "counter", false], [Rect2(768, 124, 14, 10), "boxes", true]],
 		[Vector2(776, 200), Vector2(708, 120)])
 	# DINER: booths, a long counter, kitchen with a back door.
-	_interior("DINER", Rect2(640, 960, 150, 100), "diner", [["n", 0.35], ["e", 0.8]],
+	_interior("MESS HALL", Rect2(640, 960, 150, 100), "diner", [["n", 0.35], ["e", 0.8]],
 		[Rect2(730, 1020, 60, WALL)],
 		[[Rect2(652, 974, 20, 12), "table", false], [Rect2(652, 1004, 20, 12), "table", false], [Rect2(652, 1034, 20, 12), "table", false], [Rect2(690, 980, 8, 34), "counter", false], [Rect2(742, 1034, 30, 12), "stove", true]],
 		[Vector2(770, 1046), Vector2(680, 1046)])
@@ -1331,7 +1334,7 @@ func _refresh_overlay() -> void:
 	match mode:
 		"title":
 			_ov_title.text = "HOLDOUT · %s" % diff()["name"]
-			_ov_text.text = "Survive the town. WASD moves — your %s fires by itself. Buildings can be entered.\n%s best %d (wave %d) · Wallet %d CR" % [WEAPONS[weapon]["name"], diff()["name"], int(best_by.get(difficulty, 0)), int(best_wave_by.get(difficulty, 0)), credits]
+			_ov_text.text = "Hold the colony. WASD moves — your %s fires by itself. Modules can be entered.\n%s best %d (wave %d) · Wallet %d CR" % [WEAPONS[weapon]["name"], diff()["name"], int(best_by.get(difficulty, 0)), int(best_wave_by.get(difficulty, 0)), credits]
 			show = {"diff_easy": true, "diff_hard": true, "start": true, "shop": true, "desktop": true}
 		"paused":
 			_ov_title.text = "PAUSED"
@@ -1380,7 +1383,7 @@ func _draw_arena() -> void:
 	a.draw_rect(Rect2(Vector2.ZERO, a.size), Color(0.04, 0.05, 0.05))
 	a.draw_set_transform(Vector2(0, HUD_H), 0.0, Vector2(ZOOM, ZOOM))
 	# Ground: dusk grass with a faint lot grid (shows the map scrolling).
-	a.draw_rect(Rect2(Vector2.ZERO, vs), Color(0.11, 0.14, 0.09))
+	a.draw_rect(Rect2(Vector2.ZERO, vs), Color(0.15, 0.14, 0.18))      # Round 45: moon regolith
 	# The central PLAZA: paving around a dry fountain.
 	var pz := Rect2(START - Vector2(150, 110), Vector2(300, 220))
 	if view.intersects(pz):
@@ -1391,26 +1394,35 @@ func _draw_arena() -> void:
 			a.draw_line(_w2s(pz.position + Vector2(0, k * 20)), _w2s(pz.position + Vector2(pz.size.x, k * 20)), Color(0.17, 0.17, 0.16), 1.0)
 	var g0 := Vector2(floor(cam.x / 60.0) * 60.0, floor(cam.y / 60.0) * 60.0)
 	for gx in range(int(g0.x), int(cam.x + vs.x) + 60, 60):
-		a.draw_line(_w2s(Vector2(gx, cam.y)), _w2s(Vector2(gx, cam.y + vs.y)), Color(0.13, 0.16, 0.1), 1.0)
+		a.draw_line(_w2s(Vector2(gx, cam.y)), _w2s(Vector2(gx, cam.y + vs.y)), Color(0.17, 0.16, 0.2), 1.0)
 	for gy in range(int(g0.y), int(cam.y + vs.y) + 60, 60):
-		a.draw_line(_w2s(Vector2(cam.x, gy)), _w2s(Vector2(cam.x + vs.x, gy)), Color(0.13, 0.16, 0.1), 1.0)
-	# Park lawn.
+		a.draw_line(_w2s(Vector2(cam.x, gy)), _w2s(Vector2(cam.x + vs.x, gy)), Color(0.17, 0.16, 0.2), 1.0)
+	# Craters (deterministic from position): a little texture on the regolith.
+	for cx in range(int(floor(cam.x / 140.0)) * 140, int(cam.x + vs.x) + 140, 140):
+		for cy in range(int(floor(cam.y / 140.0)) * 140, int(cam.y + vs.y) + 140, 140):
+			var hh: int = absi(hash([cx, cy, "crater"]))
+			var cp := Vector2(cx + hh % 100, cy + (hh / 100) % 100)
+			var cr: float = 5.0 + float(hh % 9)
+			a.draw_circle(_w2s(cp), cr, Color(0.12, 0.11, 0.15))
+			a.draw_arc(_w2s(cp), cr, PI * 0.9, PI * 1.9, 10, Color(0.24, 0.23, 0.28), 1.0)
+	# Biodome floor.
 	for lm in landmarks:
-		if lm["name"] == "PARK" and view.intersects(lm["rect"]):
-			a.draw_rect(Rect2(_w2s((lm["rect"] as Rect2).position), (lm["rect"] as Rect2).size), Color(0.13, 0.22, 0.1))
+		if lm["name"] == "BIODOME" and view.intersects(lm["rect"]):
+			a.draw_rect(Rect2(_w2s((lm["rect"] as Rect2).position), (lm["rect"] as Rect2).size), Color(0.12, 0.24, 0.18))
 	# Roads: kerb, asphalt, lane dashes.
 	for rd in roads:
 		if not view.intersects(rd):
 			continue
-		a.draw_rect(Rect2(_w2s(rd.position - Vector2(4, 4)), rd.size + Vector2(8, 8)), Color(0.3, 0.3, 0.28))
-		a.draw_rect(Rect2(_w2s(rd.position), rd.size), Color(0.17, 0.17, 0.18))
+		# Lit colony walkways: metal decking with cyan edge lights.
+		a.draw_rect(Rect2(_w2s(rd.position - Vector2(4, 4)), rd.size + Vector2(8, 8)), Color(0.25, 0.3, 0.34))
+		a.draw_rect(Rect2(_w2s(rd.position), rd.size), Color(0.2, 0.22, 0.26))
 		var horiz: bool = rd.size.x > rd.size.y
 		var mid: float = rd.get_center().y if horiz else rd.get_center().x
 		var c0: float = cam.x if horiz else cam.y
 		var from: int = int(c0 - fmod(c0, 40.0))
 		for t in range(from, from + int(vs.x if horiz else vs.y) + 40, 40):
 			var p: Vector2 = Vector2(t, mid - 1) if horiz else Vector2(mid - 1, t)
-			a.draw_rect(Rect2(_w2s(p), Vector2(18, 2) if horiz else Vector2(2, 18)), Color(0.75, 0.65, 0.25, 0.8))
+			a.draw_rect(Rect2(_w2s(p), Vector2(18, 2) if horiz else Vector2(2, 18)), Color(0.3, 0.85, 0.95, 0.75))
 	# Streetlights: pools of light (broken ones flicker).
 	for l in lights:
 		var lp: Vector2 = l["pos"]
@@ -1418,7 +1430,7 @@ func _draw_arena() -> void:
 			continue
 		var on: bool = not l["broken"] or fmod(tnow * 7.3 + lp.x, 3.0) > 2.2
 		if on:
-			a.draw_circle(_w2s(lp), 26.0, Color(1.0, 0.9, 0.6, 0.07))
+			a.draw_circle(_w2s(lp), 26.0, Color(0.4, 0.85, 1.0, 0.07))
 		a.draw_circle(_w2s(lp), 2.0, Color(0.85, 0.8, 0.6) if on else Color(0.35, 0.35, 0.35))
 	# Supply crates and pickups.
 	for sp in supply_points:
@@ -1439,7 +1451,7 @@ func _draw_arena() -> void:
 	for b in buildings:
 		var br: Rect2 = b["rect"]
 		if view.intersects(br):
-			var floor_c: Color = {"house": Color(0.33, 0.27, 0.2), "store": Color(0.36, 0.38, 0.38), "diner": Color(0.3, 0.22, 0.22)}.get(String(b["kind"]), Color(0.3, 0.3, 0.3))
+			var floor_c: Color = {"house": Color(0.24, 0.27, 0.3), "store": Color(0.3, 0.34, 0.36), "diner": Color(0.27, 0.25, 0.3)}.get(String(b["kind"]), Color(0.3, 0.3, 0.3))
 			a.draw_rect(Rect2(_w2s(br.position), br.size), floor_c)
 			var step_px: int = 12 if b["kind"] != "diner" else 10
 			for k in range(int(br.position.x) + step_px, int(br.end.x), step_px):
@@ -1463,36 +1475,47 @@ func _draw_arena() -> void:
 		var sr := Rect2(_w2s(r.position), r.size)
 		match String(o["kind"]):
 			"building":
+				# Colony module: white panelled roof, a ring hatch, viewports.
 				a.draw_rect(Rect2(sr.position + Vector2(3, 3), sr.size), Color(0, 0, 0, 0.35))
-				a.draw_rect(sr, Color(0.27, 0.25, 0.24))
-				a.draw_rect(sr.grow(-4), Color(0.33, 0.31, 0.29))
-				a.draw_rect(sr, Color(0.12, 0.11, 0.1), false, 1.0)
+				a.draw_rect(sr, Color(0.55, 0.58, 0.62))
+				a.draw_rect(sr.grow(-4), Color(0.72, 0.74, 0.78))
+				a.draw_rect(sr, Color(0.25, 0.27, 0.3), false, 1.0)
+				for px in range(int(sr.position.x) + 16, int(sr.end.x) - 4, 16):
+					a.draw_line(Vector2(px, sr.position.y + 4), Vector2(px, sr.end.y - 4), Color(0.6, 0.62, 0.66), 1.0)
+				a.draw_arc(sr.get_center(), minf(sr.size.x, sr.size.y) * 0.18, 0, TAU, 16, Color(0.4, 0.42, 0.46), 2.0)
 				for wx in range(int(sr.position.x) + 10, int(sr.end.x) - 8, 22):
-					a.draw_rect(Rect2(wx, sr.position.y + 6, 8, 4), Color(0.12, 0.13, 0.15))
+					a.draw_rect(Rect2(wx, sr.position.y + 6, 8, 4), Color(0.3, 0.75, 0.9))
 			"car":
-				var col: Color = [Color(0.55, 0.15, 0.12), Color(0.2, 0.3, 0.5), Color(0.6, 0.6, 0.58), Color(0.25, 0.4, 0.3)][int(r.position.x + r.position.y) % 4]
+				# Parked rovers / cargo pods with wheels.
+				var col: Color = [Color(0.85, 0.55, 0.15), Color(0.75, 0.77, 0.8), Color(0.35, 0.55, 0.75), Color(0.6, 0.62, 0.55)][int(r.position.x + r.position.y) % 4]
+				var vert3: bool = sr.size.y > sr.size.x
+				for wv in [0.15, 0.85]:
+					var wp: Vector2 = sr.position + (Vector2(0, sr.size.y * wv) if vert3 else Vector2(sr.size.x * wv, 0))
+					a.draw_circle(wp, 3.0, Color(0.1, 0.1, 0.12))
+					a.draw_circle(wp + (Vector2(sr.size.x, 0) if vert3 else Vector2(0, sr.size.y)), 3.0, Color(0.1, 0.1, 0.12))
 				a.draw_rect(sr, col.darkened(0.3))
 				a.draw_rect(sr.grow(-2), col)
 				var wind: Rect2 = Rect2(sr.position + Vector2(3, sr.size.y * 0.25), Vector2(sr.size.x - 6, sr.size.y * 0.2)) if sr.size.y > sr.size.x else Rect2(sr.position + Vector2(sr.size.x * 0.6, 3), Vector2(sr.size.x * 0.18, sr.size.y - 6))
 				a.draw_rect(wind, Color(0.55, 0.7, 0.8, 0.8))
 			"barricade":
-				a.draw_rect(sr, Color(0.9, 0.5, 0.15))
+				a.draw_rect(sr.grow(1.0), Color(0.2, 0.7, 0.9, 0.35))      # energy barrier
+				a.draw_rect(sr, Color(0.25, 0.75, 0.95))
 				var vert: bool = sr.size.y > sr.size.x
 				for s in range(0, int(maxf(sr.size.x, sr.size.y)), 8):
 					var stripe: Rect2 = Rect2(sr.position + Vector2(0, s), Vector2(sr.size.x, 4)) if vert else Rect2(sr.position + Vector2(s, 0), Vector2(4, sr.size.y))
-					a.draw_rect(stripe.intersection(sr), Color(0.95, 0.95, 0.9))
+					a.draw_rect(stripe.intersection(sr), Color(0.75, 0.95, 1.0))
 			"wall":
-				a.draw_rect(sr, Color(0.55, 0.52, 0.48))
+				a.draw_rect(sr, Color(0.6, 0.63, 0.68))
 				a.draw_rect(sr, Color(0.2, 0.19, 0.18), false, 1.0)
 			"furniture":
 				var fc: Color = {"shelf": Color(0.55, 0.42, 0.3), "boxes": Color(0.6, 0.5, 0.3), "bed": Color(0.5, 0.55, 0.7), "sofa": Color(0.45, 0.3, 0.3), "stove": Color(0.6, 0.6, 0.62), "wardrobe": Color(0.42, 0.32, 0.22)}.get(String(o.get("label", "")), Color(0.5, 0.4, 0.32))
 				a.draw_rect(sr, fc.darkened(0.3))
 				a.draw_rect(sr.grow(-1.0), fc)
 			"fence":
-				a.draw_rect(sr, Color(0.45, 0.33, 0.2))
+				a.draw_rect(sr, Color(0.4, 0.45, 0.5))          # pipe run
 				var vert2: bool = sr.size.y > sr.size.x
 				for s in range(0, int(maxf(sr.size.x, sr.size.y)), 14):
-					a.draw_rect(Rect2(sr.position + (Vector2(-1, s) if vert2 else Vector2(s, -1)), Vector2(5, 5)), Color(0.35, 0.25, 0.15))
+					a.draw_rect(Rect2(sr.position + (Vector2(-1, s) if vert2 else Vector2(s, -1)), Vector2(5, 5)), Color(0.55, 0.6, 0.65))
 	# Landmark names on their roofs.
 	for lm in landmarks:
 		var lr: Rect2 = lm["rect"]
@@ -1518,12 +1541,14 @@ func _draw_arena() -> void:
 		if bi == pbi or not view.intersects(rb):
 			continue
 		a.draw_rect(Rect2(_w2s(rb.position) + Vector2(3, 3), rb.size), Color(0, 0, 0, 0.35))
-		a.draw_rect(Rect2(_w2s(rb.position), rb.size), Color(0.36, 0.22, 0.18))
-		a.draw_line(_w2s(Vector2(rb.position.x, rb.get_center().y)), _w2s(Vector2(rb.end.x, rb.get_center().y)), Color(0.25, 0.15, 0.12), 2.0)
-		for k in range(int(rb.position.y) + 8, int(rb.end.y), 8):
-			a.draw_line(_w2s(Vector2(rb.position.x, k)), _w2s(Vector2(rb.end.x, k)), Color(0.32, 0.2, 0.16), 1.0)
+		# Research-module roof: pale panels, a dome, an antenna.
+		a.draw_rect(Rect2(_w2s(rb.position), rb.size), Color(0.7, 0.72, 0.76))
+		for k in range(int(rb.position.y) + 10, int(rb.end.y), 10):
+			a.draw_line(_w2s(Vector2(rb.position.x, k)), _w2s(Vector2(rb.end.x, k)), Color(0.6, 0.62, 0.66), 1.0)
+		a.draw_circle(_w2s(rb.get_center() + Vector2(rb.size.x * 0.25, 0)), minf(rb.size.x, rb.size.y) * 0.16, Color(0.55, 0.75, 0.85, 0.85))
+		a.draw_line(_w2s(rb.position + Vector2(10, 10)), _w2s(rb.position + Vector2(10, 10)) + Vector2(0, -8), Color(0.3, 0.32, 0.36), 1.5)
 		for d in buildings[bi]["doors"]:
-			a.draw_rect(Rect2(_w2s(d["at"]) - Vector2(5, 5), Vector2(10, 10)), Color(0.12, 0.1, 0.09))
+			a.draw_rect(Rect2(_w2s(d["at"]) - Vector2(5, 5), Vector2(10, 10)), Color(0.85, 0.55, 0.15))
 		var nm: String = buildings[bi]["name"]
 		a.draw_string(font, _w2s(rb.get_center()) + Vector2(-float(nm.length()) * 3.0, -4), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.95, 0.88, 0.6))
 	# Bullets + arc bolts.
@@ -1543,21 +1568,26 @@ func _draw_arena() -> void:
 	if mode != "title":
 		var sp2: Vector2 = _w2s(player)
 		a.draw_arc(sp2, magnet_radius(), 0, TAU, 24, Color(1.0, 0.85, 0.3, 0.12), 1.0)
-		a.draw_circle(sp2, PLAYER_R + 1.5, Color(0.1, 0.25, 0.4))
-		a.draw_circle(sp2, PLAYER_R, Color(0.55, 0.8, 1.0))
+		# The spaceman: white suit, backpack, gold visor facing the aim.
+		a.draw_circle(sp2 - facing * 3.0, PLAYER_R * 0.7, Color(0.6, 0.62, 0.66))
+		a.draw_circle(sp2, PLAYER_R + 1.2, Color(0.35, 0.37, 0.42))
+		a.draw_circle(sp2, PLAYER_R, Color(0.93, 0.94, 0.96))
+		a.draw_circle(sp2 + facing * 2.0, PLAYER_R * 0.5, Color(0.95, 0.75, 0.3))
 		a.draw_line(sp2, sp2 + facing * (PLAYER_R + 4.0), WEAPONS[weapon]["color"], 2.0)
 	# Tree crowns above everything walking.
 	for t in trees:
 		var tp2: Vector2 = t["pos"]
 		if t.get("fountain", false) and view.has_point(tp2):
-			a.draw_circle(_w2s(tp2), float(t["r"]), Color(0.45, 0.45, 0.43))
-			a.draw_circle(_w2s(tp2), float(t["r"]) - 3.0, Color(0.16, 0.2, 0.22))
-			a.draw_circle(_w2s(tp2), 3.0, Color(0.5, 0.5, 0.48))
+			a.draw_circle(_w2s(tp2), float(t["r"]), Color(0.45, 0.48, 0.52))
+			a.draw_circle(_w2s(tp2), float(t["r"]) - 3.0, Color(0.16, 0.18, 0.22))
+			a.draw_circle(_w2s(tp2), 3.0, Color(1.0, 0.5, 0.2) if fmod(tnow, 1.2) < 0.6 else Color(0.5, 0.3, 0.2))
 			continue
 		if view.has_point(tp2):
-			a.draw_circle(_w2s(tp2) + Vector2(2, 2), float(t["r"]), Color(0, 0, 0, 0.3))
-			a.draw_circle(_w2s(tp2), float(t["r"]), Color(0.12, 0.3, 0.13))
-			a.draw_circle(_w2s(tp2) - Vector2(2, 2), float(t["r"]) * 0.6, Color(0.18, 0.4, 0.17))
+			# Crystal formations.
+			var tr: float = float(t["r"])
+			var c0: Vector2 = _w2s(tp2)
+			a.draw_colored_polygon(PackedVector2Array([c0 + Vector2(0, -tr * 1.2), c0 + Vector2(tr * 0.7, -tr * 0.2), c0 + Vector2(tr * 0.4, tr * 0.8), c0 + Vector2(-tr * 0.5, tr * 0.7), c0 + Vector2(-tr * 0.8, -tr * 0.3)]), Color(0.42, 0.3, 0.62))
+			a.draw_colored_polygon(PackedVector2Array([c0 + Vector2(0, -tr * 1.2), c0 + Vector2(tr * 0.7, -tr * 0.2), c0 + Vector2(0, 0)]), Color(0.65, 0.5, 0.9))
 	for f in fx:
 		var t: float = float(f["t"])
 		if f.has("text"):
@@ -1595,6 +1625,12 @@ func _draw_arena() -> void:
 	a.draw_string(font, Vector2(86, 11), "HP %d  W%d  SCORE %d  KILLS %d  %d CR  %s" % [int(maxf(hp, 0.0)), wave, score, kills, credits, WEAPONS[weapon]["name"]], HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.9, 0.95, 0.9))
 
 
+## Round 45: ORIGINAL space creatures (same behaviours as before):
+## walker = pale three-legged drifter, swarm = glowing mites, runner =
+## sleek red stalker with blade legs, spitter = bulb with a glowing sac,
+## brute = carapaced crab-beast, bloater = veined pulsing sac, armored =
+## bronze-shelled crawler, lurker = shadow with pale eyes, spewer = slug
+## leaving residue, elite = spined crimson alpha. Each faces its prey.
 func _draw_zombie(z: Dictionary, view: Rect2) -> void:
 	var a: Control = _arena
 	var zp: Vector2 = z["pos"]
@@ -1606,55 +1642,79 @@ func _draw_zombie(z: Dictionary, view: Rect2) -> void:
 	var zr: float = float(kd["r"])
 	var sp: Vector2 = _w2s(zp)
 	var to: Vector2 = (player - zp).normalized()
+	var side: Vector2 = to.orthogonal()
+	var tnow: float = Time.get_ticks_msec() / 1000.0 + float(z.get("id", 0)) * 0.37
+	var legs := func(n: int, length: float, w: float, col: Color) -> void:
+		for k in n:
+			var ang: float = (float(k) / n) * TAU + sin(tnow * 6.0 + k) * 0.25
+			a.draw_line(sp, sp + Vector2.from_angle(ang) * length, col, w)
 	match kind:
 		"brute", "elite":
 			if kind == "elite":
-				a.draw_arc(sp, zr + 3.0, 0, TAU, 20, Color(1.0, 0.8, 0.25, 0.85), 2.0)
-			a.draw_rect(Rect2(sp - Vector2(zr, zr * 0.8), Vector2(zr * 2, zr * 1.6)), c.darkened(0.5))
-			a.draw_rect(Rect2(sp - Vector2(zr - 1.5, zr * 0.8 - 1.5), Vector2(zr * 2 - 3, zr * 1.6 - 3)), c)
-			a.draw_line(sp, sp + to.rotated(0.7) * (zr + 5.0), c.darkened(0.3), 3.0)
-			a.draw_line(sp, sp + to.rotated(-0.7) * (zr + 5.0), c.darkened(0.3), 3.0)
-		"swarm":
+				for k in 6:
+					var sa: float = to.angle() + PI + (k - 2.5) * 0.35
+					a.draw_line(sp, sp + Vector2.from_angle(sa) * (zr + 6.0), Color(1.0, 0.4, 0.35), 2.0)
+			legs.call(6, zr + 3.0, 2.0, c.darkened(0.45))
+			a.draw_circle(sp, zr + 1.0, c.darkened(0.55))
 			a.draw_circle(sp, zr, c)
-			a.draw_circle(sp + to * 1.5, 1.0, Color(0.9, 0.2, 0.15))
+			a.draw_arc(sp, zr * 0.6, to.angle() - 1.3, to.angle() + 1.3, 10, c.lightened(0.3), 2.0)
+			a.draw_line(sp + to * zr * 0.6 + side * 3.0, sp + to * (zr + 5.0) + side * 5.0, c.lightened(0.2), 2.5)
+			a.draw_line(sp + to * zr * 0.6 - side * 3.0, sp + to * (zr + 5.0) - side * 5.0, c.lightened(0.2), 2.5)
+		"swarm":
+			var glow: float = 0.5 + 0.5 * sin(tnow * 9.0)
+			a.draw_circle(sp, zr + 1.5, Color(c, 0.25 * glow))
+			a.draw_circle(sp, zr, c)
+			legs.call(4, zr + 1.5, 1.0, c.darkened(0.3))
 		"runner":
-			var tip: Vector2 = sp + to * (zr + 3.0)
-			a.draw_colored_polygon(PackedVector2Array([tip, sp + to.rotated(2.4) * zr, sp + to.rotated(-2.4) * zr]), c)
+			var tip: Vector2 = sp + to * (zr + 4.0)
+			a.draw_line(sp - side * zr, sp - side * (zr + 4.0) - to * 3.0, c.darkened(0.3), 1.5)
+			a.draw_line(sp + side * zr, sp + side * (zr + 4.0) - to * 3.0, c.darkened(0.3), 1.5)
+			a.draw_colored_polygon(PackedVector2Array([tip, sp + to.rotated(2.5) * (zr + 1.0), sp - to * zr * 0.6, sp + to.rotated(-2.5) * (zr + 1.0)]), c)
+			a.draw_circle(sp + to * zr * 0.8, 1.0, Color(1.0, 0.9, 0.5))
 			if float(z.get("lunge", 0.0)) > 1.2:
-				a.draw_line(sp - to * 8.0, sp - to * 2.0, Color(c, 0.5), 2.0)
+				a.draw_line(sp - to * 9.0, sp - to * 2.0, Color(c, 0.5), 2.0)
 		"spitter":
-			a.draw_circle(sp, zr, c.darkened(0.2))
+			legs.call(3, zr + 2.5, 1.5, c.darkened(0.4))
+			a.draw_circle(sp, zr, c.darkened(0.15))
 			var winding: bool = float(z.get("windup", -1.0)) >= 0.0
-			a.draw_circle(sp + to * 2.0, zr * 0.55, Color(0.6, 1.0, 0.45) if winding else c.lightened(0.2))
+			a.draw_circle(sp + to * 2.0, zr * 0.6, Color(0.7, 1.0, 0.4) if winding else c.lightened(0.25))
 			if winding:
 				a.draw_arc(sp, zr + 3.0, 0, TAU, 14, Color(0.6, 1.0, 0.45, 0.8), 1.5)
 		"bloater":
 			var fuse: float = float(z.get("fuse", -1.0))
-			var swell: float = 1.0 + (maxf(fuse, 0.0) / FUSE_S) * 0.5
-			a.draw_circle(sp, zr * swell, c.darkened(0.3))
-			a.draw_circle(sp, zr * swell - 1.5, c if fuse < 0.0 or fmod(fuse * 10.0, 1.0) > 0.5 else Color(1.0, 0.9, 0.5))
-			for i in 3:
-				a.draw_circle(sp + Vector2.from_angle(i * 2.1) * zr * 0.5, 1.5, Color(0.5, 0.65, 0.3))
+			var swell: float = 1.0 + (maxf(fuse, 0.0) / FUSE_S) * 0.5 + 0.05 * sin(tnow * 5.0)
+			a.draw_circle(sp, zr * swell, c.darkened(0.35))
+			a.draw_circle(sp, zr * swell - 1.5, c if fuse < 0.0 or fmod(fuse * 10.0, 1.0) > 0.5 else Color(1.0, 0.85, 0.95))
+			for k in 4:
+				var va: float = k * 1.57 + tnow * 0.5
+				a.draw_line(sp, sp + Vector2.from_angle(va) * zr * swell * 0.85, c.lightened(0.35), 1.0)
+		"armored":
+			legs.call(8, zr + 2.0, 1.0, Color(0.3, 0.22, 0.12))
+			a.draw_circle(sp, zr + 1.0, Color(0.25, 0.18, 0.1))
+			a.draw_circle(sp, zr, c)
+			for k in 3:
+				a.draw_arc(sp, zr - 1.0 - k * 1.6, to.angle() + PI - 1.2, to.angle() + PI + 1.2, 8, Color(0.85, 0.7, 0.45), 1.5)
 		"lurker":
 			var dorm: bool = z.get("dormant", false)
-			a.draw_circle(sp, zr, Color(c, 0.35 if dorm else 1.0))
-			a.draw_circle(sp + to * 1.5, 1.2, Color(0.9, 0.85, 1.0, 0.4 if dorm else 1.0))
-			a.draw_circle(sp + to.rotated(0.6) * 2.4, 0.8, Color(0.9, 0.85, 1.0, 0.4 if dorm else 1.0))
+			var al: float = 0.3 if dorm else 1.0
+			a.draw_circle(sp, zr + 2.0, Color(0.05, 0.03, 0.08, 0.6 * al))
+			a.draw_circle(sp, zr, Color(c, al))
+			a.draw_circle(sp + to * 2.0 + side * 1.6, 1.1, Color(0.9, 0.9, 1.0, al))
+			a.draw_circle(sp + to * 2.0 - side * 1.6, 1.1, Color(0.9, 0.9, 1.0, al))
 		"spewer":
-			a.draw_circle(sp, zr + 1.0, c.darkened(0.5))
+			a.draw_circle(sp - to * 4.0, zr * 0.8, c.darkened(0.3))
 			a.draw_circle(sp, zr, c)
-			a.draw_circle(sp + to * 3.0, 2.2, Color(0.85, 1.0, 0.35))
-		"armored":
-			a.draw_circle(sp, zr + 1.0, Color(0.2, 0.22, 0.25))
-			a.draw_circle(sp, zr, c)
-			a.draw_arc(sp, zr - 1.0, to.angle() - 1.2, to.angle() + 1.2, 8, Color(0.85, 0.88, 0.92), 2.0)
+			a.draw_circle(sp + to * 3.0, 2.2, Color(0.9, 1.0, 0.35))
+			a.draw_line(sp + to * zr, sp + to * (zr + 3.0) + side * 2.0, c.lightened(0.2), 1.0)
+			a.draw_line(sp + to * zr, sp + to * (zr + 3.0) - side * 2.0, c.lightened(0.2), 1.0)
 		_:
-			a.draw_circle(sp, zr + 1.0, c.darkened(0.6))
+			# walker: a pale three-legged drifter with a single eye.
+			legs.call(3, zr + 3.0, 1.5, c.darkened(0.35))
+			a.draw_circle(sp, zr + 1.0, c.darkened(0.55))
 			a.draw_circle(sp, zr, c)
-			a.draw_line(sp, sp + to.rotated(0.5) * (zr + 3.0), c.darkened(0.3), 1.5)
-			a.draw_line(sp, sp + to.rotated(-0.5) * (zr + 3.0), c.darkened(0.3), 1.5)
+			a.draw_circle(sp + to * 2.0, 1.6, Color(0.95, 0.3, 0.6))
 	if float(z["hp"]) < float(z["max"]):
-		a.draw_rect(Rect2(sp + Vector2(-zr, -zr - 4.0), Vector2(2.0 * zr * clampf(float(z["hp"]) / float(z["max"]), 0, 1), 1.5)), Color(0.9, 0.3, 0.2))
+		a.draw_rect(Rect2(sp + Vector2(-zr, -zr - 5.0), Vector2(2.0 * zr * clampf(float(z["hp"]) / float(z["max"]), 0, 1), 1.5)), Color(0.9, 0.3, 0.2))
 
 
 func _draw_minimap(a: Control) -> void:

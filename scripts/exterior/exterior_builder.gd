@@ -59,6 +59,8 @@ func _ready() -> void:
 		_dress_hull(geo)
 		_finish_walls.call_deferred()
 	_separate_light_layers.call_deferred()
+	if geo != null:
+		_build_tunnel_port(geo)
 
 
 # ---------------------------------------------------------------- helpers
@@ -293,7 +295,10 @@ func _build_hull(geo: Node) -> void:
 			# neighbouring wall's inner face (coplanar faces z-fight -- a
 			# flickering hull strip showed inside the Engineering tunnel).
 			var sz: Vector3 = Vector3(0.12, s.y + 0.2, s.z - 0.04) if thin_x else Vector3(s.x - 0.04, s.y + 0.2, 0.12)
-			_box(sz, c + off, _module_mat(nm), hull)
+			if nm == TUNNEL_PORT_WALL and sgn > 0.0:
+				_plate_with_port(sz, c + off, _module_mat(nm), hull)
+			else:
+				_box(sz, c + off, _module_mat(nm), hull)
 			panel_count += 1
 			_wall_plates.append({"name": nm, "c": c + off, "size": sz, "thin_x": thin_x, "n": (Vector3(sgn, 0, 0) if thin_x else Vector3(0, 0, sgn))})
 
@@ -655,6 +660,7 @@ func _keep_outs() -> Array:
 			if cam is Node3D and (cam as Node3D).is_inside_tree():
 				out.append((cam as Node3D).global_position)
 	out.append(Vector3(-4.75, 1.4, -2.75))      # outer hatch
+	out.append(TUNNEL_PORT_CENTRE + Vector3(0.1, 0, 0))   # Round 45 tunnel port
 	return out
 
 
@@ -848,3 +854,104 @@ func _separate_light_layers() -> void:
 		if lt.light_cull_mask & EXTERIOR:
 			lt.light_cull_mask = lt.light_cull_mask & ~EXTERIOR
 			interior_lights_masked += 1
+
+
+
+# ======================================================================
+# Round 45 Priority 6: a SECOND OBSERVATION WINDOW -- a small reinforced
+# port in the AIRLOCK TUNNEL's east wall, facing the EVA courtyard. From
+# the Control Room's port (x -1.2) the line of sight crosses the courtyard
+# left of antenna mast A1 and lands on it (inspected in renders), so the
+# lit tunnel interior is visible across the gap. It is REAL geometry: a
+# CSG cut through the wall, the hull plate split around it, exterior and
+# interior frames with bolts, glass with a collision pane (the hull stays
+# sealed for the leak sweep), and a dim tunnel light behind it.
+# ======================================================================
+const TUNNEL_PORT_WALL := "AirlockTunnelEastWall"
+const TUNNEL_PORT_CENTRE := Vector3(-4.3, 1.55, 2.5)     # on the wall's centre plane
+const TUNNEL_PORT_SIZE := Vector2(0.5, 0.42)             # (z width, y height)
+var tunnel_port: Node3D
+
+
+func _plate_with_port(sz: Vector3, centre: Vector3, mat: Material, parent: Node3D) -> void:
+	var z0: float = centre.z - sz.z * 0.5
+	var z1: float = centre.z + sz.z * 0.5
+	var y0: float = centre.y - sz.y * 0.5
+	var y1: float = centre.y + sz.y * 0.5
+	var pz0: float = TUNNEL_PORT_CENTRE.z - TUNNEL_PORT_SIZE.x * 0.5
+	var pz1: float = TUNNEL_PORT_CENTRE.z + TUNNEL_PORT_SIZE.x * 0.5
+	var py0: float = TUNNEL_PORT_CENTRE.y - TUNNEL_PORT_SIZE.y * 0.5
+	var py1: float = TUNNEL_PORT_CENTRE.y + TUNNEL_PORT_SIZE.y * 0.5
+	for piece in [[z0, pz0, y0, y1], [pz1, z1, y0, y1], [pz0, pz1, py1, y1], [pz0, pz1, y0, py0]]:
+		var w: float = float(piece[1]) - float(piece[0])
+		var h: float = float(piece[3]) - float(piece[2])
+		if w > 0.01 and h > 0.01:
+			_box(Vector3(sz.x, h, w), Vector3(centre.x, (float(piece[2]) + float(piece[3])) * 0.5, (float(piece[0]) + float(piece[1])) * 0.5), mat, parent)
+
+
+func _build_tunnel_port(geo: Node) -> void:
+	var wall: CSGBox3D = geo.get_node_or_null(TUNNEL_PORT_WALL) as CSGBox3D
+	if wall == null:
+		return
+	var cut := CSGBox3D.new()
+	cut.name = "TunnelPortCut"
+	cut.operation = CSGShape3D.OPERATION_SUBTRACTION
+	cut.size = Vector3(wall.size.x + 0.06, TUNNEL_PORT_SIZE.y, TUNNEL_PORT_SIZE.x)
+	wall.add_child(cut)
+	cut.global_position = TUNNEL_PORT_CENTRE
+	tunnel_port = Node3D.new()
+	tunnel_port.name = "TunnelPort"
+	get_parent().add_child.call_deferred(tunnel_port)
+	tunnel_port.position = TUNNEL_PORT_CENTRE
+	var w: float = TUNNEL_PORT_SIZE.x
+	var h: float = TUNNEL_PORT_SIZE.y
+	var rim := _m(Color(0.22, 0.23, 0.26), 0.7)
+	var bolt := _m(Color(0.55, 0.56, 0.58), 0.8)
+	# Frames: exterior (x +0.2, on the hull plate) and interior (x -0.11).
+	for side in [[0.2, true], [-0.115, false]]:
+		var x: float = side[0]
+		for e in [[Vector3(0.05, 0.08, w + 0.16), Vector3(x, h * 0.5 + 0.04, 0)], [Vector3(0.05, 0.08, w + 0.16), Vector3(x, -h * 0.5 - 0.04, 0)],
+				[Vector3(0.05, h, 0.08), Vector3(x, 0, w * 0.5 + 0.04)], [Vector3(0.05, h, 0.08), Vector3(x, 0, -w * 0.5 - 0.04)]]:
+			var b: MeshInstance3D = _box(e[0], e[1], rim, tunnel_port)
+			b.layers = EXTERIOR if side[1] else 1
+		for bz in [-1, 1]:
+			for by in [-1, 1]:
+				var bt: MeshInstance3D = _box(Vector3(0.03, 0.025, 0.025), Vector3(x + (0.03 if side[1] else -0.03), by * (h * 0.5 + 0.04), bz * (w * 0.5 + 0.04)), bolt, tunnel_port)
+				bt.layers = EXTERIOR if side[1] else 1
+	# Sun hood over the exterior frame.
+	var hood: MeshInstance3D = _box(Vector3(0.14, 0.03, w + 0.2), Vector3(0.26, h * 0.5 + 0.1, 0), rim, tunnel_port)
+	hood.layers = EXTERIOR
+	# Glass: faintly tinted, see-through from both sides.
+	var glass := MeshInstance3D.new()
+	var q := QuadMesh.new()
+	q.size = Vector2(w, h)
+	glass.mesh = q
+	glass.rotation_degrees.y = 90.0
+	var gm := StandardMaterial3D.new()
+	gm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	gm.albedo_color = Color(0.55, 0.65, 0.72, 0.12)
+	gm.metallic = 0.2
+	gm.roughness = 0.05
+	gm.cull_mode = BaseMaterial3D.CULL_DISABLED
+	glass.material_override = gm
+	glass.layers = 1 | EXTERIOR
+	glass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	tunnel_port.add_child(glass)
+	var pane := StaticBody3D.new()
+	pane.name = "TunnelPortGlass"
+	pane.collision_layer = 1
+	var cs := CollisionShape3D.new()
+	var bs := BoxShape3D.new()
+	bs.size = Vector3(0.04, h, w)
+	cs.shape = bs
+	pane.add_child(cs)
+	tunnel_port.add_child(pane)
+	# A dim tunnel light behind the port (interior only).
+	var tl := OmniLight3D.new()
+	tl.name = "TunnelPortLight"
+	tl.position = Vector3(-0.5, 0.75, 0.2)
+	tl.light_color = Color(0.85, 0.9, 1.0)
+	tl.light_energy = 0.45
+	tl.omni_range = 1.8
+	tl.light_cull_mask = 0xFFFFF & ~EXTERIOR
+	tunnel_port.add_child(tl)

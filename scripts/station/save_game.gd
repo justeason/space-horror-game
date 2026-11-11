@@ -69,7 +69,7 @@ const DAYPLAN_FIELDS := ["day_number", "workday", "_facts", "_serviced", "servic
 	"c01_status", "e06_status", "c05_status", "c02_status", "e01_status", "e02_status", "e05_status",
 	"l07_status", "l08_status", "l02_status", "e09_status", "m02_status"]
 ## Optional DayPlan fields added by later rounds (absent in older saves is fine).
-const DAYPLAN_OPTIONAL := ["shift_stats", "shift_reported", "carried_over_from", "inspections_done", "shift_history", "readings", "shift_elapsed_s", "shift_ended", "cargo_duty", "cargo_duty_id", "orders", "day_type", "_order_seq", "emergency_plan", "proficiency", "_credited", "underfed", "work_done_at_s", "awake_after_shift_s"]
+const DAYPLAN_OPTIONAL := ["shift_stats", "shift_reported", "carried_over_from", "inspections_done", "shift_history", "readings", "shift_elapsed_s", "shift_ended", "cargo_duty", "cargo_duty_id", "orders", "day_type", "_order_seq", "emergency_plan", "proficiency", "_credited", "underfed", "work_done_at_s", "awake_after_shift_s", "laptop_clock_s"]
 
 @export var save_path: String = "user://savegame.json"
 ## Round 34 Priority 10: the protected AUTOSAVE slot (written only at a
@@ -393,7 +393,8 @@ func collect_state() -> Dictionary:
 	var lv: Node = player.get_node_or_null("LaptopView")
 	d["laptop"] = {"entry": lv._saved_entry if lv != null else "", "read": lv._log_screen.read_messages.keys() if lv != null and "read_messages" in lv._log_screen else [], "game_best": lv._log_screen.game_best if lv != null and "game_best" in lv._log_screen else 0,
 		"cargo_drop": _enc(lv._log_screen._game.state_dict()) if lv != null and lv._log_screen.get("_game") != null else {},
-		"holdout": lv._log_screen.holdout.state_dict() if lv != null and lv._log_screen.get("holdout") != null else {}}
+		"holdout": lv._log_screen.holdout.state_dict() if lv != null and lv._log_screen.get("holdout") != null else {},
+		"handover_read": lv._log_screen.handover_read.keys() if lv != null and "handover_read" in lv._log_screen else []}
 	return d
 
 
@@ -618,6 +619,12 @@ func apply_state(data: Dictionary) -> Dictionary:
 			var cd: Dictionary = _dec(data.get("laptop", {}).get("cargo_drop", {}))
 			if not cd.is_empty() and not lv._log_screen._game.load_state(cd):
 				lv._log_screen._game.restart()
+		# Round 45: which handover archive notes were read.
+		if "handover_read" in lv._log_screen:
+			lv._log_screen.handover_read = {}
+			for k in Array(data.get("laptop", {}).get("handover_read", [])):
+				lv._log_screen.handover_read[int(k)] = true
+			lv._log_screen._refresh_unread()
 		# Round 42: Holdout's own wallet / upgrades / best (never an active run).
 		if lv._log_screen.get("holdout") != null:
 			lv._log_screen.holdout.load_state(data.get("laptop", {}).get("holdout", {}))

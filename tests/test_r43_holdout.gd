@@ -35,7 +35,7 @@ func _world() -> void:
 	h.start_seeded(1)
 	var vs: Vector2 = h.view_size()
 	_check("world (%s) much larger than the view (%s)" % [h.WORLD.size, vs], h.WORLD.size.x > vs.x * 3.0 and h.WORLD.size.y > vs.y * 3.0)
-	_check("landmarks: %s" % str(h.landmark_names()), h.landmark_names().size() >= 6 and "MOTEL" in h.landmark_names() and "PARK" in h.landmark_names())
+	_check("landmarks: %s" % str(h.landmark_names()), h.landmark_names().size() >= 6 and "CREW HAB" in h.landmark_names() and "BIODOME" in h.landmark_names())     # Round 45 space retheme
 	_check("roads, cars, barricades, fences, trees, streetlights, supply points", h.roads.size() == 4 and h.obstacles.any(func(o): return o["kind"] == "car") and h.obstacles.any(func(o): return o["kind"] == "barricade") and h.obstacles.any(func(o): return o["kind"] == "fence") and h.trees.size() > 10 and h.lights.any(func(l): return l["broken"]) and h.supply_points.size() >= 4)
 	var c0: Vector2 = h.cam
 	h.held = {KEY_D: true}
@@ -47,7 +47,7 @@ func _world() -> void:
 	h.build_map()
 	_check("deterministic map (same layout every time)", h.obstacles.map(func(o): return o["rect"]) == lm1)
 	# Collision: walk into the MOTEL for 3 s -- never inside it.
-	var motel: Rect2 = h.landmarks.filter(func(l): return l["name"] == "MOTEL")[0]["rect"]
+	var motel: Rect2 = h.landmarks.filter(func(l): return l["name"] == "CREW HAB")[0]["rect"]
 	h.player = Vector2(motel.get_center().x, motel.end.y + 20)
 	h.held = {KEY_W: true}
 	h.zombies = []

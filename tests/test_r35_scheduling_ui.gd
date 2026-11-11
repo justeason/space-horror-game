@@ -155,6 +155,9 @@ func _fresh() -> Node:
 	get_root().add_child(m)
 	current_scene = m
 	for i in 6: await process_frame
+	# Round 45: this suite tests mechanics, not story access -- full
+	# technician clearance (EVA / Comms gates open; gating has its own test).
+	m.get_node("DayPlan/Clearance").load_dict({"level": 3})
 	return m
 
 

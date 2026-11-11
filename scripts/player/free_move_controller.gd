@@ -26,6 +26,10 @@ extends CharacterBody3D
 @export var move_speed: float = 1.8
 ## Round 39: set every frame by DayPlan (underfed / overtired: < 1.0).
 var speed_scale: float = 1.0
+## Round 45: a guided walk target (window encounter). Real movement physics,
+## a slower pace, cancelled by ANY movement key; INF = none.
+var guide_target: Vector3 = Vector3.INF
+var guide_cancelled: bool = false
 ## Round 39/40/41: EVA free-floating. Round 41 control scheme (playtest
 ## feedback: "too complicated"): AIM AND PUSH.
 ##   W  -- the suit's jets push gently along the CAMERA's aim (look where
@@ -159,6 +163,9 @@ func _physics_process(delta: float) -> void:
 	if Input.is_key_pressed(KEY_D):
 		input_dir.x += 1.0
 	input_dir = input_dir.normalized()
+	if input_dir != Vector2.ZERO and guide_target != Vector3.INF:
+		guide_target = Vector3.INF          # the player takes over at once
+		guide_cancelled = true
 
 	var yaw: float = look_pivot.global_rotation.y if look_pivot else 0.0
 	var forward := Vector3(-sin(yaw), 0.0, -cos(yaw))
@@ -166,6 +173,15 @@ func _physics_process(delta: float) -> void:
 	var wish_dir: Vector3 = (forward * -input_dir.y + right * input_dir.x)
 	if wish_dir.length_squared() > 0.0001:
 		wish_dir = wish_dir.normalized()
+	var guide_scale: float = 1.0
+	if guide_target != Vector3.INF:
+		var to: Vector3 = guide_target - current_eye_position()
+		to.y = 0.0
+		if to.length() < 0.12:
+			guide_target = Vector3.INF
+		else:
+			wish_dir = to.normalized()
+			guide_scale = 0.55
 
 	if zero_g:
 		settling = false
@@ -174,7 +190,7 @@ func _physics_process(delta: float) -> void:
 	if settling:
 		_settle_step(delta)
 		return
-	var target_velocity: Vector3 = wish_dir * move_speed * speed_scale
+	var target_velocity: Vector3 = wish_dir * move_speed * speed_scale * guide_scale
 	velocity.x = move_toward(velocity.x, target_velocity.x, acceleration * delta)
 	velocity.z = move_toward(velocity.z, target_velocity.z, acceleration * delta)
 

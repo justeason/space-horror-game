@@ -440,6 +440,11 @@ func is_safe_state() -> bool:
 
 # -------------------------------------------------------------- sequences
 func begin_cycle_out() -> bool:
+	var clr: Node = get_tree().get_first_node_in_group(&"clearance") if is_inside_tree() else null
+	if clr != null and not clr.allows("eva"):
+		_say(clr.refusal("eva"))
+		_sfx(&"fail")
+		return false
 	var why: String = exit_blocker()
 	if why != "":
 		_say("Airlock: %s." % why)

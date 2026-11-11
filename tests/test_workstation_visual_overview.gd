@@ -49,7 +49,7 @@ func _init() -> void:
 	var t2_light: ColorRect = terminal_lights.get_node("T2/Light")
 	_check("T-1 (nominal terminal) light is green", t1_light.color.g > t1_light.color.r)
 	_check("T-2 (faulted terminal) light is red", t2_light.color.r > t2_light.color.g)
-	_check("diagnostic evidence text is still present (visual pairing, not a replacement)", screen.get_node("Control/VBox/Content/Diagnostics/Status").text.findn("Terminal T-2") != -1)
+	_check("diagnostic evidence text is still present (visual pairing, not a replacement)", (screen.get_node("Control/VBox/Content/Diagnostics/Status").text.findn("Terminal T-2") != -1 or screen.get_node("Control/VBox/Content/Diagnostics/Status").text.findn("T2  11V") != -1))
 
 	print("")
 	if _ok: print("ALL TESTS PASSED")

@@ -31,11 +31,12 @@ func _init() -> void:
 	dp.shift_elapsed_s = 0.0
 	_check("start of shift reads 08:00 (%s)" % dp.clock_text_hhmm(), dp.clock_text_hhmm() == "08:00")
 	dp.shift_elapsed_s = dur * 0.5
-	_check("halfway through the shift duration: 12:00 (%s)" % dp.clock_text_hhmm(), dp.clock_text_hhmm() == "12:00")
+	# Round 45: the active day now spans 08:00 -> 23:00 (15 h), so halfway = 15:30.
+	_check("halfway through the shift duration: 15:30 (%s)" % dp.clock_text_hhmm(), dp.clock_text_hhmm() == "15:30")
 	var f: String = _face()
-	_check("watch line 1 is DAY + time ('%s')" % f.replace("\n", " / "), f.begins_with("DAY %02d  12:00" % dp.day_number))
+	_check("watch line 1 is DAY + time ('%s')" % f.replace("\n", " / "), f.begins_with("DAY %02d  15:30" % dp.day_number))
 	_check("no work percentage on the watch", f.find("%") == -1)
-	_check("work progress still lives in the shift status (Operations): '%s'" % dp.shift_status_text(), dp.shift_status_text().find("WORK") != -1 and dp.shift_status_text().find("12:00") != -1)
+	_check("work progress still lives in the shift status (Operations): '%s'" % dp.shift_status_text(), dp.shift_status_text().find("WORK") != -1 and dp.shift_status_text().find("15:30") != -1)
 	var m0: int = dp.clock_minutes()
 	dp.shift_elapsed_s += 30.0
 	_check("time advances with the shift (%d -> %d min)" % [m0, dp.clock_minutes()], dp.clock_minutes() > m0)

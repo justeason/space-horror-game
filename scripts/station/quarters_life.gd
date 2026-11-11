@@ -32,7 +32,7 @@ var brush_pm_day: int = -1          # optional evening brush
 var basil_day: int = -1             # basil watered on this day
 var basil_dry_days: int = 0         # consecutive days without water (visible)
 var missed_dinner: bool = false     # yesterday ended without dinner (mild)
-const DINNER_FROM_MIN := 15 * 60    # dinner from 15:00 (or once work is done)
+const DINNER_FROM_MIN := 18 * 60    # dinner from 18:00 (or once work is done); Round 45 15 h day
 const BRUSH_S := 4.0
 var _leaves: Array = []
 var _brush_holder: Node3D
@@ -249,6 +249,12 @@ func _on_consumed(kind: String) -> void:
 			say("Dinner tray: savoury lentil stew. It's... fine.")
 			if _dp != null:
 				_dp.log_event("Dinner")
+		"pour":
+			basil_day = _today()
+			basil_dry_days = 0
+			say("A little water for the basil.")
+			if _dp != null:
+				_dp.log_event("Watered the basil")
 		"brush":
 			if _hour() >= DINNER_FROM_MIN and brushed_today():
 				brush_pm_day = _today()
@@ -307,13 +313,17 @@ func on_part(id: StringName) -> void:
 			if basil_watered_today():
 				say("The soil's still damp. That's enough for today.")
 				return
-			basil_day = _today()
-			basil_dry_days = 0
-			sfx(&"click")
-			say("A little water for the basil.")
-			if _dp != null:
-				_dp.log_event("Watered the basil")
-			routine_changed.emit()
+			# Round 45: a real watering gesture (reach, tilt, trickle,
+			# return); the plant updates when the pour finishes.
+			if _pending != "" or _hands_full():
+				return
+			_pending = "pour"
+			var b: Node = _body()
+			if b != null and b.has_method("begin_consume") and b.begin_consume("pour", 2.6, _basil_pos()):
+				if not b.consume_finished.is_connected(_on_consumed):
+					b.consume_finished.connect(_on_consumed)
+			else:
+				_on_consumed("pour")
 	_refresh()
 
 
@@ -386,6 +396,10 @@ func _refresh() -> void:
 
 ## The basil shows how it has been looked after: green and upright when
 ## watered, droopier and paler for every dry day (recovers when watered).
+func _basil_pos() -> Vector3:
+	return to_global(Vector3(3.45, 0.85, 2.25))
+
+
 func basil_health() -> float:
 	return clampf(1.0 - 0.25 * float(basil_dry_days), 0.25, 1.0)
 

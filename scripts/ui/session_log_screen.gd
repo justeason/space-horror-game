@@ -129,7 +129,11 @@ func _build_app_bar() -> void:
 	brand.add_theme_color_override("font_color", Color(0.95, 0.8, 0.55))
 	_bar.add_child(brand)
 	_bar.move_child(brand, 0)
-	for spec in [[&"home", "< Desktop"], [&"note_history", "History"], [&"journal_obs", "Seen"], [&"journal_notes", "Notes"], [&"save", "Save"], [&"back", "< Save & Back"], [&"close", "Close"]]:
+	# Round 45 Priority 13: in-app navigation (< Desktop, app views) is
+	# clearly separate from the ONE physical action, CLOSE LAPTOP (always
+	# shown, far right, amber; it saves everything and folds the lid).
+	# "back" (zoom out without closing) stays reachable by Esc only.
+	for spec in [[&"home", "< Desktop"], [&"note_history", "History"], [&"journal_obs", "Seen"], [&"journal_notes", "Notes"], [&"save", "Save"], [&"back", "< Save & Back"], [&"close", "CLOSE LAPTOP"]]:
 		_add_button(_bar, spec[0], spec[1])
 	_clock = Label.new()
 	_clock.name = "Clock"
@@ -378,9 +382,20 @@ func _show_view(v: StringName) -> void:
 		open_entry({"kind": "txt", "rec": _report_record(-1)})
 		return
 	if v == &"handover":
-		# The desktop shortcut LINKS to the one real record in Files.
+		# The desktop shortcut LINKS to the real records in Files: the
+		# welcome handover until it is read, then the newest released
+		# archive note if unread, else the archive folder.
 		folder = Files.HANDOVER_PATH
-		open_entry({"kind": "txt", "rec": Files.find(Files.HANDOVER_PATH, Files.HANDOVER_FILE)})
+		var welcome: Dictionary = Files.find(Files.HANDOVER_PATH, Files.HANDOVER_FILE)
+		var notes: Array = Files.handover_records(int(_day_plan.day_number) if _day_plan != null else 1)
+		if not handover_read.has(0):
+			handover_read[0] = true
+			open_entry({"kind": "txt", "rec": welcome})
+		elif not notes.is_empty() and not handover_read.has(int(notes.back()["handover"])):
+			open_entry({"kind": "txt", "rec": notes.back()})
+		else:
+			_show_view(&"files")
+		_refresh_unread()
 		return
 	var text_view: bool = v in [&"report", &"schedule", &"file", &"note", &"note_record", &"journal", &"observations", &"mail_sent"]
 	if _report != null:
@@ -407,14 +422,15 @@ func _show_view(v: StringName) -> void:
 		_entry_field.release_focus()
 		if _zoomed:
 			_hint_label.visible = true
-			_hint_label.text = "[< Save & Back] or ESC — zoom out"
+			_hint_label.text = "ESC — step back from the laptop"
 			_edit_hint_label.visible = false
 		else:
 			_set_hint_for_viewing()
 	_buttons[&"home"].visible = v != &"home"
-	_buttons[&"save"].visible = editing_log
-	_buttons[&"back"].visible = _zoomed
+	_buttons[&"save"].visible = false          # Round 45: notes autosave on close
+	_buttons[&"back"].visible = false          # Round 45: Esc zooms out; CLOSE LAPTOP closes
 	_buttons[&"close"].visible = true
+	_buttons[&"close"].add_theme_color_override("font_color", Color(1.0, 0.8, 0.4))
 	_app_title.text = APP_TITLES.get(v, "")
 	_app_title.add_theme_color_override("font_color", Color(0.75, 0.95, 0.8))
 	if v != &"home":
@@ -447,9 +463,9 @@ func _show_view(v: StringName) -> void:
 			if is_inside_tree():
 				get_tree().call_group(&"story_events", &"on_record_viewed", "sent_mail")
 		&"journal":
-			var jn: Node = get_tree().get_first_node_in_group(&"journal") if is_inside_tree() else null
-			var jl: Array = jn.lines(12) if jn != null else []
-			_report.text = "JOURNAL\n" + ("\n".join(jl) if not jl.is_empty() else "(nothing written yet — the first entry comes after your first shift)")
+			_refresh_journal()
+			if _zoomed:
+				_journal_pad().grab_focus()
 		&"observations":
 			_report.text = "\n".join(observation_lines())
 		&"schedule":
@@ -500,6 +516,10 @@ func _build_file_list() -> void:
 			entries.append({"name": sf + "/", "kind": "dir", "target": folder + "/" + sf})
 		for f in Files.list(folder):
 			entries.append({"name": f["name"], "kind": f["type"], "rec": f})
+		if folder == Files.HANDOVER_PATH:
+			# Round 45: the previous technician's released shift notes.
+			for r in Files.handover_records(int(_day_plan.day_number) if _day_plan != null else 1):
+				entries.append({"name": r["name"] + ("" if handover_read.has(int(r["handover"])) else "  ●"), "kind": "txt", "rec": r})
 		if folder == "Work/Archived Reports" and _day_plan != null:
 			# Round 44: this rotation's shift reports (DayPlan's own history).
 			for i in _day_plan.shift_history.size():
@@ -539,6 +559,10 @@ func open_entry(e: Dictionary) -> void:
 			_view = &"file"
 			_show_view(&"file")
 			_report.text = "%s\n\n%s" % [open_file, e["rec"]["text"]]
+			if int(e["rec"].get("handover", 0)) > 0:
+				handover_read[int(e["rec"]["handover"])] = true
+				_refresh_unread()
+				_refresh_note()
 			# Round 42: a few documents are NARRATIVE discoveries (read on
 			# purpose by the technician) -- the story director decides what
 			# that means; the laptop never explains it.
@@ -615,7 +639,28 @@ func schedule_lines() -> Array:
 	return out
 
 
+## Round 45: archive notes read (0 = the welcome handover); saved.
+var handover_read: Dictionary = {}
+
+
+func handover_unread() -> int:
+	var n: int = 0 if handover_read.has(0) else 1
+	for r in Files.handover_records(int(_day_plan.day_number) if _day_plan != null else 1):
+		if not handover_read.has(int(r["handover"])):
+			n += 1
+	return n
+
+
+## Today's checklist: has the note released today been read?
+func todays_handover_read() -> bool:
+	var d: int = int(_day_plan.day_number) if _day_plan != null else 1
+	return d > Files.HANDOVER_NOTES.size() or handover_read.has(d)
+
+
 func _refresh_unread() -> void:
+	if _buttons.has(&"handover"):
+		var hu: int = handover_unread()
+		_buttons[&"handover"].text = "Shift Handover (%d)" % hu if hu > 0 else "Shift Handover"
 	if _buttons.has(&"messages"):
 		var fm: Node = _family()
 		var n: int = unread_count() + (fm.unread_count() if fm != null else 0)
@@ -817,8 +862,10 @@ func _refresh_clock() -> void:
 	# shift status made the menu bar wider than the screen.
 	if _day_plan.has_method("clock_text_hhmm"):
 		# Round 43: the shift clock visibly PAUSED while a game is played.
-		_clock.text = "D%d  %s%s" % [_day_plan.day_number, _day_plan.clock_text_hhmm(), "  PAUSED" if entertainment_hold else ""]
-		_clock.add_theme_color_override("font_color", Color(0.98, 0.8, 0.35) if entertainment_hold else Color(0.85, 0.9, 0.88))
+		# Round 45: a normal running clock (no PAUSED label) -- the station
+		# clock keeps moving; only the shift budget is held.
+		_clock.text = "D%d  %s" % [_day_plan.day_number, _day_plan.clock_text_hhmm()]
+		_clock.add_theme_color_override("font_color", Color(0.85, 0.9, 0.88))
 	elif _day_plan.has_method("shift_status_text"):
 		_clock.text = _day_plan.shift_status_text()
 	else:
@@ -965,11 +1012,12 @@ static func _app_icon(id: StringName, c: Color) -> ImageTexture:
 			img.fill_rect(Rect2i(12, 7, 8, 1), ink)
 			img.fill_rect(Rect2i(12, 10, 6, 1), ink)
 		&"holdout":
-			# A survivor (blue) among three shamblers (green).
-			img.fill_rect(Rect2i(4, 4, 22, 18), Color(0.1, 0.12, 0.08))
+			# Round 45: a spaceman (white, gold visor) among three creatures.
+			img.fill_rect(Rect2i(4, 4, 22, 18), Color(0.1, 0.09, 0.14))
 			for zp in [[7, 7], [20, 8], [9, 17]]:
-				img.fill_rect(Rect2i(zp[0], zp[1], 4, 4), Color(0.45, 0.75, 0.35))
-			img.fill_rect(Rect2i(14, 12, 4, 4), Color(0.55, 0.8, 1.0))
+				img.fill_rect(Rect2i(zp[0], zp[1], 4, 4), Color(0.78, 0.4, 0.85))
+			img.fill_rect(Rect2i(14, 12, 4, 4), Color(0.93, 0.94, 0.96))
+			img.fill_rect(Rect2i(16, 12, 2, 2), Color(0.95, 0.75, 0.3))
 			img.fill_rect(Rect2i(18, 13, 3, 1), Color(1.0, 0.92, 0.45))
 	return ImageTexture.create_from_image(img)
 
@@ -991,7 +1039,13 @@ func _story() -> Node:
 
 
 func daily_note() -> Dictionary:
-	return DailyNote.build(_day_plan, _quarters_node())
+	var note: Dictionary = DailyNote.build(_day_plan, _quarters_node(), todays_handover_read())
+	# Round 45: an ordinary station duty from the story (the observation
+	# port check, after the window cue was ignored twice).
+	var we: Node = get_tree().get_first_node_in_group(&"window_encounter") if is_inside_tree() else null
+	if we != null:
+		note["items"] = Array(note["items"]) + we.today_items()
+	return note
 
 
 func daily_note_lines() -> Array:
@@ -1144,3 +1198,61 @@ func send_reply(conv: String, choice: String) -> bool:
 	var ok: bool = fm != null and fm.reply(conv, choice)
 	_build_mail()
 	return ok
+
+
+
+# ======================================================================
+# Round 45 Priority 14: AUTO-WRITING. In JOURNAL, any ordinary key press
+# (forwarded into this viewport while the laptop is focused) writes the
+# next few characters of today's pre-composed entry. Backspace, Esc and
+# shortcut chords never touch the text; held keys type at a throttled
+# pace; the technician never moves (focused laptop).
+# ======================================================================
+var _pad: Control
+var _type_t: int = 0
+
+
+func _journal() -> Node:
+	return get_tree().get_first_node_in_group(&"journal") if is_inside_tree() else null
+
+
+func _journal_pad() -> Control:
+	if _pad == null:
+		_pad = Control.new()
+		_pad.name = "JournalPad"
+		_pad.focus_mode = Control.FOCUS_ALL
+		_pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_pad.gui_input.connect(_on_pad_input)
+		$Control.add_child(_pad)
+	return _pad
+
+
+func _today_n() -> int:
+	return int(_day_plan.day_number) if _day_plan != null else 1
+
+
+func _refresh_journal() -> void:
+	var jn: Node = _journal()
+	_report.text = "\n".join(jn.page_lines(_today_n())) if jn != null else "JOURNAL"
+
+
+func journal_key(event: InputEventKey) -> bool:
+	if not event.pressed or event.ctrl_pressed or event.meta_pressed or event.alt_pressed:
+		return false
+	if event.keycode in [KEY_BACKSPACE, KEY_ESCAPE, KEY_TAB, KEY_DELETE] or (event.unicode < 32 and event.keycode != KEY_ENTER):
+		return false
+	var now: int = Time.get_ticks_msec()
+	if event.echo and now - _type_t < 45:
+		return true          # held key: throttled
+	_type_t = now
+	var jn: Node = _journal()
+	if jn == null:
+		return false
+	jn.type_keys(_today_n(), 1)
+	_refresh_journal()
+	return true
+
+
+func _on_pad_input(e: InputEvent) -> void:
+	if _view == &"journal" and e is InputEventKey and journal_key(e):
+		_pad.accept_event()

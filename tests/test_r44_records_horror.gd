@@ -26,6 +26,9 @@ func _init() -> void:
 	get_root().add_child(main)
 	current_scene = main
 	for i in 8: await process_frame
+	# Round 45: this suite tests mechanics, not story access -- full
+	# technician clearance (EVA / Comms gates open; gating has its own test).
+	main.get_node("DayPlan/Clearance").load_dict({"level": 3})
 	dp = main.get_node("DayPlan")
 	se = main.get_node("StoryEvents")
 	lg = main.get_tree().get_first_node_in_group(&"station_log")
@@ -195,14 +198,17 @@ func _voice_and_chapter() -> void:
 	dp.end_shift_now()
 	dp.reset_for_new_day()
 	await process_frame
-	_check("chapter one completes (contradiction route)", se.chapter_one_complete() and main.find_child("ChapterCard", true, false) != null)
+	# Round 45: the chapter's climax is the window encounter -- a record
+	# contradiction alone no longer ends it (test_r45_window_access covers
+	# the window route); the long quiet fallback is 8 phase-2 days.
+	_check("a contradiction alone no longer ends Chapter One (window climax required)", not se.chapter_one_complete())
 	se.milestones.erase("chapter_1")
 	se.evidence = []
 	se.phase2_day = dp.day_number
-	for i in 4:
+	for i in 8:
 		dp.end_shift_now()
 		dp.reset_for_new_day()
-	_check("quiet route: four phase-2 days without clues also end the chapter", se.chapter_one_complete())
+	_check("quiet fallback: eight phase-2 days also end the chapter", se.chapter_one_complete() and main.find_child("ChapterCard", true, false) != null)
 	_check("the story keeps going (phase not locked)", se.story_phase >= 2)
 
 

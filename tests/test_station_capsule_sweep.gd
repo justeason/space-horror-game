@@ -40,6 +40,10 @@ func _init() -> void:
 	current_scene = main
 	for i in 5:
 		await process_frame
+	# Round 45: this sweep tests GEOMETRY clearance; the three access gates are
+	# intentional barriers that open with progression (tested separately) -- full
+	# technician clearance (EVA / Comms gates open; gating has its own test).
+	main.get_node("DayPlan/Clearance").load_dict({"level": 3})
 
 	var free_body := main.get_node("FreeMoveBody")
 	var movement_controller := main.get_node("Player")

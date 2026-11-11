@@ -60,7 +60,7 @@ func record(kind: String, text: String) -> void:
 	if not entries.has(kind):
 		return
 	var arr: Array = entries[kind]
-	arr.append({"day": day(), "t": now_text(), "text": text})
+	arr.append({"day": day(), "t": now_text(), "text": text, "m": _dp.clock_minutes() if _dp != null and _dp.has_method("clock_minutes") else 0})
 	while arr.size() > CAP:
 		arr.pop_front()
 
@@ -82,8 +82,11 @@ func display_entries(kind: String, last: int = 14) -> Array:
 	var st: Node = get_tree().get_first_node_in_group(&"story_events") if is_inside_tree() else null
 	if st != null and st.has_method("record_overlays"):
 		for o in st.record_overlays(kind):
-			out.append({"day": int(o.get("day", day())), "t": String(o["t"]), "text": String(o["text"]), "overlay": true})
-	out.sort_custom(func(a, b): return int(a["day"]) < int(b["day"]) or (int(a["day"]) == int(b["day"]) and String(a["t"]) < String(b["t"])))
+			var tt: String = String(o["t"])
+			out.append({"day": int(o.get("day", day())), "t": tt, "text": String(o["text"]), "overlay": true, "m": int(tt.get_slice(":", 0)) * 60 + int(tt.get_slice(":", 1))})
+	# Round 45: ordered by real station minutes (a late night past 00:00
+	# still sorts after the evening).
+	out.sort_custom(func(a, b): return int(a["day"]) < int(b["day"]) or (int(a["day"]) == int(b["day"]) and int(a.get("m", 0)) < int(b.get("m", 0))))
 	return out.slice(maxi(out.size() - last, 0))
 
 
@@ -231,7 +234,8 @@ func load_dict(d: Dictionary) -> void:
 		entries[k] = []
 		for e in Array(src.get(k, [])):
 			if e is Dictionary:
-				entries[k].append({"day": int(e.get("day", 1)), "t": String(e.get("t", "--:--")), "text": String(e.get("text", ""))})
+				var tt: String = String(e.get("t", "--:--"))
+				entries[k].append({"day": int(e.get("day", 1)), "t": tt, "text": String(e.get("text", "")), "m": int(e.get("m", int(tt.get_slice(":", 0)) * 60 + int(tt.get_slice(":", 1))))})
 	rooms_today = {}
 	for r in Array(d.get("rooms_today", [])):
 		rooms_today[StringName(r)] = true

@@ -23,6 +23,9 @@ func _init() -> void:
 	get_root().add_child(main)
 	current_scene = main
 	for i in 8: await process_frame
+	# Round 45: this suite tests mechanics, not story access -- full
+	# technician clearance (EVA / Comms gates open; gating has its own test).
+	main.get_node("DayPlan/Clearance").load_dict({"level": 3})
 	eva = main.get_node("EvaSystem")
 	al = main.get_node("AirlockChamber")
 	fb = main.get_node("FreeMoveBody")

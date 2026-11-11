@@ -540,6 +540,21 @@ func _refresh_diagnostics() -> void:
 	_t1_light.color = Color(0.2, 0.85, 0.3, 1)
 	_t2_light.color = Color(0.85, 0.2, 0.15, 1)
 	var difficulty: StringName = GameSettings.difficulty_name()
+	# Round 45 Priority 21: SHORT labels by default ("T1 24V OK"); the full
+	# engineering readout only in DETAIL mode (the console's DIAG switch).
+	var tg: Node = get_tree().get_first_node_in_group(&"console_toggles") if is_inside_tree() else null
+	if tg == null or not bool(tg.diag):
+		var short: Array[String] = ["ENGINEERING POWER", "", "T1  24V  OK", "T2  11V  LOW"]
+		if difficulty != &"hard":
+			short.append("T2  OPEN CIRCUIT")
+		short.append("")
+		short.append("FAULT ENG-PWR-02")
+		if difficulty == &"easy":
+			short.append("CHECK T2")
+		short.append("")
+		short.append("(DIAG switch: full readout)")
+		_diagnostics_status.text = "\n".join(short)
+		return
 	var lines: Array[String] = [
 		"SUBSYSTEM DIAGNOSTIC — ENGINEERING POWER",
 		"",

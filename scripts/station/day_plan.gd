@@ -112,6 +112,13 @@ func _ready() -> void:
 	var snd: Node = preload("res://scripts/audio/station_sounds.gd").new()
 	snd.name = "StationSounds"
 	add_child(snd)
+	# Round 45: story-driven station access (clearance levels + gates).
+	var clr: Node = preload("res://scripts/station/clearance.gd").new()
+	clr.name = "Clearance"
+	add_child(clr)
+	var tg: Node = preload("res://scripts/station/console_toggles.gd").new()
+	tg.name = "ConsoleToggles"
+	add_child(tg)
 	preload("res://scripts/station/game_settings.gd").apply_one.call_deferred("brightness")
 
 
@@ -233,6 +240,9 @@ func _poll_day_active() -> void:
 
 func _process(delta: float) -> void:
 	_poll_day_active()
+	# Round 45: the displayed station clock keeps real pace on the laptop.
+	if day_active and _holds.has(&"laptop") and _holds.size() == 1:
+		laptop_clock_s += delta
 	if clock_paused():
 		delta = 0.0
 	if not shift_ended:
@@ -341,18 +351,30 @@ func shift_status_text() -> String:
 #   D. emergencies  -- their own countdown (StationStatus).
 # A new day restarts at 08:00 (shift_elapsed_s / awake_after_shift_s reset).
 # ======================================================================
+## Round 45 Priority 19: TWO clocks, never mixed up.
+##   ACTIVE SHIFT BUDGET -- shift_elapsed_s (held while the laptop is
+##     focused / while waking; ends the work period, drives scheduling);
+##   STATION CLOCK -- what every display shows. Over the active day it runs
+##     08:00 -> ~23:00 (CLOCK_DAY_SPAN_MIN across shift_duration_s(), ~10
+##     real minutes), continues at that pace through overtime, and while
+##     the laptop is focused it keeps moving at REAL pace (laptop_clock_s:
+##     1 real second = 1 station second) -- never frozen, never a jump,
+##     never backwards. Past midnight the display wraps (00:12) without a
+##     new day; only sleeping starts one. Emergencies keep their own timer.
 const CLOCK_START_MIN := 8 * 60
-const CLOCK_SHIFT_MIN := 8 * 60
+const CLOCK_DAY_SPAN_MIN := 15 * 60
+const CLOCK_SHIFT_MIN := CLOCK_DAY_SPAN_MIN       # (Round 42 name)
+var laptop_clock_s: float = 0.0
 
 
 func clock_minutes() -> int:
 	var real_s: float = shift_elapsed_s + (awake_after_shift_s if shift_ended else 0.0)
-	var m: float = CLOCK_START_MIN + real_s * CLOCK_SHIFT_MIN / maxf(shift_duration_s(), 1.0)
-	return mini(int(m), 23 * 60 + 59)
+	var m: float = CLOCK_START_MIN + real_s * CLOCK_DAY_SPAN_MIN / maxf(shift_duration_s(), 1.0) + laptop_clock_s / 60.0
+	return int(m)
 
 
 func clock_text_hhmm() -> String:
-	var m: int = clock_minutes()
+	var m: int = posmod(clock_minutes(), 24 * 60)
 	return "%02d:%02d" % [m / 60, m % 60]
 
 
@@ -660,7 +682,16 @@ func _schedule_orders() -> void:
 
 ## Never schedule mutually exclusive work: no hatch-seal inspection while a
 ## cargo transfer uses the airlock.
+## Round 45: the technician's clearance (null-safe for bare tests).
+func clearance() -> Node:
+	return get_node_or_null(^"Clearance")
+
+
 func _order_compatible(t: StringName) -> bool:
+	# Round 45: never schedule work behind a gate the technician can't pass.
+	var clr: Node = clearance()
+	if clr != null and not clr.allows_order(t):
+		return false
 	if t == &"seal" and cargo_duty == "open":
 		return false
 	if t in LONG_EVA and LONG_EVA.any(func(x): return has_open_order(x)):
@@ -1322,12 +1353,15 @@ func reset_for_new_day() -> void:
 	inspections_done = []
 	readings = {}
 	shift_elapsed_s = 0.0
+	laptop_clock_s = 0.0
 	shift_ended = false
 	# Round 43: the new day's clock waits at 08:00 until the technician is up.
 	day_active = false
 	if cargo_duty == "done":
 		cargo_duty = ""
 	day_number += 1
+	if clearance() != null:
+		clearance().refresh()      # Round 45: earned access first, then the schedule
 	_run_cargo_schedule()
 	if carry.is_empty():
 		carried_over_from = -1
@@ -1672,7 +1706,7 @@ func _start_next_workday() -> void:
 	var n: int = workday_rotation.size()
 	for i in n:
 		var w: int = workday_rotation[(day_number - 2 + i) % n]
-		if not _serviced.has(w):
+		if not _serviced.has(w) and _workday_allowed(w):
 			workday = w
 			_pick_service_variant(w)
 			return
@@ -1687,7 +1721,7 @@ func _start_next_workday() -> void:
 			blocked_services.append(w)
 	for i in n:
 		var w: int = workday_rotation[(day_number - 2 + i) % n]
-		if is_service_due(w) and _rearm.has(w) and is_service_feasible(w):
+		if is_service_due(w) and _rearm.has(w) and is_service_feasible(w) and _workday_allowed(w):
 			(_rearm[w] as Callable).call(daily_variant_seed(w))
 			_serviced.erase(w)
 			workday = w
@@ -1695,6 +1729,16 @@ func _start_next_workday() -> void:
 			return
 	# Round 33: nothing due -> a routine inspection day (alternating).
 	workday = ROUTINE_WORKDAYS[day_number % ROUTINE_WORKDAYS.size()]
+	if not _workday_allowed(workday):
+		workday = Workday.INSPECTION_ROUND
+
+
+## Round 45: a main workday is only assigned when its rooms are open.
+func _workday_allowed(w: int) -> bool:
+	var clr: Node = clearance()
+	if clr == null:
+		return true
+	return w != Workday.COMMS_CHECK or clr.allows("comms")
 
 
 func is_equipment_serviced(w: int) -> bool:

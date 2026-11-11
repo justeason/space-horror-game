@@ -237,6 +237,19 @@ func _build_story_controls(box: VBoxContainer) -> void:
 	var h2 := _row(box)
 	_button(h2, "Variant: normal", func(): _variant = "normal")
 	_button(h2, "Variant: abnormal", func(): _variant = "abnormal")
+	# Round 45: WINDOW ENCOUNTER test controls (transient; dev_reset restores).
+	var h3 := _row(box)
+	var wl := Label.new()
+	wl.text = "Window:"
+	h3.add_child(wl)
+	for spec in [["Prepare", "dev_prepare"], ["Cue", "dev_cue"], ["Go to spot", "dev_goto"], ["Spawn", "dev_spawn"], ["Gaze react", "dev_react"], ["Guide", "dev_guide"], ["Reset", "dev_reset"]]:
+		var m: String = spec[1]
+		_button(h3, spec[0], func(): se._dev_touch(); se.window.call(m); last_action = "window " + m)
+	var h4 := _row(box)
+	_button(h4, "Test investigation (tunnel check)", func(): se._dev_touch(); se._investigated("window_figure"); last_action = "window check")
+	_button(h4, "Handover: release all", func(): main.get_node("DayPlan").day_number = maxi(main.get_node("DayPlan").day_number, 10); last_action = "day >= 10 (all notes)")
+	for cl in [0, 1, 2, 3, -1]:
+		_button(h4, "Clr %s" % ("auto" if cl < 0 else str(cl)), func(): main.get_node("DayPlan/Clearance").dev_set(cl); last_action = "clearance %d" % cl)
 
 
 func _build_station_controls(box: VBoxContainer) -> void:
@@ -410,6 +423,11 @@ func story_text() -> String:
 			if st != "none":
 				inv.append("%s=%s" % [id, st])
 		lines.append("Investigation state: %s" % (", ".join(inv) if not inv.is_empty() else "nothing observed yet"))
+		if se.get("window") != null:
+			lines.append("Window encounter: stage %s · witnessed day %d · guide days %s · ready %s · observable %s" % [se.window.stage, se.window.witnessed_day, str(se.window.guide_days), se.window.is_ready_now(), se.window.observable()])
+		var clr: Node = main.get_node_or_null("DayPlan/Clearance")
+		if clr != null:
+			lines.append("Clearance: %s (earned %d%s)" % [clr.NAMES[clr.effective()], clr.earned(), " · DEV OVERRIDE" if clr.dev_override >= 0 else ""])
 		for e in se.evidence.slice(maxi(se.evidence.size() - 4, 0)):
 			lines.append("  · d%d %s [%s] %s" % [int(e["day"]), e["event"], e["kind"], String(e["text"]).left(70)])
 	return "\n".join(lines)

@@ -2212,9 +2212,16 @@ var _consume_prop: Node3D = null
 signal consume_finished(kind: String)
 
 
-func begin_consume(kind: String, duration: float = 2.4) -> bool:
+## Round 45: a REACH target (world) for gestures performed at an object
+## rather than the mouth ("pour": watering the basil). INF = the mouth.
+var _consume_target: Vector3 = Vector3.INF
+var _pour_fx: CPUParticles3D
+
+
+func begin_consume(kind: String, duration: float = 2.4, target: Vector3 = Vector3.INF) -> bool:
 	if _rig == null or _pose != Pose.STANDING or _consume_t >= 0.0:
 		return false
+	_consume_target = target
 	_consume_kind = kind
 	_consume_dur = maxf(duration, 0.6)
 	_consume_t = 0.0
@@ -2261,6 +2268,9 @@ func _pose_consume_arm(delta: float) -> void:
 			# Round 43: brushing -- a quick side-to-side scrub at the mouth.
 			ofs = CONSUME_MOUTH_HEAD + Vector3(sin(_consume_t * TAU * 3.2) * 0.03, -0.01, 0.02)
 	var mouth_rig: Vector3 = _rig.bone_pos("Head") + _rig.bone_basis("Head") * ofs
+	if _consume_kind == "pour" and _consume_target != Vector3.INF:
+		# Reach out over the plant (hand ~14 cm above / short of the pot).
+		mouth_rig = _rig.to_local(_consume_target + Vector3(0.0, 0.16, 0.0))
 	var hold_rig: Vector3 = (CONSUME_REST + _rig.EYE_POINT).lerp(mouth_rig, k)
 	var blend: float = clampf(minf(u / 0.12, (1.0 - u) / 0.12), 0.0, 1.0)
 	_rig.pose_arm_ik("Right", hold_rig, Vector3(0.9, -1.0, 0.2), blend, deg_to_rad(-80.0) * blend, 0.0)
@@ -2271,9 +2281,13 @@ func _pose_consume_arm(delta: float) -> void:
 		_consume_prop.position = hp + hb * Vector3(0.0, -0.07, 0.0)
 		var tilt: float = 0.0
 		if not _consume_kind in ["meal", "dinner", "brush"] and u >= 0.28 and u < 0.78:
-			tilt = smoothstep(0.28, 0.45, u) * (1.0 - smoothstep(0.65, 0.78, u)) * deg_to_rad(55.0)
+			tilt = smoothstep(0.28, 0.45, u) * (1.0 - smoothstep(0.65, 0.78, u)) * (deg_to_rad(55.0) if _consume_kind != "pour" else deg_to_rad(-75.0))
 		_consume_prop.basis = Basis(Vector3.RIGHT, tilt)
 		_consume_prop.visible = u > 0.03 and u < 0.97
+		if _consume_kind == "pour":
+			var fx: CPUParticles3D = _consume_prop.get_node_or_null("Drops") as CPUParticles3D
+			if fx != null:
+				fx.emitting = u > 0.4 and u < 0.7
 	if _consume_t >= _consume_dur:
 		_consume_t = -1.0
 		if _consume_prop != null:
@@ -2320,6 +2334,44 @@ func _make_consume_prop(kind: String) -> Node3D:
 			st.bottom_radius = 0.004
 			st.height = 0.05
 			add.call(st, Color(0.95, 0.95, 0.95), Vector3(0.0, 0.075, 0.0))
+		"pour":
+			# Round 45: a small personal watering can (body, handle, spout)
+			# with a short trickle of droplets from the spout tip.
+			var can := CylinderMesh.new()
+			can.top_radius = 0.035
+			can.bottom_radius = 0.04
+			can.height = 0.08
+			add.call(can, Color(0.35, 0.6, 0.45), Vector3.ZERO)
+			var spout := CylinderMesh.new()
+			spout.top_radius = 0.006
+			spout.bottom_radius = 0.009
+			spout.height = 0.09
+			add.call(spout, Color(0.35, 0.6, 0.45), Vector3(0.0, 0.02, -0.06), Vector3(-55, 0, 0))
+			var handle := TorusMesh.new()
+			handle.inner_radius = 0.012
+			handle.outer_radius = 0.022
+			add.call(handle, Color(0.25, 0.45, 0.35), Vector3(0.0, 0.02, 0.045), Vector3(0, 0, 90))
+			var drops := CPUParticles3D.new()
+			drops.name = "Drops"
+			drops.amount = 14
+			drops.lifetime = 0.35
+			drops.emitting = false
+			drops.local_coords = false
+			drops.position = Vector3(0.0, 0.05, -0.1)
+			drops.direction = Vector3(0, -1, -0.3)
+			drops.spread = 8.0
+			drops.initial_velocity_min = 0.3
+			drops.initial_velocity_max = 0.5
+			drops.gravity = Vector3(0, -6.0, 0)
+			var dm := SphereMesh.new()
+			dm.radius = 0.004
+			dm.height = 0.008
+			var dmat := StandardMaterial3D.new()
+			dmat.albedo_color = Color(0.7, 0.85, 1.0, 0.8)
+			dmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			dm.material = dmat
+			drops.mesh = dm
+			root.add_child(drops)
 		"brush":
 			# Round 43: the toothbrush (teal handle, white bristle head).
 			var hdl := BoxMesh.new()

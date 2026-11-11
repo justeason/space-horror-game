@@ -306,8 +306,6 @@ func _on_laptop_app(app: StringName) -> void:
 		&"save":
 			_laptop_view.save_entry()
 		&"close":
-			if _state == State.EDITING:
-				end_editing()
 			close_laptop()
 
 
@@ -742,6 +740,11 @@ func open_laptop(zoom_in: bool = false) -> void:
 ## The dedicated "close laptop" action. Only valid from LAPTOP (not
 ## EDITING -- end editing first, via Esc).
 func close_laptop() -> void:
+	# Round 45 Priority 13: ONE way to close the laptop -- from the focused
+	# view too. end_editing() saves the private notes (laptop_view keeps
+	# _saved_entry); letters / journal / games already save themselves.
+	if _state == State.EDITING:
+		end_editing()
 	if _state != State.LAPTOP:
 		return
 	_state = State.SITTING

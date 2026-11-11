@@ -461,11 +461,11 @@ func _refresh_cameras() -> void:
 		get_tree().call_group(&"lens_task", &"on_feed_viewed", selected_cam)
 		get_tree().call_group(&"story_events", &"on_feed_viewed", selected_cam)
 	var inf: Dictionary = net.info(selected_cam)
-	_feed.texture = net.feed(selected_cam)
-	_feed_tag.text = ("● REC  %s" % selected_cam) if _feed.texture != null else ("NO SIGNAL  %s" % selected_cam)
+	_feed.texture = net.feed(selected_cam) if monitor_on() else null
+	_feed_tag.text = ("MONITOR OFF  ·  console switch") if not monitor_on() else (("● REC  %s" % selected_cam) if _feed.texture != null else ("NO SIGNAL  %s" % selected_cam))
 	_feed_clock.text = "D%02d  %s" % [dp.day_number, dp.clock_text_hhmm()]
 	var line1: String = "%s · %s" % [selected_cam, String(inf.get("label", ""))]
-	var line2: String = "Blind spot: %s" % String(inf.get("blind", "-"))
+	var line2: String = ("Blind spot: %s" % String(inf.get("blind", "-"))) if detail_mode() else ""
 	_cam_info.text = line1
 	_cam_info.add_theme_font_size_override("font_size", fit_font_size(line1, _cam_info.size.x, 12, 9))
 	_cam_blind.text = line2
@@ -513,6 +513,26 @@ func room_duties(room: StringName) -> Array:
 	return out
 
 
+## Round 45: the physical console toggles (console_toggles.gd).
+func _toggles() -> Node:
+	return get_tree().get_first_node_in_group(&"console_toggles") if is_inside_tree() else null
+
+
+func monitor_on() -> bool:
+	var tg: Node = _toggles()
+	return tg == null or bool(tg.monitor_on)
+
+
+## DETAIL mode (the DIAG toggle): technical lines; off = short visual default.
+func detail_mode() -> bool:
+	var tg: Node = _toggles()
+	return tg != null and bool(tg.diag)
+
+
+func _clearance() -> Node:
+	return get_tree().get_first_node_in_group(&"clearance") if is_inside_tree() else null
+
+
 func _refresh_ops() -> void:
 	var st: Node = _status()
 	var rs: Dictionary = st.rooms() if st != null else {}
@@ -548,6 +568,10 @@ func _refresh_ops() -> void:
 			if st_name == "hover":
 				s2.bg_color = fill.lightened(0.12)
 			b.add_theme_stylebox_override(st_name, s2)
+		# Round 45: rooms beyond the technician's clearance are dimmed.
+		var clr: Node = _clearance()
+		var locked: bool = clr != null and not clr.room_open(room)
+		b.modulate = Color(0.45, 0.45, 0.5) if locked else Color(1, 1, 1)
 		var badge: Badge = b.get_child(0)
 		badge.severity = sev
 		badge.pulse = pulse if sev == 3 else gentle
@@ -557,7 +581,9 @@ func _refresh_ops() -> void:
 	_room_badge.severity = sev_sel
 	_room_badge.pulse = pulse
 	_room_badge.queue_redraw()
-	_room_title.text = "%s · %s" % [preload("res://scripts/station/station_status.gd").ROOM_NAMES.get(selected_room, "ROOM"), SEV_WORDS[sev_sel]]
+	var clr2: Node = _clearance()
+	var sel_locked: bool = clr2 != null and not clr2.room_open(selected_room)
+	_room_title.text = "%s · %s" % [preload("res://scripts/station/station_status.gd").ROOM_NAMES.get(selected_room, "ROOM"), "RESTRICTED" if sel_locked else SEV_WORDS[sev_sel]]
 	_room_title.add_theme_color_override("font_color", SEV_COLORS[sev_sel] if sev_sel > 0 else Color(0.8, 0.85, 0.85))
 	var duties: Array = sel["duties"]
 	if duty_buttons.size() != duties.size():
@@ -576,13 +602,18 @@ func _refresh_ops() -> void:
 			duty_buttons.append(b)
 	for i in duties.size():
 		var d: Dictionary = duties[i]
-		duty_buttons[i].text = "%s %s" % [["", "o", "<>", "!"][int(d["severity"])], d["action"]]
+		# Round 45: one short required action per line ("CLEAN VENT");
+		# the full sentence only in DETAIL (Diag) mode.
+		var label: String = String(d["action"]) if detail_mode() else String(d.get("short", d["action"])).to_upper()
+		duty_buttons[i].text = "%s %s" % [["", "o", "<>", "!"][int(d["severity"])], label]
 		duty_buttons[i].add_theme_color_override("font_color", SEV_COLORS[int(d["severity"])] if int(d["severity"]) > 0 else Color(0.9, 0.9, 0.9))
 	selected_duty = clampi(selected_duty, -1, duties.size() - 1)
-	if duties.is_empty():
-		_detail.text = "No work here." if sev_sel == 0 else ""
+	if sel_locked:
+		_detail.text = "Needs %s clearance." % clr2.NAMES[int(clr2.ROOM_LEVEL.get(selected_room, 0))]
+	elif duties.is_empty():
+		_detail.text = "" if sev_sel == 0 else ""
 	elif selected_duty >= 0:
-		_detail.text = "\n".join(_duty_details(duties[selected_duty]).slice(0, 6))
+		_detail.text = "\n".join(_duty_details(duties[selected_duty]).slice(0, 6 if detail_mode() else 2))
 	else:
 		_detail.text = ""
 	# Day actions: only those that apply now.
@@ -598,13 +629,14 @@ func _refresh_ops() -> void:
 	for d in all_d:
 		if top.is_empty() or int(d["severity"]) > int(top["severity"]):
 			top = d
-	_footer.text = ("NEXT: %s · %s" % [top["action"], preload("res://scripts/station/station_status.gd").ROOM_NAMES.get(StringName(top["room"]), "")]) if not top.is_empty() else "All assignments complete."
+	var top_label: String = (String(top["action"]) if detail_mode() else String(top.get("short", top["action"])).to_upper()) if not top.is_empty() else ""
+	_footer.text = ("NEXT: %s · %s" % [top_label, preload("res://scripts/station/station_status.gd").ROOM_NAMES.get(StringName(top["room"]), "")]) if not top.is_empty() else "ALL DONE"
 	# Round 42: the station's TRUE cabin environment (EnvironmentModel),
 	# always on the Operations page -- the reference a technician compares
 	# the physical wall readouts against.
 	var env: Node = dp.get_parent().get_node_or_null("EnvironmentModel")
 	if env != null:
-		_footer.text += "\nCABIN %.1f kPa · O2 %.1f kPa (live sensors)" % [env.pressure_kpa, env.o2_kpa]
+		_footer.text += ("\nCABIN %.1f kPa · O2 %.1f kPa (live sensors)" % [env.pressure_kpa, env.o2_kpa]) if detail_mode() else ("\nCABIN %.0f kPa · O2 %.1f" % [env.pressure_kpa, env.o2_kpa])
 
 
 func _duty_details(d: Dictionary) -> Array:
@@ -781,7 +813,7 @@ func refresh() -> void:
 	if net != null:
 		var ws: Node = dp.get_parent().get_node_or_null("WorkstationState")
 		var seated: bool = ws != null and ws.is_in_use()
-		var shown: bool = page == Page.CAMERAS and (seated or monitor_visible_to_player())
+		var shown: bool = page == Page.CAMERAS and (seated or monitor_visible_to_player()) and monitor_on()
 		net.request("workstation", selected_cam if shown else "", shown and seated)
 
 

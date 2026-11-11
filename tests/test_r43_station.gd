@@ -78,6 +78,7 @@ func _routines() -> void:
 	await process_frame
 	_check("no third meal", not body.is_consuming())
 	q.on_part(&"basil")
+	await _wait_consume()          # Round 45: watering is a real gesture now
 	_check("basil watered (once a day)", q.basil_watered_today() and q.basil_health() == 1.0)
 	var sd: Dictionary = JSON.parse_string(JSON.stringify(q.state_dict()))
 	q.load_dict({})

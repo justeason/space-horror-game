@@ -72,6 +72,9 @@ const EVENTS := {
 	&"family_misremember": {"name": "Family letter quotes something never written", "phase": 2, "late": true, "chance": 0.5, "cooldown_days": 99, "max_plays": 1, "enabled": true, "implemented": true,
 		"needs": "A family answer already delivered (not on day 1). Its displayed text gains one detail the technician never wrote; 'Sent letters' shows the real reply.",
 		"variants": ["normal"]},
+	&"window_figure": {"name": "Figure behind the tunnel port (Chapter One climax)", "phase": 2, "late": false, "chance": 0.0, "cooldown_days": 999, "max_plays": 1, "enabled": true, "implemented": true,
+		"needs": "READY after one anomaly seen (or 2 quiet phase-2 days), not day 1. Shown ONLY when visible from the Control Room port; reacts to a direct gaze; guided once a day if ignored. See window_encounter.gd.",
+		"variants": ["normal"]},
 	&"blind_spot_object": {"name": "Object in a camera blind spot", "phase": 2, "late": true, "chance": 0.4, "cooldown_days": 4, "max_plays": 2, "enabled": false, "implemented": false,
 		"needs": "NOT IMPLEMENTED (future round).", "variants": []},
 	&"radio_contact": {"name": "Unknown radio contact", "phase": 3, "late": false, "chance": 1.0, "cooldown_days": 99, "max_plays": 1, "enabled": false, "implemented": false,
@@ -148,7 +151,8 @@ const RECORD_LINKS := {
 	"note_archive": {"events": ["note_extra_item"], "text": "The note archive shows one revision, no edits -- the extra line was never issued."},
 	"environment_log": {"events": ["wrong_reading"], "text": "The environment log shows normal cabin pressure all day."},
 	"airlock_log": {"events": ["phantom_cycle"], "text": "The airlock activity log records no cycle at that time."},
-	"access_log": {"events": ["access_ghost"], "text": "The access log records an entry the technician did not make."},
+	"access_log": {"events": ["access_ghost", "window_figure"], "text": "The access log records no one in the airlock tunnel but the technician."},
+	"camera_log": {"events": ["window_figure"], "text": "The cameras logged nothing unusual in the airlock section."},
 	"sent_mail": {"events": ["family_misremember"], "text": "The sent letter does not contain the detail the answer quotes."},
 }
 const NOTE_LINES := {"normal": "Check the corridor feed before bed.", "abnormal": "Leave the corridor feed on tonight. It helps."}
@@ -162,6 +166,7 @@ var _closed_today: int = 0
 var journal: Node
 var inner: Node
 var family: Node
+var window: Node
 const ACCESS_ROOMS := {&"storage": "STORAGE", &"engineering": "ENGINEERING", &"life_support": "LIFE SUPPORT", &"communications": "COMMS"}
 const FAMILY_EXTRA := "And you said the corridor light keeps you awake. Try an eye mask?"
 const THOUGHTS := {
@@ -170,6 +175,8 @@ const THOUGHTS := {
 	"access_log": ["That's strange. I haven't been in %s today.", "奇怪。我今天没去过%s。"],
 	"sent_mail": ["That's not what I wrote.", "我不是这么写的。"],
 	"environment_log": ["Those readings shouldn't be different.", "这些读数不该不一样。"],
+	"camera_log": ["Nothing on the cameras. Nothing at all.", "摄像头什么也没拍到。什么都没有。"],
+	"window_record": ["Nobody was logged in the tunnel. Nobody but me.", "隧道里没有任何记录。只有我。"],
 	"heard_phantom": ["Was that the airlock?", "是气闸的声音吗？"],
 	"note_seen": ["Was that always on the list?", "清单上一直有这一项吗？"],
 	"mail_seen": ["When did I tell her that?", "我什么时候跟她说过这个？"],
@@ -192,6 +199,9 @@ func _ready() -> void:
 	family = load("res://scripts/story/family_mail.gd").new()
 	family.name = "FamilyMail"
 	add_child(family)
+	window = load("res://scripts/story/window_encounter.gd").new()
+	window.name = "WindowEncounter"
+	add_child(window)
 	if _dp != null:
 		if _dp.has_signal(&"order_closed"):
 			_dp.order_closed.connect(func(t): note_duty(String(t)); _closed_today += 1; journal.on_order_closed(String(t)))
@@ -363,7 +373,7 @@ func on_record_checked(record_id: String) -> void:
 			if first:
 				if journal != null:
 					journal.on_contradiction(String(ev), record_id)
-				_thought(record_id)
+				_thought("window_record" if String(ev) == "window_figure" else record_id)
 			_check_milestones()
 
 
@@ -648,8 +658,13 @@ func _check_chapter() -> void:
 		return
 	if phase2_day < 0:
 		phase2_day = day()
-	var contra: bool = evidence.any(func(e): return String(e["kind"]) == "contradiction")
-	if contra or day() >= phase2_day + 4:
+	# Round 45: the chapter's climax is the WINDOW ENCOUNTER. It ends once the
+	# figure was witnessed and followed up (a physical check or a record
+	# that contradicts it) -- or simply the morning after. A long quiet
+	# fallback (8 phase-2 days) guarantees the chapter can always end.
+	var wd: int = int(window.witnessed_day) if window != null else -1
+	var followed: bool = investigation_state("window_figure") in ["checked", "contradicted"]
+	if (wd >= 0 and (followed or day() > wd)) or day() >= phase2_day + 8:
 		_add_milestone("chapter_1")
 		if journal != null:
 			journal.on_milestone("chapter_1")
@@ -810,6 +825,9 @@ func _start(id: StringName, variant: String = "normal", dev: bool = false) -> bo
 				_abort_start()
 				return false
 			_family_overlay = {conv: FAMILY_EXTRA}
+		&"window_figure":
+			# Developer start only (normal play runs window_encounter.gd).
+			window.dev_spawn()
 	return true
 
 
@@ -865,6 +883,9 @@ func _update_active(delta: float) -> void:
 				stop(true)
 		&"access_ghost", &"family_misremember":
 			pass        # presentation lasts the day; seen when the record / letter is read
+		&"window_figure":
+			if window.stage in ["done", "locked"] or _active_t > 60.0:
+				stop(window.stage == "done")
 		&"hatch_handle":
 			_hatch_animate()
 			if _feed_on_screen("EXT-02") or _feed_on_screen("INT-07"):
@@ -915,7 +936,10 @@ func stop(seen: bool = false) -> void:
 			_record_overlay.erase("access")
 		&"family_misremember":
 			_family_overlay = {}
-	if seen and not dev:
+		&"window_figure":
+			if window.stage != "done":
+				window.dev_reset()
+	if seen and not dev and id != &"window_figure":
 		observe(String(id), EVENTS[id]["name"])
 	if not dev:
 		var st: Dictionary = state[id]
