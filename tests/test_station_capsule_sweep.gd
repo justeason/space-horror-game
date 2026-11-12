@@ -44,6 +44,9 @@ func _init() -> void:
 	# intentional barriers that open with progression (tested separately) -- full
 	# technician clearance (EVA / Comms gates open; gating has its own test).
 	main.get_node("DayPlan/Clearance").load_dict({"level": 3})
+	# Round 49: the Lower Service Deck's room gates are the same kind of
+	# intentional barrier -- open them too (geometry is what is swept here).
+	main.get_node("DayPlan/Clearance").dev_set_deck_b(4)
 
 	var free_body := main.get_node("FreeMoveBody")
 	var movement_controller := main.get_node("Player")

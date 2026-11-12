@@ -2822,3 +2822,43 @@ or:
 The ordinary technician routine is therefore not filler.
 
 **The routine is the foundation of the horror.**
+
+---
+
+# 33. Deck B — Lower Service Deck expansion (Round 49)
+
+The upper floor plan in §7 (Deck A) is unchanged and remains LOCKED. This
+section adds a second level; see MILESTONE1_DESIGN.md "Round 49" for the
+full layout, room/task matrix and coverage audit.
+
+**IMPLEMENTED / LOCKED BY THIS ROUND**
+- Deck A = the operational level; Deck B = the Lower Service Deck beneath
+  it (environmental processing, thermal machinery, fabrication, research,
+  hydroponics, medical/exercise, cargo receipt, long-term archive).
+- The only connection is the B-00 vertical access shaft from a vestibule
+  off Engineering's north wall into the Lower Junction, plus a one-part
+  service hoist beside it. Microgravity: the shaft is climbed hand over
+  hand; the boots release in the tube and engage on each deck. Never a
+  teleport, never a menu.
+- Deck B access is story-driven: nothing below Deck A before Chapter One
+  is complete; then utilities, logistics, science and records open in
+  tiers through work done on the deck (records also through a Chapter Two
+  record discrepancy).
+- Upper Storage keeps usable parts; lower Cargo receives, checks, sorts and
+  transfers shipments. Upper Engineering monitors; lower Thermal Control
+  runs the main coolant loop.
+- Workload: more possible jobs, not more jobs per day (≤ 1 new lower-deck
+  order a day, ≤ 2 open).
+
+**PROPOSED FOR LATER (not canon)**
+- Chapter Two theme: "I know how this place works, but the records and my
+  experiences don't agree." Candidate endings: a record of work done while
+  the technician slept; an archive snapshot of an impossible configuration;
+  a second technician crossing a sealed corridor on camera.
+- B-10 (sealed attitude-control electronics) and B-11 (service stub) are
+  reserved expansion interfaces.
+
+**DEFERRED**: E12, L09, L10, M06, A01, A06 as full tasks; an EVA radiator
+panel job; a full M07 transmission investigation (architecture exists,
+story-inactive). The unknown contact's identity and any explanation of the
+anomalies remain undecided.

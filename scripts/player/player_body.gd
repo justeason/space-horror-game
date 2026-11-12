@@ -1508,6 +1508,10 @@ func _compose_standing(delta: float) -> void:
 	_update_rig_walk(delta)
 	if floating:
 		_pose_eva_legs(delta)
+	var climb_goal: float = float(_climb.get("blend", 0.0)) if not _climb.is_empty() else 0.0
+	_climb_w = move_toward(_climb_w, climb_goal, delta * 5.0) if delta > 0.0 else climb_goal
+	if _climb_w > 0.001 and not _climb.is_empty():
+		_pose_climb_legs()
 	if _pose_state != null:
 		_rig.pose_look(_pose_state.spine_pitch, _pose_state.neck_pitch, _pose_state.head_pitch)
 	# Round 32: bend at the waist to place a part on a LOW surface (bed);
@@ -1522,7 +1526,9 @@ func _compose_standing(delta: float) -> void:
 	# arm exactly like carrying.
 	var carrying: bool = carry != null and (carry.is_carrying() or (carry.has_method("is_reaching") and carry.is_reaching()))
 	_carry_blend = move_toward(_carry_blend, 1.0 if carrying else 0.0, delta * 4.0) if delta > 0.0 else (1.0 if carrying else 0.0)
-	if _watch_raise_progress > 0.0:
+	if _climb_w > 0.001 and not _climb.is_empty():
+		_pose_climb_arms()
+	elif _watch_raise_progress > 0.0:
 		_pose_watch_arm()
 	elif floating or not _eva_reach.is_empty():
 		_pose_eva_arms(delta)
@@ -2531,4 +2537,57 @@ func _pose_eva_arms(delta: float) -> void:
 		if blend <= 0.0:
 			continue
 		_rig.pose_arm_ik(side, tgt, Vector3(sgn * 0.9, -1.0, 0.25), blend, 0.0, 0.0)
+	_remember_arm()
+
+
+# ======================================================================
+# Round 49: CLIMBING (vertical access shaft). vertical_shaft.gd hands the
+# body world-space holds every frame -- {hand_l, hand_r, foot_l, foot_r,
+# blend} -- and the rig reaches them with the same arm / leg IK as every
+# other pose (limb lengths fixed, a straight-arm reach at most): the hands
+# close on the rungs the camera can see, the boots brace on rungs below.
+# {} = no climb (the pose eases back out).
+# ======================================================================
+var _climb: Dictionary = {}
+var _climb_w: float = 0.0
+
+
+func set_climb_pose(d: Dictionary) -> void:
+	_climb = d
+
+
+func climb_pose_weight() -> float:
+	return _climb_w
+
+
+func _climb_local(key: String) -> Vector3:
+	return _rig.global_transform.affine_inverse() * (_climb[key] as Vector3)
+
+
+func _pose_climb_legs() -> void:
+	for side in ["Right", "Left"]:
+		var key: String = "foot_r" if side == "Right" else "foot_l"
+		if not _climb.has(key):
+			continue
+		var tgt: Vector3 = _climb_local(key)
+		var hip: Vector3 = _rig.bone_pos(side + "UpperLeg")
+		var to: Vector3 = tgt - hip
+		if to.length() > 0.86:
+			tgt = hip + to.normalized() * 0.86
+		var rest: Vector3 = _rig.bone_pos(side + "Foot")
+		_rig.pose_leg_ik(side, rest.lerp(tgt, _climb_w))
+
+
+func _pose_climb_arms() -> void:
+	for side in ["Right", "Left"]:
+		var key: String = "hand_r" if side == "Right" else "hand_l"
+		if not _climb.has(key):
+			continue
+		var sgn: float = 1.0 if side == "Right" else -1.0
+		var local: Vector3 = _climb_local(key)
+		var sh: Vector3 = _rig.bone_pos(side + "UpperArm")
+		var to: Vector3 = local - sh
+		if to.length() > 0.62:
+			local = sh + to.normalized() * 0.62
+		_rig.pose_arm_ik(side, local, Vector3(sgn * 0.9, -0.6, 0.4), _climb_w, 0.0, 0.0)
 	_remember_arm()

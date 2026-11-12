@@ -24,7 +24,9 @@ func _init() -> void:
 	_check("four visible sections (Round 38: OPERATIONS / CAMERAS / RECORDS / SYSTEM)", shell.tab_buttons.size() == 4 and shell.tab_buttons.map(func(b): return b.text) == ["OPERATIONS", "CAMERAS", "RECORDS", "SYSTEM"])
 	_check("the old seven-section layout is not shown", not screen.get_node("Control").visible)
 	_check("Operations (map) is the default page", shell.page == shell.Page.OPS and shell._map.visible)
-	_check("map has all eight rooms of the real topology", shell.room_buttons.size() == 8)
+	# Round 49: the map also carries the Lower Service Deck's nine rooms
+	# (DECK B tab); Deck A's eight rooms are all still there.
+	_check("map has all eight rooms of the real topology", screen.ROOMS.all(func(r): return shell.room_buttons.has(r["id"])) and shell.room_buttons.size() == 8 + 9)
 	# Day 1: check in from the map page, by clicking.
 	_check("CHECK IN button offered before check-in", shell.action_buttons["checkin"].visible)
 	_check("map: Control Room ROUTINE (orange) before check-in", stn.room_severity(&"control_room") == 1)

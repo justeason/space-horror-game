@@ -47,6 +47,24 @@ const ORDER_LEVEL := {&"breaker": 1, &"vent": 1, &"seal": 3, &"data": 1, &"therm
 
 var level: int = 0
 var dev_override: int = -1          # -1 = none (never saved)
+## Round 49: LOWER SERVICE DECK (Deck B) access, a separate ladder of tiers
+## on top of L3 -- story-driven first, then training on the deck itself:
+##   T1 UTILITIES   Lower Junction, Water Recovery, Thermal Control. Granted
+##                  when Chapter One is complete (the window encounter's
+##                  chapter card) AND the technician holds L3 -- the opening
+##                  of Chapter Two. Never during Chapter One.
+##   T2 LOGISTICS   + Workshop, Cargo (2 Deck B jobs closed).
+##   T3 SCIENCE     + Laboratory, Hydroponics, Medical (5 Deck B jobs).
+##   T4 RECORDS     + Data Archive (8 Deck B jobs, or a Chapter Two record
+##                  discrepancy noticed -- the archive becomes relevant).
+## Like the level, the tier only rises; the developer override is
+## transient (never saved).
+var deck_b_level: int = 0
+var deck_b_jobs: int = 0
+var dev_deck_b: int = -1
+const DECK_B_NAMES := ["NONE", "UTILITIES", "LOGISTICS", "SCIENCE", "RECORDS"]
+const DeckBTasks = preload("res://scripts/deck_b/deck_b_tasks.gd")
+const DeckBLayout = preload("res://scripts/deck_b/deck_b_layout.gd")
 var _gates: Dictionary = {}         # id -> {body, lamp_mat, label}
 var _msg_cool: float = 0.0
 var _dp: Node
@@ -62,6 +80,8 @@ func _ready() -> void:
 		for sig in [&"day_started", &"task_completed", &"order_closed"]:
 			if _dp.has_signal(sig):
 				_dp.connect(sig, func(_a): refresh())
+		if _dp.has_signal(&"order_closed"):
+			_dp.order_closed.connect(_on_order_closed_b)
 
 
 func effective() -> int:
@@ -100,7 +120,78 @@ func refresh() -> void:
 		for l in range(old + 1, level + 1):
 			_announce(l)
 		level_changed.emit(level)
+	var eb: int = earned_deck_b()
+	if eb > deck_b_level:
+		var oldb: int = deck_b_level
+		deck_b_level = eb
+		for t in range(oldb + 1, deck_b_level + 1):
+			_announce_deck_b(t)
+		level_changed.emit(level)
 	_apply()
+
+
+# ------------------------------------------------------- Round 49: Deck B
+func _on_order_closed_b(t: StringName) -> void:
+	if DeckBTasks.is_deck_b(t):
+		deck_b_jobs += 1
+		refresh()
+
+
+func deck_b_tier() -> int:
+	return dev_deck_b if dev_deck_b >= 0 else deck_b_level
+
+
+func _story() -> Node:
+	return get_tree().get_first_node_in_group(&"story_events") if is_inside_tree() else null
+
+
+func earned_deck_b() -> int:
+	if level < 3:
+		return 0
+	var st: Node = _story()
+	if st == null or not st.has_method("chapter_one_complete") or not st.chapter_one_complete():
+		return 0
+	var t: int = 1
+	if deck_b_jobs >= 2:
+		t = 2
+	if t >= 2 and deck_b_jobs >= 5:
+		t = 3
+	if t >= 3 and (deck_b_jobs >= 8 or (st.has_method("has_milestone") and st.has_milestone("ch2_records"))):
+		t = 4
+	return t
+
+
+func deck_b_room_open(room: StringName) -> bool:
+	if not DeckBLayout.ROOMS.has(room):
+		return true
+	var need: int = int(DeckBLayout.ROOMS[room][2])
+	return need > 0 and deck_b_tier() >= need
+
+
+func _announce_deck_b(t: int) -> void:
+	if not is_inside_tree():
+		return
+	if t == 1:
+		# Chapter Two opens: the systems note the day (letters / pacing);
+		# the story records the milestone (never a phase change by itself).
+		var sysb: Node = get_tree().get_first_node_in_group(&"deck_b_systems")
+		if sysb != null and int(sysb.tier1_day) < 0 and _dp != null:
+			sysb.tier1_day = int(_dp.day_number)
+		var st: Node = _story()
+		if st != null and st.has_method("_add_milestone"):
+			st._add_milestone("ch2_opened")
+	get_tree().call_group(&"station_ai", &"event", StringName("access_deck_b_%d" % t))
+	var lg: Node = get_tree().get_first_node_in_group(&"station_log")
+	if lg != null:
+		lg.record("access", "CLEARANCE LOWER SERVICE DECK · %s granted · TECH-1" % DECK_B_NAMES[t])
+	if _dp != null and _dp.has_method("log_event"):
+		_dp.log_event("Clearance: Lower Service Deck — %s" % DECK_B_NAMES[t])
+
+
+func dev_set_deck_b(t: int) -> void:
+	if OS.is_debug_build():
+		dev_deck_b = clampi(t, -1, 4)
+		level_changed.emit(effective())
 
 
 func _announce(l: int) -> void:
@@ -113,10 +204,18 @@ func _announce(l: int) -> void:
 
 
 func room_open(room: StringName) -> bool:
+	if DeckBLayout.ROOMS.has(room):
+		return deck_b_room_open(room)
 	return effective() >= int(ROOM_LEVEL.get(room, 0))
 
 
 func allows_order(type: StringName) -> bool:
+	if DeckBTasks.is_deck_b(type):
+		# Every Deck B job (and the design-gap jobs that live on Deck B's
+		# systems) needs its tier: nothing is assigned behind the shaft
+		# hatch or a lower-deck gate. The EVA-dependent radiator panel path
+		# also needs L3 (checked by the job itself).
+		return effective() >= 3 and deck_b_tier() >= int(DeckBTasks.entry(type).get("tier", 1))
 	return effective() >= int(ORDER_LEVEL.get(type, 0))
 
 
@@ -234,10 +333,13 @@ func _process(delta: float) -> void:
 
 
 func state_dict() -> Dictionary:
-	return {"level": level}
+	return {"level": level, "deck_b_level": deck_b_level, "deck_b_jobs": deck_b_jobs}
 
 
 func load_dict(d: Dictionary) -> void:
 	level = clampi(int(d.get("level", 0)), 0, 3)
+	deck_b_level = clampi(int(d.get("deck_b_level", 0)), 0, 4)
+	deck_b_jobs = maxi(int(d.get("deck_b_jobs", 0)), 0)
 	dev_override = -1
+	dev_deck_b = -1
 	refresh()

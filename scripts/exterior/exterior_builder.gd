@@ -278,6 +278,10 @@ func _build_hull(geo: Node) -> void:
 			panel_count += 1
 			continue
 		if _is_floor_slab(b):
+			# Round 49: the shaft vestibule's floor has the B-00 hatch in it;
+			# Deck B's shaft builds the plating around the tube instead.
+			if nm == "ShaftVestibuleFloor":
+				continue
 			_box(Vector3(s.x + 0.2, 0.12, s.z + 0.2), c - Vector3(0, s.y * 0.5 + 0.06, 0), _hull_grey, hull)
 			panel_count += 1
 			continue

@@ -11355,3 +11355,297 @@ analysis / routing / timing, not by ear. No human-sounding inner voice
 exists on this machine (captions + exact instructions). Windows build not
 run on Windows. Optional narrative polish (Priority 35) not added: the
 critical fixes took the round.
+
+---
+
+# Round 49 — The Lower Deck expansion (Deck B), vertical traversal, new maintenance systems, design-bible gaps, Chapter Two foundations
+
+Baseline: 85b3db9 (Round 48). Baseline suite run before editing: 168/169 —
+`test_r35_save` failed once ("StationLog state restored exactly") and passed
+when rerun alone on the same code: a pre-existing, timing-sensitive check.
+
+## A. Purpose and layout (scripts/deck_b/deck_b_layout.gd = single source)
+
+Deck A (the existing operational level) is LOCKED and unchanged except for
+one new connection: a door in Engineering's north wall (x −5.1..−4.2) into
+a small **shaft vestibule** in the courtyard north of Engineering (it was an
+empty space between Engineering, Storage and the Life Support bend: no
+corridor, panel, EVA route, window or camera sightline crosses it). The
+decorative `EngineeringCabinet2` was narrowed (0.38 m) to make room for the
+service hoist; the capture port beside it is untouched.
+
+Deck B lies under the station: floor top y −3.9, rooms 3.1 m clear, service
+corridors 2.6 m, a ~0.6 m structural gap between the two pressure hulls.
+"Up/down" are operational labels (magnetic-boot floor plane), not gravity.
+
+| Space | x | z | Purpose |
+|---|---|---|---|
+| B-00 shaft | (−4.45, 8.15), r 0.5 | | vertical access tube, Deck A hatch → Lower Junction |
+| B-01 Lower Junction | −5.4..−2.2 | 6.4..9.6 | utility spine hub: Bus B panel, emergency lighting, repeater |
+| Service spine | −2.2..2.6 | 7.4..8.6 | exposed piping / trays; Water + Thermal share it |
+| B-02 Water Recovery | −1.9..1.7 | 8.6..11.0 | raw/potable tanks, MF-2 bed, P-201, analyzer |
+| B-03 Thermal Control | −1.9..1.7 | 4.0..7.4 | main coolant loop, P-301/P-302, manifold, radiators, HX-1 |
+| B-04 Workshop | −5.6..−2.2 | 3.0..6.4 | bench, vise, test bench, torque stand, fabricator, tool board |
+| B-05 Payload Lab | −6.2..−3.0 | 12.2..15.0 | glovebox, optical bench, imaging, incubator, PDU |
+| B-06 Hydroponics | −3.0..−0.4 | 12.2..14.8 | three trays, LED banks, reservoir |
+| B-07 Medical / Exercise | −11.6..−9.0 | 10.2..13.4 | exam bench, monitor, dosimetry, ergometer, supplies |
+| B-08 Cargo / Docking | −9.6..−6.6 | 5.0..9.0 | berthing port CBP-1, cargo bags, sorting rack |
+| B-09 Data Archive | 5.2..8.0 | 7.8..10.8 | racks R1-R3, console, backups, fans, tapes (isolated: end of the east branch) |
+| B-10 (reserved) | 2.6..4.6 | 4.4..7.4 | sealed attitude-control electronics compartment; closed bulkhead hatch; no work |
+| B-11 (reserved) | −8.6..−7.4 | 9.0..10.2 | service stub off Cargo ending in a pressure bulkhead (future expansion) |
+
+Builder (deck_b_builder.gd): walls are built once per shared edge with the
+doorway cut in it (2.2 m doors, lintel to the higher ceiling), corner posts,
+framed pressure doorways with hazard thresholds and room signs, handrails
+(interrupted at doorways), cable trays, coolant/water lines, emergency
+strips; exterior plating on every outward face / roof / underside,
+structural connectors to Deck A, coolant risers to Engineering's radiators,
+the cargo berthing ring, module labels, hull lights.
+
+Lighting: ceiling SPOTS pointing down (a downward cone cannot reach Deck A)
++ fills on Deck B's own visual layer (1<<13); every Deck A light ignores
+that layer, so no light crosses the floors. Performance: Deck B's interior
+is hidden while the technician is on Deck A away from the shaft and no
+Deck B feed is displayed (collision and logic keep running).
+
+## B. Vertical shaft (vertical_shaft.gd)
+
+Grip-to-grip traversal (6 stations: top landing, mount, 2 hand-over-hand,
+bottom, bottom landing), ~1 s animated motion each: camera, both hands
+(rig arm IK to the visible rungs / the stanchions above the hatch), both
+feet (leg IK to rungs), boots release/engage. CLICK the ladder to start;
+W or a click continues (holding W chains), S reverses; look within ±70°.
+The hatch lid is pushed open / pulled shut by hand and is shut whenever no
+one is in the shaft (the floor stays walkable). Interruptions: saving
+mid-shaft stores the nearest landing; emergencies never drop the climber;
+`abort_to_landing()`; Deck B access is required to go down, never to come
+up. Bulky parts (`bulky`) are refused on the ladder; the **service hoist**
+(Engineering ⇅ Lower Junction) carries one part, saved as owner "hoist".
+Sounds: glove grip, rung contact, boot release/engage, cloth, hatch,
+structure creak, hoist motor/latch (synthesised, positional).
+
+## C. Navigation, map, cameras, access
+
+* MovementNode gains `deck` and `ladder_neighbors`; 53 Deck B nodes + 2 new
+  Deck A nodes join the one graph; the ladder is the only cross-deck link.
+  `scripts/navigation/station_graph.gd`: shortest routes (Dijkstra), access
+  predicate, nearest node per deck, emergency egress up the shaft.
+* Workstation OPERATIONS map: DECK A / DECK B selector; Deck B drawn from
+  the layout (rooms, corridors, sealed spaces, B-00 marker, technician
+  position, badges); outlines + "ACCESS RESTRICTED" before access.
+* Cameras INT-09 Lower Junction (frames the shaft exit), INT-10 Service
+  Spine, INT-11 Cargo, INT-12 Archive Branch (frames the closed branch) —
+  built with the network, listed only once Deck B access exists.
+* Access (clearance.gd): Deck B tiers on top of L3 — T1 UTILITIES (B-01..03)
+  when **Chapter One is complete** and L3 is held; T2 LOGISTICS (workshop,
+  cargo) after 2 Deck B jobs; T3 SCIENCE (lab, botany, medical) after 5; T4
+  RECORDS (archive) after 8 jobs or the `ch2_records` story milestone. Gates
+  (barrier + lamp) at the workshop, cargo, north-wing and archive doors.
+  The assistant announces each tier; the access log records it.
+
+## D. Systems (deck_b_systems.gd, authoritative)
+
+Water (raw → P-201 → MF-2 bed → potable; batch auto-cycles; consumption from
+the Living Quarters routine; product conductivity from bed wear), thermal
+(P-301/P-302, branches V1 Eng+battery / V2 lab+archive / V3 bypass, radiator
+loops, heat loads from Bus A settings / payload / battery charge; equipment
+temperatures with lag; returns capped by equipment protection), Bus B power
+(B1–B4 behind breakers, FEED-1 from Bus A ENG-AUX, FEED-2 essential; loads
+from the running equipment; overload trips; FEED-1 intermittent chatter),
+hydroponics, lab (incubator vs heater and lab-branch flow), medical vitals
+from the REAL state (tiredness, underfed, drinks, cabin O2, exercise),
+service history (station log kind `maintenance`, workstation RECORDS tab
+SERVICE), visits (access log lines for Deck B rooms), player part
+placements. Fixed 0.25 s ticks; the night is caught up only on a real new
+day (DayPlan also emits day_started after a load).
+
+## E. Room / task matrix (all listed tasks are playable end to end)
+
+| Room | Access | Tasks (id → procedure) | Outcomes used | Links |
+|---|---|---|---|---|
+| B-01 | T1 | b01_utility (read B1–B4 + feeds, reset a tripped breaker only after NO SHORT, re-read); b01_lights (TEST: deck lights really dim, strips glow; failed zone module replaced from the spare clip; RESET); b01_repeater (reseat antenna lead); l06_condensation (L06: IR riser surface vs dew point; insulation gap OR local vent off) | verified_normal, repaired, fluctuation | trips unpower habitat lights / medical |
+| B-02 | T1 | b02_filter (ΔP, isolation interlock, spent bed out as a real part, IX-1 rejected by fit, MF-2 from finite spares, product sample PASS); b02_sample (COND/TURB/TEMP, QA refuses a wrong call, FAIL → recirculate → resample); b02_pump (L08: air lock / seal leak / worn bearing by sound + pressure + vibration + drip; priming; seal kit; bearing deferred → workshop); b02_flow; b02_tank (sight glasses vs sensors → sensor fault) | repaired, verified_normal, sensor_fault, deferred | potable quality / reserve |
+| B-03 | T1 | b03_inspect (E08, 5 points); b03_balance (handwheels, bands, 6 s hold); b03_pump (acoustic diagnosis: bearing / restriction / cavitation / loose mount; strainer on standby pump, accumulator charge, bolts); b03_radiator (actuator stuck → isolate, replace VA-3; panel degraded → EVA: deferred / needs_clearance); b03_overheat (fault-raised: standby pump, controller reset, primary) | repaired, inconclusive, deferred, needs_clearance | Engineering / battery / lab / archive temps |
+| B-04 | T2 | b04_bench (leads, range, limited power, reading from the part's condition, sorted tray); b04_reassembly / b04_recondition (vise, screws, cover order, worn sub-component, correct spare, bench test → same instance serviceable); b04_torque (diagonal pairs, over-torque, back off); b04_fab (bed level, templates, EVA parts refused, material consumed, magnifier inspection); b04_tools | verified_normal, repaired | P-301 bearing chain, relay for FEED-1 |
+| B-05 | T3 | b05_seal (leak test, clamp ring / pinhole glove); b05_transfer (outer/inner door interlocks, purge, gloves); b05_optics (tilt X/Y, focus, sensor rotation → real spot, ≥95 %); b05_incubator (trend diagnosis: heater fuse vs over-fed lab coolant branch → fix at B-03); b05_specimen (focus, reference card, classification recorded); b05_power (E09/E10: intermittent FEED-1 → reroute B2 at Engineering; transient → NOT REPRODUCED) | verified_normal, repaired, inconclusive, not_reproduced | cross-room with B-03 and Engineering |
+| B-06 | T3 | b06_lights (PAR, GL-6 module, schedule); b06_nutrient (EC/pH dosing, wrong dose recoverable); b06_irrigation (blocked emitter / leak / sensor fault — plants respond); b06_clean; b06_observe (gaze + record) | repaired, sensor_fault, verified_normal, inconclusive | Bus B B3 power; basil untouched |
+| B-07 | T3 | b07_health (strap, clip, real vitals); b07_dosimeter (reference CAL, gain adjust, dose = station estimate); b07_supplies (flag → deferred resupply); b07_ergo (zero / span); b07_kit (seal, contents, restore, reseal); optional exercise session (seated, pedalling animates crank + feet) | verified_normal, inconclusive, deferred, repaired | vitals from DayPlan / quarters / environment |
+| B-08 | T2 | b08_manifest (scan, straps, open, line-by-line MATCH refused when the bags disagree, sign); b08_discrepancy (S03: MISSING / MISLABELLED / DAMAGED / COUNT ERROR from evidence); b08_restraint (unstrapped bags drift); b08_seal (latches, vestibule equalisation, leak check, hatch interlock; capped port when no vehicle); b08_transfer (S02 sorting, same instances); b08_damaged (quarantine) | verified_normal, inconclusive, no_part, repaired, deferred | shipments every 6 days after T2 |
+| B-09 | T4 | b09_racks; b09_cartridge (isolate, real blank cartridge, failed one refused, rebuild index, integrity); b09_backup (snapshot checksums, restore eligibility — never touches saves); b09_correlate (C07: real logs aligned; batched writes legitimate); b09_fans (filter mat / fan swap); b09_unknown (story-gated) | verified_normal, inconclusive, repaired | snapshots of the real logs each day |
+| Engineering (Deck A) | T1/T3 | e11_battery (E11: battery temperature from the loop; charge limit really lowers the load; fix V1 at B-03); BUS B TRANSFER panel (E10) | repaired | |
+
+Scheduling (DayPlan, one schedule): Deck B routine/occasional types are
+candidates only behind their tier; at most ONE new Deck B order a day and
+TWO open; the first order at a new tier comes from that tier (the first one
+is the practical utility check); cooldowns per type; fault / story types are
+raised only by a real fault (`raise_order`, outside the budget) or a beat.
+Orders store an `outcome`. 49 registered types.
+
+## F. Design-bible coverage audit (GAME_DESIGN §27-32 vs the code)
+
+IMPLEMENTED = complete procedure; PARTIAL = some logic exists; NOT = none.
+
+| ID | Status after R49 | Where / note |
+|---|---|---|
+| C01 / C02 / C05 | IMPLEMENTED (earlier) | check-in, diagnostic, verify |
+| C03 / C04 | PARTIAL (earlier); R49 adds sensor-vs-truth comparisons | b02_tank, b06 moisture sensor |
+| C06 | PARTIAL | live feeds only, no recorded playback |
+| C07 | IMPLEMENTED (R49) | b09_correlate + SERVICE records tab |
+| C08 | PARTIAL → R49 manual tests | b01_lights TEST, workshop bench |
+| E01 E02 E05 E06 | IMPLEMENTED (earlier) | electrical panel chain |
+| E03 / E04 | PARTIAL | panel procedure variants; no standalone fuse / connector order |
+| E07 | PARTIAL (R49 battery monitor) | read inside e11 |
+| E08 | IMPLEMENTED (R49) | b03_inspect (main loop lives in B-03) |
+| E09 | IMPLEMENTED (R49) | FEED-1 intermittent, dropout counter, NOT REPRODUCED outcome |
+| E10 | IMPLEMENTED (R49) | Bus B transfer of B2 on the real bus |
+| E11 | IMPLEMENTED (R49) | e11_battery |
+| E12 | NOT | deferred |
+| L01-L04, L07 | IMPLEMENTED (earlier) | |
+| L05 | PARTIAL | hatch seal + leak detector |
+| L06 | IMPLEMENTED (R49) | l06_condensation |
+| L08 | IMPLEMENTED (R49) | b02_pump (the old "l08" id is the valve-routing prototype, unchanged) |
+| L09 / L10 | NOT | deferred (emergency tier / CO2 model) |
+| M01-M03 | IMPLEMENTED (earlier) | |
+| M04 / M05 | PARTIAL | patch bay / backup receiver |
+| M06 | NOT | deferred |
+| M07 | PARTIAL (R49 architecture, story-inactive) | unknown_signal_fragment |
+| S01 | IMPLEMENTED (earlier) | |
+| S02 / S03 | IMPLEMENTED (R49, Deck B logistics) | b08_transfer / b08_discrepancy |
+| S04 | PARTIAL | discrepancy MISSING outcome + cargo_missing_item beat |
+| A03 A04 A05 | IMPLEMENTED (earlier) | solar / lens / antenna / coupler / hinge |
+| A01 / A02 / A07 | PARTIAL | suit locker, airlock pressure, solar condition duty |
+| A06 | NOT | deferred |
+
+Reusable primitives (deck_b_room.gd): TaskAdapter (several orders per
+room), Procedure, handwheel, readout, button/lamp, Rack (real slots,
+lockable), spawn/consume part, machine loops with acoustic occlusion,
+close_task + service record, proficiency hint level.
+
+## G. Inventory, save/load
+
+Deck B parts (deck_b_part.gd, 17 kinds) are ordinary SaveGame items with an
+instance payload (serial, condition, grade, calibrated, state, history).
+Owner kinds added: `rack` (Deck B racks), `hoist`. Installing consumes the
+item; removing creates the old part. Old saves without a `deck_b` section
+keep the fresh lower-deck parts (not "consumed"). Saving mid-shaft or on the
+ergometer stores a standing landing. Every Deck B equipment node and the
+systems model persist via `state_dict()` in `equipment2`.
+
+## H. Story (Chapter Two / Phase Three) — deck_b_story.gd via story_events.gd
+
+| id | state | trigger / check |
+|---|---|---|
+| lower_sound_echo | ACTIVE (phase 2) | P-201 heard from 6 m+ while idle; NORMAL = a real logged auto cycle (plausible), ABNORMAL (phase 3) = nothing ran; check at B-02; contradiction grants `ch2_records` |
+| lower_camera_crossing | ACTIVE (late phase 2) | INT-12 4 s; camera-only figure at the archive branch; check there |
+| cargo_missing_item | ACTIVE | a part the player placed on an earlier day; SERVICE record shows a transfer nobody made; ABNORMAL moves the same instance |
+| lab_sample_disagreement | ACTIVE (late) | a documented specimen displayed with another catalogue number / structure; record unchanged |
+| archive_prev_record | ACTIVE | R.V.'s first tape heard + sound below seen → the entry reads differently |
+| archive_timestamp_drift | ACTIVE in phase 3 only | entry closed "tomorrow" |
+| hydroponics_record_anomaly | ACTIVE in phase 3 only | night-time POOR record on the log panel |
+| unknown_signal_fragment | STORY-INACTIVE (dev preview) | 0.8 s unidentified fragment on RPT-B, timestamped |
+| lower_layout_contradiction | STORY-INACTIVE (dev preview) | an extra hatch prop in the north hall (walls / graph untouched) |
+
+Gating: Chapter One complete, Deck B access, familiarity (4 lower rooms on 2
+days). Medium/subtle tiers join the existing pacing. Family: `mara_work`
+(arrives the day after Deck B opens; normal / stressful / strange replies)
+and `mara_work_followup` (its letter answers the chosen reply). Milestones
+`ch2_opened`, `ch2_records`. No identity, no explanation.
+
+Roadmap (not locked): Chapter Two — learn the deck, then records disagree
+(sound below → WRS log → archive tape → alternate copy → journal);
+Chapter Two ending candidates (documented only, none implemented): a record
+of work during sleep; an archive snapshot of an impossible configuration; a
+second technician on INT-12. Phase Three: timestamp drift, hydroponics
+record, basil return support, layout contradiction (presentation only).
+Unresolved: the unknown contact's identity; whether two station states
+overlap (the architecture only allows presentation layers).
+
+## I. Developer F8 — DECK B tab
+
+Tier override (auto/T0–T4, unlock all), teleports to every room and both
+landings, ladder test down/up, abort to landing, hoist send, real fault
+injection (pump air lock, spent bed, coolant speed drop, FEED-1 chatter,
+battery hot, B3 trip, clear), task selector (raise / cancel), restock
+parts, berth a cargo vehicle, interior always visible, every Deck B beat
+preview + reset, live status (tier, systems, open orders, milestones).
+
+## J. Tests
+
+New: test_r49_deck_b_layout, _shaft, _water_thermal, _workshop_lab,
+_botany_medical, _cargo_archive, _tasks, _story, _save. Changed with reason:
+test_station_capsule_sweep also opens Deck B's room gates (the same
+"intentional barrier" rule as Deck A's gates); test_r40_walkway_clear sweeps
+the band above EACH node's own floor (two decks) and now also audits Deck
+B's trim / equipment / shaft / hull; test_r37_workstation expects the
+map's 8 Deck A + 9 Deck B rooms (the map really gained a deck).
+
+Regression found by the full suite and fixed at the root: loading a save
+reset the station log's hour / room baselines, so the first log poll after
+a load wrote a fresh ENVIRONMENT line and a room "entered" line (latent
+since Round 35; Round 49's heavier load made the first post-load frame long
+enough to hit it every time — test_r35_save "StationLog restored exactly").
+station_log.gd now re-reads the baselines on the first poll after a load
+without writing anything. A second regression (test_gait_footsteps foot
+slide) was the archive's fan stream being re-synthesised every frame; the
+streams are cached and Deck B rooms skip refreshes while hidden.
+
+Render-driven fixes: INT-12 (archive branch) looked into a wall — moved to
+the corridor centre, looking down the branch to the B-09 turn where the
+camera-only figure crosses; B-09 light raised 0.55 → 0.75 (still the
+darkest room).
+
+## K. Limitations (honest)
+
+* Not playtested by a human; the climbing / exercise motion was checked in
+  rendered frame sequences and tests only.
+* Audio is synthesised and verified by analysis / play logs, not listened.
+* Several rooms' equipment is boxes + labels at prototype fidelity.
+* E12, L09, L10, M06, A01, A06 remain unimplemented; M07 is architecture only.
+* Windows build not run on Windows.
+
+## L. Validation (automated / rendered — not playtesting)
+
+* Full suite (178 tests) run twice after the last change: run 1 = 177/178
+  (test_animation_transitions "idle -> walking" read 0.162 m/tick once;
+  it reads 0.075 in run 2 and in 5/5 standalone reruns — a frame-timing
+  outlier under suite load, no Deck B code on that path); run 2 = 178/178.
+* Rendered frames (macOS, 1280×720): all lower rooms, shaft hatch / tube /
+  both landings, 61-frame climb down + up sequence, third-person climb
+  pose, exterior hull (4 views + eclipse), INT-09..12 feeds.
+* Frame time uncapped: Deck A 7.8–9.0 ms (HEAD 7.7–8.3; Engineering +1.3
+  ms from the shaft vestibule in view); Deck B 6.5–9.7 ms; shaft 8.7 ms.
+  Vsync-capped: 16.67 ms everywhere, p95 ≤ 17.5 ms.
+* macOS release export rebuilt; exported smoke test ALL PASSED (new step:
+  lower deck built, 9 rooms, shaft sealed on day 1). Windows .exe built
+  only, not run.
+
+## M. Manual playtest checklist (owner)
+
+Automated tests and rendered frames are not playtesting. Please check:
+
+1. Developer start (F8 → DECK B → tier T4 / unlock all) or a real save
+   past Chapter One with Specialist clearance.
+2. Engineering → shaft vestibule: the hatch lid opens, the prompt reads
+   "Climb down to Deck B"; with a bulky pump cartridge in hand the climb is
+   refused and the hoist tray is offered instead.
+3. Climb down and up (W / click per grip, S back): hand-over-hand feel,
+   camera comfort, no clipping into rungs, arrival standing on each landing;
+   abort mid-shaft returns to the nearer landing.
+4. Hoist: put a part on tray A, send, collect it on Deck B (≈5 s travel).
+5. Walk every lower room: doorway clearance, handrails, lighting
+   (archive is meant to be the darkest), labels readable, no stuck spots.
+6. Do one job per room from the workstation's Deck B map (the map's
+   DECK A / DECK B selector); read the SERVICE HISTORY tab afterwards.
+7. Water: bed swap + valve sequence; Thermal: V2 trim, pump changeover;
+   Workshop: bench test, vise rebuild, torque diagonal pattern; Lab:
+   glovebox interlocks + optics focus; Botany: tray / bank / reservoir;
+   Medical: vitals + ergometer seat; Cargo: straps, hatch, sorting bins;
+   Archive: snapshot + cartridge isolation.
+8. Cameras INT-09..12 on the workstation (INT-12 framing especially).
+9. Save on Deck B, mid-shaft, and with a part in hand → quit → load.
+10. Chapter Two beats in normal play (dev previews exist for each): the
+    sound below from Deck A, then B-02's log; confirm nothing explains the
+    unknown contact.
+11. Frame rate in the lower rooms on your machine (measured here: 6.5–9.7
+    ms uncapped, 1280×720, macOS).
+12. Windows: the .exe was built only — run it on a Windows machine.

@@ -18,6 +18,17 @@ extends Node3D
 ## (e.g. a corridor step), which are completely unaffected.
 @export var region: StringName = &""
 
+## Round 49: the deck this node is on ("A" = the operational upper deck,
+## "B" = the Lower Service Deck). Points on different decks are NEVER
+## adjacent through `neighbors` (a walk); only LADDER links connect them.
+@export var deck: StringName = &"A"
+
+## Round 49: links that are CLIMBED through the vertical access shaft
+## (vertical_shaft.gd), not walked. Kept separate from `neighbors` so
+## walking validation (capsule sweeps) never treats a vertical tube as a
+## floor route; route-finding (station_graph.gd) includes them.
+@export var ladder_neighbors: Array[NodePath] = []
+
 
 func get_neighbor_nodes() -> Array[Node3D]:
 	var result: Array[Node3D] = []
@@ -42,6 +53,15 @@ func get_region_mates() -> Array[Node3D]:
 			continue
 		if sibling.has_method("get_region_mates") and sibling.region == region:
 			result.append(sibling)
+	return result
+
+
+func get_ladder_nodes() -> Array[Node3D]:
+	var result: Array[Node3D] = []
+	for path in ladder_neighbors:
+		var node := get_node_or_null(path)
+		if node is Node3D:
+			result.append(node)
 	return result
 
 

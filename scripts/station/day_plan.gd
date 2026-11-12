@@ -644,6 +644,24 @@ const LONG_EVA := [&"antenna", &"solar_clean", &"solar_coupler", &"solar_hinge"]
 # ======================================================================
 const FAMILIES := ["electrical", "life_support", "mechanical", "communications", "eva"]
 const ORDER_FAMILY := {&"breaker": ["electrical"], &"power": ["electrical"], &"thermal": ["electrical"], &"vent": ["life_support"], &"seal": ["mechanical"], &"data": ["communications"], &"antenna": ["communications", "eva"], &"lens": ["eva"], &"solar_clean": ["eva"], &"solar_coupler": ["electrical", "eva"], &"solar_hinge": ["mechanical", "eva"], &"patch_bay": ["communications"], &"emerg_lights": ["electrical"], &"junction_panel": ["electrical"], &"backup_rx": ["communications"]}
+## Round 49: the ONE order-type lookup (Deck A types + the Deck B registry,
+## scripts/deck_b/deck_b_tasks.gd). Deck B types carry intro_day 0: they are
+## introduced by the Lower Service Deck clearance tiers, not the calendar.
+const DeckBTasks = preload("res://scripts/deck_b/deck_b_tasks.gd")
+func order_type(t: StringName) -> Dictionary:
+	if ORDER_TYPES.has(t):
+		return ORDER_TYPES[t]
+	var e: Dictionary = DeckBTasks.entry(t)
+	return e.merged({"intro_day": 0}) if not e.is_empty() else {}
+
+
+func order_family(t: StringName) -> Array:
+	if ORDER_FAMILY.has(t):
+		return ORDER_FAMILY[t]
+	var e: Dictionary = DeckBTasks.entry(t)
+	return [String(e["family"])] if e.has("family") else []
+
+
 const WORKDAY_FAMILY := {Workday.FILTER_SERVICE: ["life_support"], Workday.CALIBRATION: ["life_support"], Workday.ELECTRICAL_SERVICE: ["electrical"], Workday.COOLANT_INSPECTION: ["mechanical"], Workday.INSPECTION_ROUND: ["mechanical"], Workday.COMMS_CHECK: ["communications"]}
 var proficiency: Dictionary = {"electrical": 0, "life_support": 0, "mechanical": 0, "communications": 0, "eva": 0}
 var _credited: Dictionary = {}
@@ -709,7 +727,7 @@ func _schedule_orders() -> void:
 		day_type = "quiet"   # early days stay gentle
 	var used: int = (3 if workday != Workday.NONE else 0) + (2 if cargo_duty == "open" else 0)
 	for o in open_orders():
-		used += int(ORDER_TYPES[StringName(o["type"])]["weight"])
+		used += int(order_type(StringName(o["type"])).get("weight", 2))
 	var budget: int = DAY_BUDGET[day_type]
 	var candidates: Array = []
 	for t in ORDER_TYPES:
@@ -743,6 +761,111 @@ func _schedule_orders() -> void:
 		eq.order_rearm(int(o["seed"]))
 		used += w
 		log_event("New order %s: %s" % [o["id"], ORDER_TYPES[t]["title"]])
+	_schedule_deck_b(rng, used, budget)
+
+
+# ======================================================================
+# Round 49: LOWER SERVICE DECK work in the same schedule. The number of
+# POSSIBLE jobs grows a lot; the number ASSIGNED does not:
+#   - at most ONE new Deck B order a day (the opening day's practical
+#     first order excepted), never more than TWO open at once;
+#   - routine jobs come back after their cooldown, occasional ones rarely
+#     (weighted 3 : 1), FAULT jobs only when the model has a real fault
+#     (raise_order), STORY jobs only from a story beat;
+#   - the first time a new access tier opens, the next order comes from a
+#     room of that tier (rooms are introduced a few at a time);
+#   - never behind a gate, never without the part / tool it needs
+#     (order_feasible), never beyond the day's time budget.
+# ======================================================================
+const DECK_B_MAX_OPEN := 2
+var deck_b_last: Dictionary = {}     # type -> last day scheduled / raised
+var deck_b_intro: Array = []         # tiers whose first order was given
+
+
+func _deck_b_open() -> int:
+	return open_orders().filter(func(o): return DeckBTasks.is_deck_b(StringName(o["type"]))).size()
+
+
+func _schedule_deck_b(rng: RandomNumberGenerator, used: int, budget: int) -> void:
+	var clr: Node = clearance()
+	if clr == null or not clr.has_method("deck_b_tier") or int(clr.deck_b_tier()) < 1:
+		return
+	if _deck_b_open() >= DECK_B_MAX_OPEN:
+		return
+	var tier: int = int(clr.deck_b_tier())
+	var cands: Array = []
+	var weights: Array = []
+	var intro_tier: int = -1
+	for t2 in range(1, tier + 1):
+		if not deck_b_intro.has(t2):
+			intro_tier = t2
+			break
+	for t in DeckBTasks.TYPES:
+		var e: Dictionary = DeckBTasks.TYPES[t]
+		if not String(e["freq"]) in ["routine", "occasional"]:
+			continue
+		if has_open_order(t) or not _order_compatible(t):
+			continue
+		if day_number - int(deck_b_last.get(String(t), -99)) < int(e.get("cooldown", 4)):
+			continue
+		if intro_tier > 0 and int(e["tier"]) != intro_tier:
+			continue
+		var eq: Node = order_equipment(t)
+		if eq == null or (eq.has_method("order_feasible") and not eq.order_feasible()):
+			continue
+		# The order that introduces a new access tier may exceed the budget
+		# a little (as Deck A's newest type does).
+		if used + int(e["weight"]) > budget + (3 if intro_tier > 0 else 1):
+			continue
+		cands.append(t)
+		weights.append(3 if e["freq"] == "routine" else 1)
+	if cands.is_empty():
+		return
+	var pick: StringName = cands[0]
+	if intro_tier == 1 and cands.has(&"b01_utility"):
+		pick = &"b01_utility"            # the practical first order
+	else:
+		var tot: int = 0
+		for wv in weights:
+			tot += int(wv)
+		var r: int = rng.randi() % maxi(tot, 1)
+		for i in cands.size():
+			r -= int(weights[i])
+			if r < 0:
+				pick = cands[i]
+				break
+	if intro_tier > 0:
+		deck_b_intro.append(intro_tier)
+	_add_order(pick, hash([day_number, String(pick)]), "")
+
+
+func _add_order(t: StringName, seed: int, reason: String) -> Dictionary:
+	var eq: Node = order_equipment(t)
+	if eq == null:
+		return {}
+	var e: Dictionary = order_type(t)
+	_order_seq += 1
+	var o := {"id": "WO-%04d" % _order_seq, "type": String(t), "category": e.get("category", "B"),
+		"priority": int(e.get("priority", 1)), "day": day_number, "seed": seed, "status": "open", "carried_from": -1}
+	if reason != "":
+		o["raised"] = reason
+	orders.append(o)
+	deck_b_last[String(t)] = day_number
+	eq.order_rearm(seed)
+	log_event("New order %s: %s%s" % [o["id"], e.get("title", String(t)), (" — " + reason) if reason != "" else ""])
+	return o
+
+
+## A REAL fault (or a story beat / the developer) raises its own order,
+## outside the daily budget -- the job exists because the equipment needs
+## it. Never behind a gate, never twice.
+func raise_order(t: StringName, reason: String = "") -> Dictionary:
+	if has_open_order(t) or not _order_compatible(t):
+		return {}
+	var o: Dictionary = _add_order(t, hash([day_number, String(t), "raised", _order_seq]), reason if reason != "" else "fault")
+	if not o.is_empty():
+		_notify("NEW: %s" % order_type(t).get("title", String(t)))
+	return o
 
 
 ## Never schedule mutually exclusive work: no hatch-seal inspection while a
@@ -772,8 +895,15 @@ func _poll_orders() -> void:
 		if eq != null and eq.order_done():
 			o["status"] = "done"
 			o["done_day"] = day_number
-			credit(String(o["id"]), ORDER_FAMILY.get(StringName(o["type"]), []))
-			var title: String = ORDER_TYPES[StringName(o["type"])]["title"]
+			credit(String(o["id"]), order_family(StringName(o["type"])))
+			var title: String = order_type(StringName(o["type"])).get("title", String(o["type"]))
+			# Round 49: an explicit OUTCOME (verified normal / repaired /
+			# sensor fault / deferred / ...) when the equipment reports one.
+			if eq.has_method("order_outcome"):
+				var oc: String = String(eq.order_outcome())
+				if oc != "":
+					o["outcome"] = oc
+					title = "%s (%s)" % [title, oc.replace("_", " ")]
 			log_event("Closed work order %s: %s" % [o["id"], title], &"order_closed")
 			_notify("%s — complete." % title)
 			order_closed.emit(StringName(o["type"]))
@@ -810,7 +940,7 @@ func order_rows() -> Array:
 		var escalated: bool = int(o.get("carried_from", -1)) > 0 and int(o.get("emergency", false)) == 0
 		if escalated:
 			sev = maxi(sev, 2)
-		rows.append({"id": o["id"], "tag": ORDER_TYPES[StringName(o["type"])]["tag"], "action": nx.get("action", "Check equipment"), "short": nx.get("short", ""), "room": nx.get("room", &""),
+		rows.append({"id": o["id"], "tag": order_type(StringName(o["type"])).get("tag", "TASK"), "action": nx.get("action", "Check equipment"), "short": nx.get("short", ""), "room": nx.get("room", &""),
 			"progress": eq.order_progress() if eq != null else "", "done": false, "priority": int(o["priority"]) + (3 if sev >= 3 else 0) + (1 if escalated else 0), "carried": int(o.get("carried_from", -1)) > 0, "escalated": escalated, "type": o["type"], "severity": sev, "emergency": bool(o.get("emergency", false))})
 	if cargo_duty == "open":
 		var c: Dictionary = cargo_step()
@@ -820,11 +950,12 @@ func order_rows() -> Array:
 		rows.append(meal)
 	for o in orders:
 		if o["status"] == "done" and int(o.get("done_day", -1)) == day_number:
-			rows.append({"id": o["id"], "tag": ORDER_TYPES[StringName(o["type"])]["tag"], "action": "Complete", "room": &"", "progress": "", "done": true, "priority": 0, "carried": false})
+			rows.append({"id": o["id"], "tag": order_type(StringName(o["type"])).get("tag", "TASK"), "action": "Complete" if String(o.get("outcome", "")) in ["", "repaired", "verified_normal"] else String(o.get("outcome", "")).replace("_", " ").capitalize(), "room": &"", "progress": "", "done": true, "priority": 0, "carried": false})
 	return rows
 
 
-const ROOM_SHORT := {&"control_room": "Control", &"life_support": "Life Support", &"engineering": "Engineering", &"storage": "Storage", &"airlock": "Airlock", &"communications": "Comms", &"living_quarters": "Quarters"}
+const ROOM_SHORT := {&"control_room": "Control", &"life_support": "Life Support", &"engineering": "Engineering", &"storage": "Storage", &"airlock": "Airlock", &"communications": "Comms", &"living_quarters": "Quarters",
+	&"b01": "Lower Junction", &"b02": "Water", &"b03": "Thermal", &"b04": "Workshop", &"b05": "Lab", &"b06": "Botany", &"b07": "Medical", &"b08": "Cargo", &"b09": "Archive"}
 const WORKDAY_TAG := {Workday.FILTER_SERVICE: "FILTER", Workday.CALIBRATION: "SENSORS", Workday.ELECTRICAL_SERVICE: "WIRING", Workday.COOLANT_INSPECTION: "COOLANT", Workday.INSPECTION_ROUND: "ROUNDS", Workday.COMMS_CHECK: "COMMS"}
 ## Short verb phrases for every workday step (one-line rows).
 const STEP_ACTION := {

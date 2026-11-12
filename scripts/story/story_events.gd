@@ -93,6 +93,36 @@ const EVENTS := {
 	&"basil_return": {"name": "The dead basil is alive again (Phase 3)", "phase": 3, "late": true, "chance": 0.0, "cooldown_days": 999, "max_plays": 1, "enabled": true, "implemented": true,
 		"needs": "Phase 3 only. The plant must have GENUINELY died (3 days unwatered) and been SEEN dead; on a later day it is presented healthy -- no watering, no replacement on record. See quarters_life.gd.",
 		"variants": ["normal"]},
+	# Round 49: CHAPTER TWO / PHASE THREE on the Lower Service Deck
+	# (deck_b_story.gd). "deck_b": needs Chapter One complete, Deck B access
+	# and the technician to know the deck (4 rooms, 2 days) first.
+	&"lower_sound_echo": {"name": "The sound below (pump heard while idle)", "phase": 2, "late": false, "chance": 0.4, "cooldown_days": 5, "max_plays": 2, "enabled": true, "implemented": true, "deck_b": true,
+		"needs": "Away from Water Recovery (6 m+), P-201 idle. Its start-up and run sound comes from B-02, muffled through the decks. NORMAL: a real automatic cycle ran (the WRS log shows it). ABNORMAL (phase 3): nothing ran, no log entry. Going to B-02 = the check.",
+		"variants": ["normal", "abnormal"]},
+	&"lower_camera_crossing": {"name": "Movement at the archive branch (INT-12)", "phase": 2, "late": true, "chance": 0.35, "cooldown_days": 6, "max_plays": 1, "enabled": true, "implemented": true, "deck_b": true,
+		"needs": "INT-12 watched 4 s (and on an earlier day). A figure crosses the archive branch toward the B-09 hatch (camera only). Going there = empty; access log has no B-09 entry.",
+		"variants": ["normal", "abnormal"]},
+	&"cargo_missing_item": {"name": "A part you placed: the record disagrees", "phase": 2, "late": false, "chance": 0.35, "cooldown_days": 6, "max_plays": 1, "enabled": true, "implemented": true, "deck_b": true,
+		"needs": "A part the technician put on a Deck B rack on an EARLIER day, still there. The SERVICE record shows a transfer of that serial to quarantine nobody made (presentation). ABNORMAL (phase 3): the part really is in the quarantine bin.",
+		"variants": ["normal", "abnormal"]},
+	&"lab_sample_disagreement": {"name": "The specimen you documented reads differently", "phase": 2, "late": true, "chance": 0.4, "cooldown_days": 6, "max_plays": 1, "enabled": true, "implemented": true, "deck_b": true,
+		"needs": "A specimen documented on an earlier day, placed on the microscope again: the same container shows another catalogue number (NORMAL) or another structure (ABNORMAL). The record is unchanged.",
+		"variants": ["normal", "abnormal"]},
+	&"archive_prev_record": {"name": "The previous technician's record, twice", "phase": 2, "late": false, "chance": 0.5, "cooldown_days": 99, "max_plays": 1, "enabled": true, "implemented": true, "deck_b": true,
+		"needs": "R.V.'s first tape heard on an earlier day and the 'sound below' seen: at the archive console's RECORDS page the same entry reads differently.",
+		"variants": ["normal"]},
+	&"archive_timestamp_drift": {"name": "Archive entry dated tomorrow (Phase 3)", "phase": 3, "late": true, "chance": 0.4, "cooldown_days": 7, "max_plays": 1, "enabled": true, "implemented": true, "deck_b": true,
+		"needs": "Phase 3. On the archive RECORDS page: a service entry closed and verified TOMORROW. The station clock and the active log are untouched.",
+		"variants": ["normal"]},
+	&"hydroponics_record_anomaly": {"name": "Hydroponics log: an observation never made (Phase 3)", "phase": 3, "late": true, "chance": 0.4, "cooldown_days": 7, "max_plays": 1, "enabled": true, "implemented": true, "deck_b": true,
+		"needs": "Phase 3, tray observations recorded before. The botany log panel shows a night-time POOR record for a tray (presentation).",
+		"variants": ["normal"]},
+	&"unknown_signal_fragment": {"name": "Unidentified fragment on the lower repeater (STORY-INACTIVE)", "phase": 3, "late": true, "chance": 0.0, "cooldown_days": 99, "max_plays": 1, "enabled": false, "implemented": true, "deck_b": true,
+		"needs": "Architecture + developer preview only: RPT-B receives 0.8 s of unidentified signal, timestamped, source unknown. Not armed in normal play.",
+		"variants": ["normal"]},
+	&"lower_layout_contradiction": {"name": "A hatch where there is none (STORY-INACTIVE)", "phase": 3, "late": true, "chance": 0.0, "cooldown_days": 99, "max_plays": 1, "enabled": false, "implemented": true, "deck_b": true,
+		"needs": "Developer preview only: an extra 'B-11' service hatch on the north hall wall (event-local prop; walls / navigation untouched).",
+		"variants": ["normal"]},
 	&"blind_spot_object": {"name": "Object in a camera blind spot", "phase": 2, "late": true, "chance": 0.4, "cooldown_days": 4, "max_plays": 2, "enabled": false, "implemented": false,
 		"needs": "NOT IMPLEMENTED (future round).", "variants": []},
 	&"radio_contact": {"name": "Unknown radio contact", "phase": 3, "late": false, "chance": 1.0, "cooldown_days": 99, "max_plays": 1, "enabled": false, "implemented": false,
@@ -208,6 +238,7 @@ var inner: Node
 var family: Node
 var window: Node
 var peripheral: Node
+var deckb: Node                    # Round 49: Chapter Two beats (deck_b_story.gd)
 const ACCESS_ROOMS := {&"storage": "STORAGE", &"engineering": "ENGINEERING", &"life_support": "LIFE SUPPORT", &"communications": "COMMS"}
 const FAMILY_EXTRA := "And you said the corridor light keeps you awake. Try an eye mask?"
 const THOUGHTS := {
@@ -255,6 +286,10 @@ func _ready() -> void:
 	peripheral.se = self
 	add_child(peripheral)
 	peripheral.vanished.connect(_on_peripheral_vanished)
+	deckb = load("res://scripts/story/deck_b_story.gd").new()
+	deckb.name = "DeckBStory"
+	deckb.se = self
+	add_child(deckb)
 	window = load("res://scripts/story/window_encounter.gd").new()
 	window.name = "WindowEncounter"
 	add_child(window)
@@ -490,6 +525,10 @@ func eligibility(id: StringName) -> String:
 		return "needs phase %d (now %d)" % [int(e["phase"]), phase()]
 	if bool(e["late"]) and not late_phase_2():
 		return "needs late phase 2 (2 different anomalies seen)"
+	if bool(e.get("deck_b", false)) and deckb != null:
+		var xb: String = deckb.eligibility(id)
+		if xb != "":
+			return xb
 	var st: Dictionary = state[id]
 	if int(st["plays"]) >= int(e["max_plays"]):
 		return "played %d/%d" % [int(st["plays"]), int(e["max_plays"])]
@@ -530,8 +569,9 @@ func _daylight() -> bool:
 
 ## Round 46 horror HIERARCHY (pacing): subtle / medium / major.
 const TIERS := {
-	"subtle": ["note_extra_item", "window_mismatch", "wrong_reading", "peripheral_figure", "access_ghost", "family_misremember", "basil_return", "mismatch_shadow", "mismatch_daynight"],
-	"medium": ["phantom_cycle", "corridor_presence", "hatch_handle", "window_hand", "mismatch_eva"],
+	"subtle": ["note_extra_item", "window_mismatch", "wrong_reading", "peripheral_figure", "access_ghost", "family_misremember", "basil_return", "mismatch_shadow", "mismatch_daynight",
+		"cargo_missing_item", "lab_sample_disagreement", "archive_prev_record", "archive_timestamp_drift", "hydroponics_record_anomaly"],
+	"medium": ["phantom_cycle", "corridor_presence", "hatch_handle", "window_hand", "mismatch_eva", "lower_sound_echo", "lower_camera_crossing", "unknown_signal_fragment", "lower_layout_contradiction"],
 	"major": ["window_figure"],
 }
 
@@ -965,6 +1005,9 @@ func _process(delta: float) -> void:
 			_pending_investigation.erase(k)
 			_investigated(k)
 			_thought("hand_check")
+		elif deckb != null and deckb.is_mine(StringName(k)) and deckb.check_done(k):
+			_pending_investigation.erase(k)
+			_investigated(k)
 		elif float(_pending_investigation.get(k, 0.0)) <= 0.0:
 			_pending_investigation.erase(k)
 	_note_port_look(delta)
@@ -1031,6 +1074,9 @@ func _process(delta: float) -> void:
 					_start(armed, variant)
 			else:
 				_gaze_s = 0.0
+		_:
+			if deckb != null and deckb.is_mine(armed) and deckb.ready_to_start(armed):
+				_start(armed, variant)
 
 
 # ------------------------------------------------ Round 47: hand at the glass
@@ -1267,6 +1313,10 @@ func _start(id: StringName, variant: String = "normal", dev: bool = false) -> bo
 			if od2 == null or not od2.trigger(String(MISMATCH_MODES[id]), MISMATCH_MAX_S + 5.0, "event" if not dev else "debug"):
 				_abort_start()
 				return false
+		_ when deckb != null and deckb.is_mine(id):
+			if not deckb.start(id, variant, dev):
+				_abort_start()
+				return false
 		&"basil_return":
 			# Developer PREVIEW only (normal play: _on_day_started, Phase 3):
 			# dead plant presented alive, never counted or saved.
@@ -1345,6 +1395,10 @@ func _update_active(delta: float) -> void:
 				h.tick(delta, h.is_seen_by(_player_cam()))
 				if h.state == "gone" or _active_t > 30.0:
 					stop(bool(h.seen))
+		_ when deckb != null and deckb.is_mine(active):
+			var r: String = deckb.update(active, delta, active_dev)
+			if r != "":
+				stop(r == "seen")
 		&"hatch_handle":
 			_hatch_animate()
 			if _feed_on_screen("EXT-02") or _feed_on_screen("INT-07"):
@@ -1402,6 +1456,8 @@ func stop(seen: bool = false) -> void:
 			_hand_end()
 			if seen and not dev:
 				_pending_investigation["window_hand"] = 300.0
+		_ when deckb != null and deckb.is_mine(id):
+			deckb.stop(id, seen, dev)
 		&"mismatch_shadow", &"mismatch_daynight", &"mismatch_eva":
 			var od3: Node = get_tree().get_first_node_in_group(&"observation_discrepancy")
 			if od3 != null and od3.is_active():

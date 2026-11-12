@@ -54,6 +54,8 @@ var _events_box: VBoxContainer
 var _player_lbl: Label
 var _station_lbl: Label
 var _session_lbl: Label
+var _deck_b_lbl: Label
+var _task_pick: OptionButton
 var _variant: String = "normal"
 var _eq_snapshots: Dictionary = {}     # node path -> state_dict
 var _t: float = 0.0
@@ -221,6 +223,7 @@ func _build() -> void:
 	_station_lbl = _tab_label("STATION", _build_station_controls)
 	_player_lbl = _tab_label("PLAYER", _build_player_controls)
 	_session_lbl = _tab_label("SESSION", _build_session_controls)
+	_deck_b_lbl = _tab_label("DECK B", _build_deck_b_controls)
 
 
 func _tab_label(name: String, controls: Callable) -> Label:
@@ -482,6 +485,8 @@ func refresh(rebuild_events: bool = true) -> void:
 	_story_lbl.text = story_text()
 	_player_lbl.text = player_text()
 	_station_lbl.text = "Last action: %s\nChanged devices (restorable): %s" % [last_action, ", ".join(_eq_snapshots.keys()) if not _eq_snapshots.is_empty() else "none"]
+	if _deck_b_lbl != null:
+		_deck_b_lbl.text = deck_b_text()
 	_session_lbl.text = "Active event: %s %s\nStory snapshot held: %s\nPhase override: %s\nLast action: %s\nPreviews never count as plays; overrides are never saved." % [String(se.active) if se.active != &"" else "none", se.active_variant, "yes" if se.dev_has_snapshot() else "no", str(se.dev_phase_override) if se.dev_phase_override > 0 else "none", last_action]
 	if rebuild_events:
 		_rebuild_events()
@@ -602,3 +607,214 @@ func player_text() -> String:
 		lines.append("Last assistant line: %s" % String(ai.history.back().get("text", "")))
 	lines.append("Story history (last 4): %s" % str(se.history.slice(maxi(se.history.size() - 4, 0))))
 	return "\n".join(lines)
+
+
+# ===================================================================
+# Round 49: DECK B (Lower Service Deck) developer tools. Every override is
+# transient (never saved): access tier, faults are real model faults the
+# technician then repairs normally; previews never count as plays.
+# ===================================================================
+const DeckBLayout = preload("res://scripts/deck_b/deck_b_layout.gd")
+const DeckBTasks = preload("res://scripts/deck_b/deck_b_tasks.gd")
+const DECK_B_TELEPORTS := [["B-01 Junction", "BJunctionC"], ["B-02 Water", "BWaterA"], ["B-03 Thermal", "BThermalA"], ["B-04 Workshop", "BWorkshopA"],
+	["B-05 Lab", "BLabA"], ["B-06 Botany", "BBotanyA"], ["B-07 Medical", "BMedA"], ["B-08 Cargo", "BCargoA"], ["B-09 Archive", "BArchiveA"],
+	["Shaft (Deck A)", "ShaftTop"], ["Shaft (Deck B)", "BShaftBottom"]]
+
+
+func _deck_b() -> Node:
+	return main.get_node_or_null("DeckB") if main != null else null
+
+
+func _sys_b() -> Node:
+	return main.get_node_or_null("DeckB/DeckBSystems") if main != null else null
+
+
+func _build_deck_b_controls(box: VBoxContainer) -> void:
+	var l := Label.new()
+	l.text = "Access (developer override, not saved):"
+	box.add_child(l)
+	var h := _row(box)
+	for t in [-1, 0, 1, 2, 3, 4]:
+		var tt: int = t
+		_button(h, "auto" if t < 0 else "T%d" % t, func(): main.get_node("DayPlan/Clearance").dev_set_deck_b(tt); last_action = "Deck B tier %s" % ("auto" if tt < 0 else str(tt)))
+	_button(h, "Unlock all (L3 + T4)", func(): main.get_node("DayPlan/Clearance").dev_set(3); main.get_node("DayPlan/Clearance").dev_set_deck_b(4); last_action = "Deck B fully unlocked (dev)")
+	var l2 := Label.new()
+	l2.text = "Teleport (Deck B rooms / shaft landings):"
+	box.add_child(l2)
+	var ht: HBoxContainer = null
+	for i in DECK_B_TELEPORTS.size():
+		if i % 4 == 0:
+			ht = _row(box)
+		var ti: int = i
+		_button(ht, DECK_B_TELEPORTS[i][0], func(): teleport_node(DECK_B_TELEPORTS[ti][1]))
+	var hl := _row(box)
+	_button(hl, "Ladder: climb down", func(): ladder_test(true))
+	_button(hl, "Ladder: climb up", func(): ladder_test(false))
+	_button(hl, "Abort to landing", func(): shaft_abort())
+	_button(hl, "Hoist: send", func(): hoist_send_dev())
+	var l3 := Label.new()
+	l3.text = "Inject a REAL model fault (repair it normally):"
+	box.add_child(l3)
+	var hf := _row(box)
+	_button(hf, "Water pump air lock", func(): _sys_b().water["pump_fault"] = "air_lock"; _sys_b().water["processing"] = true; last_action = "fault: P-201 air lock")
+	_button(hf, "Filter bed spent", func(): _sys_b().water["filter_life"] = 0.25; last_action = "fault: MF-2 spent")
+	_button(hf, "Coolant speed drop", func(): _sys_b().thermal["fault"] = "speed_drop"; last_action = "fault: P-301 speed")
+	var hf2 := _row(box)
+	_button(hf2, "FEED-1 chatter", func(): _sys_b().power["feed1_fault"] = "chatter"; last_action = "fault: FEED-1 intermittent")
+	_button(hf2, "Battery hot (V1 shut)", func(): _sys_b().thermal["v1"] = 0.0; last_action = "fault: V1 closed")
+	_button(hf2, "Trip B3 breaker", func(): _sys_b().power["on"][2] = false; last_action = "fault: B3 tripped")
+	_button(hf2, "Clear all faults", func(): clear_deck_b_faults())
+	var l4 := Label.new()
+	l4.text = "Work orders (Deck B registry):"
+	box.add_child(l4)
+	var hk := _row(box)
+	_task_pick = OptionButton.new()
+	_task_pick.focus_mode = Control.FOCUS_NONE
+	for t in DeckBTasks.TYPES:
+		_task_pick.add_item(String(t))
+	hk.add_child(_task_pick)
+	_button(hk, "Raise", func(): raise_selected_task())
+	_button(hk, "Cancel open", func(): cancel_selected_task())
+	var hs := _row(box)
+	_button(hs, "Restock lower-deck parts", func(): restock_deck_b())
+	_button(hs, "Berth cargo vehicle now", func(): berth_cargo())
+	_button(hs, "Interior always visible", func(): toggle_interior())
+	var l5 := Label.new()
+	l5.text = "Chapter Two / Phase Three events (preview never counts):"
+	box.add_child(l5)
+	var he: HBoxContainer = null
+	var ids: Array = []
+	for id in se.EVENTS:
+		if bool(se.EVENTS[id].get("deck_b", false)):
+			ids.append(id)
+	for i in ids.size():
+		if i % 3 == 0:
+			he = _row(box)
+		var eid: StringName = ids[i]
+		_button(he, String(eid), func(): se.dev_trigger(eid, _variant); last_action = "preview " + String(eid))
+	var hr := _row(box)
+	_button(hr, "Cancel event", func(): se.dev_cancel(); last_action = "cancel")
+	_button(hr, "Reset Deck B events", func():
+		for id2 in ids:
+			se.dev_reset(id2)
+		last_action = "Deck B events reset")
+
+
+func deck_b_text() -> String:
+	var clr: Node = main.get_node_or_null("DayPlan/Clearance")
+	var s: Node = _sys_b()
+	var lines: Array = []
+	if clr != null:
+		lines.append("Deck B tier: %d %s (earned %d · Deck B jobs %d)%s" % [clr.deck_b_tier(), clr.DECK_B_NAMES[clr.deck_b_tier()], clr.earned_deck_b(), clr.deck_b_jobs, " · DEV OVERRIDE" if clr.dev_deck_b >= 0 else ""])
+	var pc: Node3D = main.get_node_or_null("Player") as Node3D
+	if pc != null:
+		lines.append("Player: %s · room %s" % ["DECK B" if DeckBLayout.is_lower(pc.global_position) else "DECK A", String(DeckBLayout.room_at(pc.global_position))])
+	var sh: Node = _deck_b().get_node_or_null("VerticalShaft") if _deck_b() != null else null
+	if sh != null:
+		lines.append("Shaft: climbing %s grip %d dir %d lid %s · hoist at %s (%s)" % [sh.climbing, sh.grip, sh.dir, "open" if sh.lid_open else "shut", sh.hoist_at, sh.hoist_item.name if sh.hoist_item != null else "empty"])
+	if s != null:
+		lines.append("Water: %s raw %.1f L potable %.1f L cond %.0f bed %d %% pump %s %s" % [s.water_status(), float(s.water["raw_l"]), float(s.water["potable_l"]), float(s.water["pot_cond"]), int(float(s.water["filter_life"]) * 100.0), "RUN" if s.water["processing"] else "IDLE", s.water["pump_fault"]])
+		lines.append("Coolant: %s supply %.1f ENG %.1f BATT %.1f LAB %.1f fault '%s' standby %s" % [s.thermal_status(), float(s.thermal["supply"]), float(s.thermal["eng_T"]), float(s.thermal["batt_T"]), float(s.thermal["lab_T"]), s.thermal["fault"], s.thermal["standby"]])
+		lines.append("Bus B: B1 %s B2 %s B3 %s B4 %s · feed1 '%s' · B2 on %s · FEED-2 %.2f kW" % ["ON" if s.powered(0) else "off", "ON" if s.powered(1) else "off", "ON" if s.powered(2) else "off", "ON" if s.powered(3) else "off", s.power["feed1_fault"], s.power["b2_source"], s.feed2_load()])
+		lines.append("Visited lower rooms: %s · Deck B days %d · services logged %d" % [", ".join(s.rooms_visited_total()), s.deck_b_days(), s.service_log.size()])
+	var dp: Node = main.get_node_or_null("DayPlan")
+	if dp != null:
+		var ob: Array = dp.open_orders().filter(func(o): return DeckBTasks.is_deck_b(StringName(o["type"])))
+		lines.append("Open Deck B orders: %s" % ", ".join(ob.map(func(o): return "%s %s" % [o["id"], o["type"]])))
+	lines.append("Chapter: one complete %s · milestones %s" % [se.chapter_one_complete(), ", ".join(se.milestones)])
+	lines.append("Last action: %s" % last_action)
+	return "\n".join(lines)
+
+
+func shaft_abort() -> void:
+	_deck_b().get_node("VerticalShaft").abort_to_landing()
+	last_action = "shaft: abort to landing"
+
+
+func hoist_send_dev() -> void:
+	var sh: Node = _deck_b().get_node("VerticalShaft")
+	sh.hoist_send(sh.hoist_at if sh.hoist_at in ["A", "B"] else "A")
+	last_action = "hoist sent"
+
+
+func berth_cargo() -> void:
+	var cb: Node = _deck_b().room_node(&"b08")
+	if cb != null:
+		cb.arrive(randi())
+		last_action = "cargo vehicle berthed"
+
+
+func toggle_interior() -> void:
+	_deck_b().interior_forced = not _deck_b().interior_forced
+	last_action = "interior forced %s" % _deck_b().interior_forced
+
+
+func teleport_node(node_name: String) -> bool:
+	var sh: Node = _deck_b().get_node_or_null("VerticalShaft") if _deck_b() != null else null
+	if sh != null and sh.is_climbing():
+		last_action = "teleport refused: climbing"
+		return false
+	var n: Node3D = main.get_node_or_null("MovementNodes/" + node_name) as Node3D
+	var fb: Node = main.get_node_or_null("FreeMoveBody")
+	if n == null or fb == null:
+		return false
+	fb.sync_to_eye_position(n.global_position)
+	fb.velocity = Vector3.ZERO
+	last_action = "teleport %s" % node_name
+	return true
+
+
+func ladder_test(down: bool) -> void:
+	teleport_node("ShaftTop" if down else "BShaftBottom")
+	var sh: Node = _deck_b().get_node("VerticalShaft")
+	main.get_tree().create_timer(0.3).timeout.connect(func(): sh.begin(down))
+	last_action = "ladder test %s (W / click to continue)" % ("down" if down else "up")
+
+
+func clear_deck_b_faults() -> void:
+	var s: Node = _sys_b()
+	if s == null:
+		return
+	s.water["pump_fault"] = ""
+	s.thermal["fault"] = ""
+	s.thermal["rad_fault"] = ""
+	s.thermal["rad"] = [1.0, 1.0]
+	s.power["feed1_fault"] = ""
+	s.power["on"] = [true, true, true, true]
+	last_action = "Deck B faults cleared"
+
+
+func raise_selected_task() -> void:
+	if _task_pick == null or _task_pick.selected < 0:
+		return
+	var t := StringName(_task_pick.get_item_text(_task_pick.selected))
+	var dp: Node = main.get_node("DayPlan")
+	var o: Dictionary = dp.raise_order(t, "developer")
+	last_action = ("raised %s %s" % [o.get("id", ""), t]) if not o.is_empty() else "not raised (open already / gated: unlock Deck B)"
+
+
+func cancel_selected_task() -> void:
+	if _task_pick == null or _task_pick.selected < 0:
+		return
+	var t: String = _task_pick.get_item_text(_task_pick.selected)
+	var dp: Node = main.get_node("DayPlan")
+	for o in dp.orders:
+		if o["status"] == "open" and String(o["type"]) == t:
+			o["status"] = "cancelled"
+	last_action = "cancelled open %s" % t
+
+
+func restock_deck_b() -> void:
+	var db: Node = _deck_b()
+	var plan := [[&"b02", "WaterSpareBeds", &"mf_bed"], [&"b02", "PumpSealKits", &"pump_seal_kit"], [&"b03", "ThermalSpares", &"valve_actuator"], [&"b04", "WorkshopStock", &"relay_module"],
+		[&"b06", "BotanyCabinet", &"grow_light_module"], [&"b09", "ArchiveBlanks", &"data_cartridge"], [&"b01", "EmSpareClip", &"lamp_module"]]
+	var n := 0
+	for p in plan:
+		var room: Node = db.room_node(p[0])
+		if room == null:
+			continue
+		var r: Node = room.find_child(p[1], true, false)
+		if r != null and r.free_slot() != -1:
+			room.spawn_part(p[2], r)
+			n += 1
+	last_action = "restocked %d lower-deck parts" % n

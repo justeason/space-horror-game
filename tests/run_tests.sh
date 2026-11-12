@@ -196,6 +196,15 @@ TESTS=(
   test_r48_holdout_economy
   test_r48_clock_calendar
   test_r48_chapter_one
+  test_r49_deck_b_layout
+  test_r49_shaft
+  test_r49_water_thermal
+  test_r49_workshop_lab
+  test_r49_botany_medical
+  test_r49_cargo_archive
+  test_r49_tasks
+  test_r49_story
+  test_r49_save
 )
 
 if [ "$#" -gt 0 ]; then

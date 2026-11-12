@@ -108,6 +108,11 @@ const LINES := {
 	&"access_l1": [Prio.INFO, "Orientation complete. Maintenance clearance granted: Engineering, Life Support and Storage are open.", "入职完成。已授予维护权限：工程舱、生命维持舱和储藏室已开放。"],
 	&"access_l2": [Prio.INFO, "Specialist clearance granted. Communications is open.", "已授予专业权限。通信舱已开放。"],
 	&"access_l3": [Prio.INFO, "EVA clearance granted. The suit locker and airlock are authorised for you.", "已授予舱外活动权限。宇航服柜和气闸已为你授权。"],
+	# Round 49: the Lower Service Deck (Chapter Two). Practical, not ominous.
+	&"access_deck_b_1": [Prio.INFO, "Additional service equipment has been assigned to you: the Lower Service Deck. The access shaft is in the vestibule off Engineering's north wall. Start with the utility spine, water recovery and thermal control.", "已为你分配额外的维护设备：下层维护甲板。通道竖井位于工程舱北墙外的前室。请从公用干线、水回收和热控开始。"],
+	&"access_deck_b_2": [Prio.INFO, "Lower deck logistics clearance: the workshop and cargo handling are yours.", "已授予下层后勤权限：工作间和货物处理舱已开放。"],
+	&"access_deck_b_3": [Prio.INFO, "Lower deck science wing open: payload laboratory, hydroponics and the medical bay.", "下层科学区已开放：载荷实验室、水培舱和医疗舱。"],
+	&"access_deck_b_4": [Prio.INFO, "Records clearance granted. The data archive is at the end of the east branch.", "已授予记录权限。数据档案室位于东侧支路尽头。"],
 	&"laptop_intro": [Prio.INFO, "Your laptop. TODAY shows the day at a glance. The station clock waits while you use it.", "你的笔记本电脑。TODAY 一眼显示当天安排。使用电脑时站内时间会暂停。"],
 	&"save_hint": [Prio.INFO, "Shift over. The station saves each morning; save any time from the workstation SYSTEM page. Then rest in your bunk.", "班次结束。空间站每天早上自动存档；也可随时在工作站 SYSTEM 页面存档。然后回床铺休息。"],
 	&"hygiene_intro": [Prio.INFO, "Hygiene niche. Brush your teeth; the push tap saves water.", "洗漱角。刷牙吧，按压式水龙头很省水。"],

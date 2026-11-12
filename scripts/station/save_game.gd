@@ -52,8 +52,13 @@ const GameSettings = preload("res://scripts/station/game_settings.gd")
 const _FILTER_SCENE := preload("res://scenes/interactables/filter_cartridge.tscn")
 const _WIRE_SCENE := preload("res://scenes/interactables/wire_component.tscn")
 const _USED_SCENE := preload("res://scenes/interactables/used_filter_cartridge.tscn")
-const KNOWN_TYPES := [&"filter_cartridge", &"wire_control_16ga", &"wire_signal_22ga", &"used_filter_cartridge", &"cargo_carrier", &"data_module", &"thermal_probe", &"airflow_meter", &"leak_detector"]
-const OWNER_KINDS := ["cabinet", "reserve", "port", "installed", "seated", "loose", "held", "carrier", "docked", "dataport"]
+const KNOWN_TYPES := [&"filter_cartridge", &"wire_control_16ga", &"wire_signal_22ga", &"used_filter_cartridge", &"cargo_carrier", &"data_module", &"thermal_probe", &"airflow_meter", &"leak_detector",
+	# Round 49: Deck B components (scripts/deck_b/deck_b_part.gd KINDS).
+	&"mf_bed", &"ix_bed", &"mf_bed_spent", &"pump_seal_kit", &"coolant_sensor", &"valve_actuator", &"relay_module", &"bearing_cartridge",
+	&"pump_cartridge", &"data_cartridge", &"grow_light_module", &"sample_carrier", &"dosimeter_badge", &"bracket", &"cable_guide", &"med_pack", &"lamp_module"]
+## Round 49: "rack" = a Deck B parts rack slot; "hoist" = the service hoist tray.
+const OWNER_KINDS := ["cabinet", "reserve", "port", "installed", "seated", "loose", "held", "carrier", "docked", "dataport", "rack", "hoist"]
+const DeckBPart = preload("res://scripts/deck_b/deck_b_part.gd")
 
 ## stable id -> [node name (unique in main.tscn), saved fields]
 const EQUIPMENT := {
@@ -69,7 +74,8 @@ const DAYPLAN_FIELDS := ["day_number", "workday", "_facts", "_serviced", "servic
 	"c01_status", "e06_status", "c05_status", "c02_status", "e01_status", "e02_status", "e05_status",
 	"l07_status", "l08_status", "l02_status", "e09_status", "m02_status"]
 ## Optional DayPlan fields added by later rounds (absent in older saves is fine).
-const DAYPLAN_OPTIONAL := ["shift_stats", "shift_reported", "carried_over_from", "inspections_done", "shift_history", "readings", "shift_elapsed_s", "shift_ended", "cargo_duty", "cargo_duty_id", "orders", "day_type", "_order_seq", "emergency_plan", "proficiency", "_credited", "underfed", "work_done_at_s", "awake_after_shift_s", "laptop_clock_s"]
+const DAYPLAN_OPTIONAL := ["shift_stats", "shift_reported", "carried_over_from", "inspections_done", "shift_history", "readings", "shift_elapsed_s", "shift_ended", "cargo_duty", "cargo_duty_id", "orders", "day_type", "_order_seq", "emergency_plan", "proficiency", "_credited", "underfed", "work_done_at_s", "awake_after_shift_s", "laptop_clock_s",
+	"deck_b_last", "deck_b_intro"]
 
 @export var save_path: String = "user://savegame.json"
 ## Round 34 Priority 10: the protected AUTOSAVE slot (written only at a
@@ -389,7 +395,18 @@ func collect_state() -> Dictionary:
 	var fb: Node3D = main.get_node("FreeMoveBody")
 	var player: Node3D = main.get_node("Player")
 	var lp: Node3D = player.get_node("LookPivot")
-	d["player"] = {"pos": _enc(fb.global_position), "yaw": player.rotation.y + lp.rotation.y, "pitch": lp.get_node("PitchPivot").rotation.x}
+	var feet: Vector3 = fb.global_position
+	# Round 49: saving inside the vertical shaft stores the NEAREST LANDING
+	# (never a point in the tube / empty space): the game resumes standing.
+	var shaft: Node = get_tree().get_first_node_in_group(&"vertical_shaft")
+	if shaft != null and shaft.is_climbing():
+		feet = shaft.safe_landing() - Vector3(0, fb.eye_height, 0)
+	# ...and saving on the ergometer stores the spot beside it (standing).
+	for rm in get_tree().get_nodes_in_group(&"deck_b_room"):
+		if rm.get("exercising") == true:
+			feet = Vector3(-9.75, -3.9, 12.55)
+	d["player"] = {"pos": _enc(feet), "yaw": player.rotation.y + lp.rotation.y, "pitch": lp.get_node("PitchPivot").rotation.x}
+	d["deck_b"] = {"version": 1}
 	var lv: Node = player.get_node_or_null("LaptopView")
 	d["laptop"] = {"entry": lv._saved_entry if lv != null else "", "read": lv._log_screen.read_messages.keys() if lv != null and "read_messages" in lv._log_screen else [], "game_best": lv._log_screen.game_best if lv != null and "game_best" in lv._log_screen else 0,
 		"cargo_drop": _enc(lv._log_screen._game.state_dict()) if lv != null and lv._log_screen.get("_game") != null else {},
@@ -426,6 +443,14 @@ func _owner_of(it: Node3D) -> Dictionary:
 	var port: Node = _find("CargoPort")
 	if port != null and port.slot_index_of(it) != -1:
 		return {"kind": "port", "slot": _enc(port.slot_index_of(it))}
+	# Round 49: Deck B racks and the service hoist.
+	for r in get_tree().get_nodes_in_group(&"deck_b_rack"):
+		var ri: int = r.slot_index_of(it)
+		if ri != -1:
+			return {"kind": "rack", "at": String(r.name), "slot": _enc(ri)}
+	var shaft: Node = get_tree().get_first_node_in_group(&"vertical_shaft")
+	if shaft != null and shaft.hoist_item == it:
+		return {"kind": "hoist", "at": String(shaft.hoist_at) if shaft.hoist_at in ["A", "B"] else String(shaft._hoist_to)}
 	if it.item_id == &"used_filter_cartridge" and not it.is_ejected():
 		return {"kind": "seated"}
 	return {"kind": "loose", "xf": _enc(it.global_transform)}
@@ -451,7 +476,13 @@ func apply_state(data: Dictionary) -> Dictionary:
 	var wanted := {}
 	for rec in data["items"]:
 		wanted[_rec_pid(rec)] = rec
+	# Round 49: a save from before the Lower Service Deck existed has no
+	# Deck B parts at all -- they are NOT "consumed": keep the fresh ones.
+	var pre_deck_b: bool = not data.has("deck_b")
 	for n in by_name.keys():
+		if pre_deck_b and by_name[n].is_in_group(&"deck_b_part"):
+			by_name.erase(n)       # untouched: stays in its fresh rack slot
+			continue
 		if not wanted.has(n) and by_name[n].item_id != &"cargo_carrier":
 			var gone: Node = by_name[n]
 			gone.get_parent().remove_child(gone)
@@ -545,6 +576,17 @@ func apply_state(data: Dictionary) -> Dictionary:
 				if it.item_id == &"used_filter_cartridge":
 					it._ejected = true
 				held = it
+			"rack":
+				var rk: Node = null
+				for r in get_tree().get_nodes_in_group(&"deck_b_rack"):
+					if String(r.name) == String(o["at"]):
+						rk = r
+				if rk == null or not rk.persist_place(it, int(_dec(o["slot"]))):
+					return {"ok": false, "message": "Load failed: rack %s has no slot %s." % [o["at"], str(_dec(o["slot"]))]}
+			"hoist":
+				var sh: Node = get_tree().get_first_node_in_group(&"vertical_shaft")
+				if sh != null:
+					sh.put_on_tray(it, String(o["at"]) if String(o["at"]) in ["A", "B"] else "A")
 	if car != null and not wanted.has(String(car.name)):
 		# Older save without the carrier: it starts docked, as on a new game.
 		car.dock(port, port.dock_global())
@@ -652,6 +694,10 @@ func apply_state(data: Dictionary) -> Dictionary:
 func _create_item(rec: Dictionary, parent: Node) -> Node3D:
 	var t := StringName(rec["type"])
 	var it: Node3D
+	if DeckBPart.KINDS.has(t):
+		var dbp: Node3D = DeckBPart.make(t, String(rec["id"]))
+		parent.add_child(dbp)
+		return dbp
 	if t == &"used_filter_cartridge":
 		it = _USED_SCENE.instantiate()
 	elif t == &"filter_cartridge":
@@ -705,7 +751,7 @@ func validate(data: Variant) -> Dictionary:
 			return {"ok": false, "message": "item %s has no valid owner" % rec["id"]}
 		if o["kind"] == "held":
 			held += 1
-		if o["kind"] in ["cabinet", "reserve", "port"]:
+		if o["kind"] in ["cabinet", "reserve", "port", "rack"]:
 			var key: String = "%s/%s/%s" % [o["kind"], o.get("at", ""), str(_dec(o.get("slot", -1)))]
 			if slots.has(key):
 				return {"ok": false, "message": "two parts claim %s" % key}

@@ -15,8 +15,10 @@ extends Node
 ## that lines() merges for display, flagged so tests / tools can tell them
 ## apart; the stored history stays true and saveable.
 
-const KINDS := ["airlock", "camera", "environment", "access"]
-const TITLES := {"airlock": "AIRLOCK ACTIVITY", "camera": "CAMERA LOG", "environment": "ENVIRONMENT LOG", "access": "ACCESS LOG"}
+const KINDS := ["airlock", "camera", "environment", "access", "maintenance"]
+## Round 49: "maintenance" = the SERVICE HISTORY (time, room, equipment,
+## fault, action, verification, outcome) written by Deck B jobs.
+const TITLES := {"airlock": "AIRLOCK ACTIVITY", "camera": "CAMERA LOG", "environment": "ENVIRONMENT LOG", "access": "ACCESS LOG", "maintenance": "SERVICE HISTORY"}
 const CAP := 80
 const ROOM_NAMES := {&"control_room": "CONTROL", &"living_quarters": "QUARTERS", &"engineering": "ENGINEERING", &"life_support": "LIFE SUPPORT", &"storage": "STORAGE", &"communications": "COMMS", &"airlock": "AIRLOCK"}
 
@@ -29,6 +31,9 @@ var _air: Dictionary = {}
 var _cam_off: Dictionary = {}
 var _seal_state: String = ""
 var _room: StringName = &""
+## Round 49: set by load_dict -- the first poll after a load only re-reads
+## the hour / room baselines (loading a save never writes log lines).
+var _resync: bool = false
 var _cam_check_day: int = -1
 
 
@@ -108,6 +113,14 @@ func _process(delta: float) -> void:
 	_poll = 0.0
 	var main: Node = _main()
 	if main == null:
+		return
+	if _resync:
+		_resync = false
+		if _dp != null and _dp.has_method("clock_minutes"):
+			_last_hour = _dp.clock_minutes() / 60
+		var cam: Node3D = main.get_node_or_null("Player/LookPivot/PitchPivot/Camera3D") as Node3D
+		if cam != null:
+			_room = room_at(cam.global_position)
 		return
 	_poll_airlock(main.get_node_or_null("AirlockChamber"))
 	_poll_seal(main.get_node_or_null("Equipment/HatchSeal"))
@@ -202,6 +215,7 @@ func room_at(p: Vector3) -> StringName:
 	for r in _room_rects:
 		if (r[0] as Rect2).has_point(Vector2(p.x, p.z)) and p.y < 3.2 and p.y > -0.5:
 			return r[1]
+	# Round 49: Deck B (its own access lines are written by deck_b_systems).
 	return &""
 
 
@@ -243,3 +257,4 @@ func load_dict(d: Dictionary) -> void:
 	_air = {}
 	_seal_state = ""
 	_last_hour = -1
+	_resync = true

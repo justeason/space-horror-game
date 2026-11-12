@@ -23,8 +23,10 @@ extends Node
 const GS = preload("res://scripts/station/game_settings.gd")
 enum Sev { NORMAL, ROUTINE, WARNING, EMERGENCY }
 const SEV_NAMES := ["NORMAL", "ROUTINE", "WARNING", "EMERGENCY"]
-const MAP_ROOMS := [&"living_quarters", &"control_room", &"main_junction", &"communications", &"life_support", &"engineering", &"storage", &"airlock"]
-const ROOM_NAMES := {&"living_quarters": "QUARTERS", &"control_room": "CONTROL", &"main_junction": "JUNCTION", &"communications": "COMMS", &"life_support": "LIFE SUPPORT", &"engineering": "ENGINEERING", &"storage": "STORAGE", &"airlock": "AIRLOCK"}
+const MAP_ROOMS := [&"living_quarters", &"control_room", &"main_junction", &"communications", &"life_support", &"engineering", &"storage", &"airlock",
+	&"b01", &"b02", &"b03", &"b04", &"b05", &"b06", &"b07", &"b08", &"b09"]
+const ROOM_NAMES := {&"living_quarters": "QUARTERS", &"control_room": "CONTROL", &"main_junction": "JUNCTION", &"communications": "COMMS", &"life_support": "LIFE SUPPORT", &"engineering": "ENGINEERING", &"storage": "STORAGE", &"airlock": "AIRLOCK",
+	&"b01": "LOWER JCT", &"b02": "WATER", &"b03": "THERMAL", &"b04": "WORKSHOP", &"b05": "LAB", &"b06": "BOTANY", &"b07": "MEDICAL", &"b08": "CARGO", &"b09": "ARCHIVE"}
 ## Red warning beacons: [room, wall-mounted position, facing (yaw deg)].
 const BEACONS := [
 	[&"engineering", Vector3(-2.68, 2.55, 4.2), -90.0],

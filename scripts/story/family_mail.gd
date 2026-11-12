@@ -60,8 +60,29 @@ const CONVERSATIONS := {
 			{"id": "A", "text": "Sorry, Mum. Long week. I'm alright.", "answer": "Alright is enough. The jam is still waiting. So am I."},
 			{"id": "B", "text": "I didn't know what to say.", "answer": "Then say that. 'I don't know what to say' is still a letter. I'd rather have that than nothing."},
 		]},
+	# Round 49 (Chapter Two): arrives the day after the Lower Service Deck
+	# opens (the family knows nothing about it -- the technician chooses
+	# what to tell). The follow-up a few days later answers THAT choice.
+	"mara_work": {"contact": "mara", "subject": "the job", "from": "Mara (sister)", "short": "Mara", "day": 2, "gate": "deck_b",
+		"text": "Dev says your company put out a newsletter: 'expanded maintenance programme'. Does that mean more work for you? How's the job, honestly?",
+		"options": [
+			{"id": "A", "text": "Everything's normal. Same routine, more rooms.", "answer": "Same routine sounds nice from down here. Rain, bills, Pip. Send me a boring photo of a pump."},
+			{"id": "B", "text": "Work is stressful. They gave me a whole lower deck.", "answer": "A whole deck? Make them pay you per deck. Seriously though — take the breaks they give you."},
+			{"id": "C", "text": "Something strange happened down there.", "needs": "observed", "answer": "Strange like broken, or strange like strange? You can tell me either. I won't tell Mum unless you want me to."},
+		]},
+	"mara_work_followup": {"contact": "mara", "subject": "again", "from": "Mara (sister)", "short": "Mara", "day": 3, "gate": "replied", "after": "mara_work",
+		"text": "Thinking about you.",
+		"text_by_prev": {
+			"A": "You said everything was normal, so here is my normal: Pip ate a sock and is very proud. Write when you can.",
+			"B": "You said it's been stressful. Are you sleeping? Don't do the thing where you stop answering when it's busy.",
+			"C": "I keep thinking about the 'something strange'. Did it happen again? You don't have to explain. Just tell me you're okay.",
+		},
+		"options": [
+			{"id": "A", "text": "I'm okay.", "answer": "Okay. I'll take okay."},
+			{"id": "B", "text": "Not sure. It's hard to explain.", "answer": "Then don't explain. Write me one ordinary thing a day. I'll know you're there."},
+		]},
 }
-const ORDER := ["mara_eating", "mum_sleep", "dev_quiz", "mara_distracted", "mum_quiet"]
+const ORDER := ["mara_eating", "mum_sleep", "dev_quiz", "mara_distracted", "mum_quiet", "mara_work", "mara_work_followup"]
 ## Round 46: ONE conversation per person (stable contact ids; letters are
 ## grouped by contact, never by subject / letter id).
 const CONTACTS := {"mara": "Mara (sister)", "mum": "Mum", "dev": "Dev"}
@@ -112,6 +133,16 @@ func arrival_day(conv: String) -> int:
 		if not arrived(String(c["after"])) or (replied_on > 0 and replied_on < int(c["day"])):
 			return -1
 		return int(c["day"])
+	if String(c["gate"]) == "deck_b":
+		# Round 49: the day after Lower Service Deck access opened.
+		var sysb: Node = get_tree().get_first_node_in_group(&"deck_b_systems") if is_inside_tree() else null
+		var t1: int = int(sysb.tier1_day) if sysb != null else -1
+		return -1 if t1 < 0 else maxi(int(c["day"]), t1 + 1)
+	if String(c["gate"]) == "replied":
+		var pv: Dictionary = threads.get(String(c["after"]), {})
+		if String(pv.get("state", "")) != "replied":
+			return -1
+		return int(pv.get("reply_day", 0)) + int(c["day"])
 	if String(c["gate"]) == "observed":
 		var od: int = observed_day()
 		return -1 if od < 0 else maxi(int(c["day"]), od + 1)
@@ -281,6 +312,9 @@ func pending_conv(cid: String) -> String:
 ## letter had gone unanswered for 2+ days by then, the variant says so.
 func letter_text(conv: String) -> String:
 	var c: Dictionary = CONVERSATIONS[conv]
+	if c.has("text_by_prev"):
+		var prev_choice: String = String(threads.get(String(c["after"]), {}).get("choice", ""))
+		return String(c["text_by_prev"].get(prev_choice, c["text"]))
 	if c.has("text_after_silence"):
 		var arr: int = _arrived_on(conv)
 		for prev in contact_convs(contact_of(conv)):

@@ -183,6 +183,7 @@ func _build_ops() -> void:
 		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		b.add_child(badge)
 		room_buttons[r["id"]] = b
+	_build_deck_b_map(p)
 	# Selected room panel.
 	_room_badge = Badge.new()
 	_room_badge.position = Vector2(396, 6)
@@ -209,6 +210,110 @@ func _build_ops() -> void:
 	action_buttons["verify"] = _btn("VERIFY REPAIR", Vector2(134, 262), Vector2(128, 30), p, func(): screen._run_verify(); refresh(), 12)
 	action_buttons["diag"] = _btn("DIAGNOSTIC", Vector2(268, 262), Vector2(118, 30), p, toggle_diag, 12)
 	_footer = _lbl("", Vector2(10, 298), Vector2(620, 36), p, 11, Color(0.6, 0.68, 0.68))
+
+
+# ------------------------------------------------- Round 49: Deck B map
+## A DECK A / DECK B selector over the map. Deck B is drawn from the same
+## layout data the deck is built from (deck_b_layout.gd): modules, service
+## corridors, the B-00 shaft link, sealed compartments, work-order badges
+## and the technician's own position while on Deck B. Before any Deck B
+## clearance it shows outlines only ("ACCESS RESTRICTED").
+const DeckBLayout = preload("res://scripts/deck_b/deck_b_layout.gd")
+var map_deck: String = "A"
+var _map_b: Control
+var _deck_tabs: Dictionary = {}
+var _you_b: ColorRect
+var _map_b_title: Label
+const MAP_B_ORIGIN := Vector2(-11.9, 2.7)
+const MAP_B_SCALE := 18.6
+
+
+func _map_b_pos(x: float, z: float) -> Vector2:
+	return Vector2((x - MAP_B_ORIGIN.x) * MAP_B_SCALE + 4.0, (z - MAP_B_ORIGIN.y) * MAP_B_SCALE + 14.0)
+
+
+func _build_deck_b_map(p: Control) -> void:
+	_map_b = Control.new()
+	_map_b.position = _map.position
+	_map_b.size = _map.size
+	_map_b.visible = false
+	p.add_child(_map_b)
+	var bg := ColorRect.new()
+	bg.color = Color(0.05, 0.07, 0.085)
+	bg.size = _map_b.size
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_map_b.add_child(bg)
+	_map_b_title = _lbl("DECK B · LOWER SERVICE DECK", Vector2(6, 0), Vector2(260, 14), _map_b, 9, Color(0.75, 0.82, 0.85))
+	for sp in DeckBLayout.SPACES:
+		var a: Vector2 = _map_b_pos(float(sp[2]), float(sp[4]))
+		var b: Vector2 = _map_b_pos(float(sp[3]), float(sp[5]))
+		var room: StringName = DeckBLayout.SPACE_ROOM.get(sp[0], &"")
+		if sp[1] == "corridor" or sp[1] == "sealed" or room == &"b11":
+			var e := ColorRect.new()
+			e.color = Color(0.32, 0.36, 0.38) if sp[1] == "corridor" else Color(0.14, 0.15, 0.16)
+			e.position = a
+			e.size = b - a
+			e.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_map_b.add_child(e)
+			if sp[1] == "sealed":
+				_lbl("B-10\nSEALED", a + Vector2(3, 3), b - a, _map_b, 8, Color(0.6, 0.6, 0.6))
+			continue
+		if room_buttons.has(room):
+			continue
+		var bt := Button.new()
+		bt.focus_mode = Control.FOCUS_NONE
+		bt.position = a
+		bt.size = b - a
+		bt.text = preload("res://scripts/station/station_status.gd").ROOM_NAMES.get(room, String(room))
+		bt.add_theme_font_size_override("font_size", 9)
+		bt.clip_text = true
+		bt.pressed.connect(select_room.bind(room))
+		_map_b.add_child(bt)
+		var badge := Badge.new()
+		badge.size = Vector2(14, 14)
+		badge.position = Vector2(bt.size.x - 13, -6)
+		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bt.add_child(badge)
+		room_buttons[room] = bt
+	var sh := ColorRect.new()
+	sh.color = Color(0.95, 0.72, 0.1)
+	sh.size = Vector2(9, 9)
+	sh.position = _map_b_pos(DeckBLayout.SHAFT_X, DeckBLayout.SHAFT_Z) - Vector2(4.5, 4.5)
+	sh.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_map_b.add_child(sh)
+	_lbl("B-00 ⇅ A", sh.position + Vector2(10, -2), Vector2(60, 12), _map_b, 8, Color(0.95, 0.8, 0.3))
+	_you_b = ColorRect.new()
+	_you_b.color = Color(0.3, 0.95, 1.0)
+	_you_b.size = Vector2(6, 6)
+	_you_b.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_you_b.visible = false
+	_map_b.add_child(_you_b)
+	for k in 2:
+		var d: String = ["A", "B"][k]
+		var t := _btn("DECK " + d, Vector2(_map.position.x + _map.size.x - 112 + k * 56, _map.position.y + 2), Vector2(54, 16), p, show_deck.bind(d), 9)
+		_deck_tabs[d] = t
+
+
+func show_deck(d: String) -> void:
+	map_deck = d if d in ["A", "B"] else "A"
+	refresh()
+
+
+func _refresh_deck_b_map() -> void:
+	_map.visible = map_deck == "A"
+	_map_b.visible = map_deck == "B"
+	for d in _deck_tabs:
+		(_deck_tabs[d] as Button).modulate = Color(1, 1, 1) if d == map_deck else Color(0.6, 0.6, 0.65)
+	var clr: Node = _clearance()
+	var tier: int = int(clr.deck_b_tier()) if clr != null and clr.has_method("deck_b_tier") else 0
+	_map_b_title.text = "DECK B · LOWER SERVICE DECK" + ("" if tier >= 1 else " · ACCESS RESTRICTED")
+	var cam: Camera3D = get_viewport().get_camera_3d() if get_viewport() != null else null
+	var main_cam: Node3D = dp.get_parent().get_node_or_null("Player") as Node3D if dp != null else null
+	if main_cam != null and DeckBLayout.is_lower(main_cam.global_position):
+		_you_b.visible = true
+		_you_b.position = _map_b_pos(main_cam.global_position.x, main_cam.global_position.z) - Vector2(3, 3)
+	else:
+		_you_b.visible = false
 
 
 func select_room(room: StringName) -> void:
@@ -608,7 +713,10 @@ func _refresh_ops() -> void:
 		duty_buttons[i].text = "%s %s" % [["", "o", "<>", "!"][int(d["severity"])], label]
 		duty_buttons[i].add_theme_color_override("font_color", SEV_COLORS[int(d["severity"])] if int(d["severity"]) > 0 else Color(0.9, 0.9, 0.9))
 	selected_duty = clampi(selected_duty, -1, duties.size() - 1)
-	if sel_locked:
+	if sel_locked and DeckBLayout.ROOMS.has(selected_room):
+		var need: int = int(DeckBLayout.ROOMS[selected_room][2])
+		_detail.text = "LOWER SERVICE DECK · %s" % ("sealed compartment" if need == 0 else "needs %s access" % clr2.DECK_B_NAMES[need])
+	elif sel_locked:
 		_detail.text = "Needs %s clearance." % clr2.NAMES[int(clr2.ROOM_LEVEL.get(selected_room, 0))]
 	elif duties.is_empty():
 		_detail.text = "" if sev_sel == 0 else ""
@@ -622,7 +730,7 @@ func _refresh_ops() -> void:
 	_diag.visible = ops_panel == "diag"
 	if _diag.visible:
 		_diag.text = screen._diagnostics_status.text
-	_map.visible = true
+	_refresh_deck_b_map()
 	# Footer: the single most urgent duty on the station (same model).
 	var all_d: Array = st.duties() if st != null else []
 	var top: Dictionary = {}
@@ -655,7 +763,7 @@ func _duty_details(d: Dictionary) -> Array:
 ## Round 44 Priority 9: RECORDS tabs -- the daily summary plus the four
 ## consultable station logs (station_log.gd). Opening a log tab tells the
 ## story director a record was consulted (investigations).
-const RECORD_TABS := [["summary", "SUMMARY"], ["airlock", "AIRLOCK"], ["camera", "CAMERAS"], ["environment", "ENVIRONMENT"], ["access", "ACCESS"]]
+const RECORD_TABS := [["summary", "SUMMARY"], ["airlock", "AIRLOCK"], ["camera", "CAMERAS"], ["environment", "ENVIRON."], ["access", "ACCESS"], ["maintenance", "SERVICE"]]
 var record_tab: String = "summary"
 var record_buttons: Dictionary = {}
 
@@ -673,7 +781,7 @@ func _build_records() -> void:
 	var p: Control = _pages[Page.RECORDS]
 	for i in RECORD_TABS.size():
 		var t: Array = RECORD_TABS[i]
-		record_buttons[t[0]] = _btn(t[1], Vector2(10 + i * 124, 2), Vector2(120, 22), p, select_record_tab.bind(t[0]), 11)
+		record_buttons[t[0]] = _btn(t[1], Vector2(10 + i * 104, 2), Vector2(100, 22), p, select_record_tab.bind(t[0]), 11)
 	var sc := ScrollContainer.new()
 	sc.position = Vector2(10, 28)
 	sc.size = Vector2(620, 306)

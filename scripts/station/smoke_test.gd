@@ -92,6 +92,12 @@ func run(menu: Node) -> void:
 	_say("workstation in use, Operations page", ws.is_in_use() if ws.has_method("is_in_use") else true)
 	ws.end_use()
 	await _wait(2.0)
+	# Round 49: the Lower Service Deck is built and still sealed on day 1.
+	var deckb: Node = main.get_node_or_null("DeckB")
+	var shaft: Node = main.get_node_or_null("DeckB/VerticalShaft")
+	var rooms_n: int = deckb.get_node("Rooms").get_child_count() if deckb != null and deckb.has_node("Rooms") else 0
+	var why: String = shaft.refusal(true) if shaft != null else "no shaft"
+	_say("lower deck built (%d rooms), shaft sealed on day 1" % rooms_n, rooms_n >= 9 and why != "" and main.get_node("DayPlan/Clearance").deck_b_tier() == 0, why)
 	# Save + read back + apply.
 	var sg: Node = main.get_node("SaveGame")
 	var r: Dictionary = sg.save_game()

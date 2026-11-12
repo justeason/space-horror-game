@@ -23,7 +23,10 @@ func _init() -> void:
 	main.get_node("FreeMoveBody").set_active(false)
 	# Candidate obstructions: visual instances in these subtrees.
 	var cands: Array = []
-	for root_name in ["StationDecor", "StationSeal", "AirlockChamber", "Exterior", "Equipment/QuartersLife/LivedIn", "TetherAnchors"]:
+	# Round 49: Deck B's non-colliding trim, equipment and hull dressing too.
+	main.get_node("DeckB").interior_forced = true
+	main.get_node("DeckB")._update_visibility()
+	for root_name in ["StationDecor", "StationSeal", "AirlockChamber", "Exterior", "Equipment/QuartersLife/LivedIn", "TetherAnchors", "DeckB/Shell", "DeckB/Rooms", "DeckB/VerticalShaft", "DeckB/Hull"]:
 		var r: Node = main.get_node_or_null(root_name)
 		if r == null:
 			continue
@@ -67,7 +70,10 @@ func _init() -> void:
 		var steps: int = maxi(int(a.distance_to(b) / 0.1), 2)
 		for i in steps + 1:
 			var p: Vector3 = a.lerp(b, float(i) / steps)
-			var vol := AABB(Vector3(p.x - HALF_W, Y_LO, p.z - HALF_W), Vector3(HALF_W * 2.0, Y_HI - Y_LO, HALF_W * 2.0))
+			# Round 49: knee-to-head band above THIS node's own floor (eye
+			# height 1.6) -- the station now has two decks.
+			var floor_y: float = p.y - 1.6
+			var vol := AABB(Vector3(p.x - HALF_W, floor_y + Y_LO, p.z - HALF_W), Vector3(HALF_W * 2.0, Y_HI - Y_LO, HALF_W * 2.0))
 			for bx in boxes:
 				if (bx[0] as AABB).intersects(vol):
 					# Pieces buried inside a solid wall are invisible: only an

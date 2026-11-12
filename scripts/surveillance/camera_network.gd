@@ -78,12 +78,32 @@ var frames: Dictionary = {}      # id -> int
 var _t: float = 0.0
 
 
+## Round 49: the Lower Service Deck's four cameras (deck_b_layout.gd) --
+## built with the rest, LISTED only once Deck B access exists (Chapter One
+## never sees them). Ids are new (INT-09..INT-12); nothing is renumbered.
+const DeckBLayout = preload("res://scripts/deck_b/deck_b_layout.gd")
+
+
+func _all_cameras() -> Array:
+	var out: Array = CAMERAS.duplicate()
+	for c in DeckBLayout.CAMERAS:
+		out.append([c[0], c[1], c[2], c[3], [c[4], c[5]], false, "behind the mount"])
+	return out
+
+
+func _is_deck_b(id: String) -> bool:
+	for c in DeckBLayout.CAMERAS:
+		if c[0] == id:
+			return true
+	return false
+
+
 func _ready() -> void:
 	add_to_group(&"camera_network")
 	var root: Node = get_parent()
 	var surv: Node = root.get_node_or_null("Surveillance")
-	for c in CAMERAS:
-		if not c[0] in CURATED:
+	for c in _all_cameras():
+		if not c[0] in CURATED and not _is_deck_b(c[0]):
 			continue
 		var vp: SubViewport = null
 		if c[4] == null:
@@ -200,7 +220,17 @@ func ids() -> Array:
 	for c in CAMERAS:
 		if cams.has(c[0]):
 			out.append(c[0])
+	var clr: Node = get_tree().get_first_node_in_group(&"clearance") if is_inside_tree() else null
+	if clr != null and clr.has_method("deck_b_tier") and int(clr.deck_b_tier()) >= 1:
+		for c in DeckBLayout.CAMERAS:
+			if cams.has(c[0]):
+				out.append(c[0])
 	return out
+
+
+## Round 49: the camera ids any display currently asks for.
+func demanded_ids() -> Array:
+	return _demand.values()
 
 
 func feed(id: String) -> Texture2D:
