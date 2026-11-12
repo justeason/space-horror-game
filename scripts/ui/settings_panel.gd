@@ -20,6 +20,8 @@ var sens_slider: HSlider
 var invert_check: CheckBox
 var reduce_check: CheckBox
 var brightness_slider: HSlider
+var thought_volume_slider: HSlider
+var thought_source_label: Label
 var language_option: OptionButton
 var back_button: Button
 var ai_checks := {}
@@ -148,6 +150,29 @@ func _build() -> void:
 		tcb.toggled.connect(func(on): GS.set_value(tk, on))
 		tr_row.add_child(tcb)
 		ai_checks[key] = tcb
+	# Round 48: the inner voice's own volume, and WHAT will be heard.
+	var tv_row := _row("SET_THOUGHT_VOLUME")
+	thought_volume_slider = HSlider.new()
+	thought_volume_slider.min_value = 0.0
+	thought_volume_slider.max_value = 1.0
+	thought_volume_slider.step = 0.05
+	thought_volume_slider.custom_minimum_size = Vector2(220, 0)
+	thought_volume_slider.value = float(GS.get_value("thought_volume"))
+	thought_volume_slider.value_changed.connect(func(v): GS.set_value("thought_volume", v))
+	tv_row.add_child(thought_volume_slider)
+	var src_row := _row("SET_THOUGHT_SOURCE")
+	thought_source_label = Label.new()
+	thought_source_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	thought_source_label.custom_minimum_size = Vector2(300, 0)
+	thought_source_label.add_theme_font_size_override("font_size", 12)
+	var iv: Node = get_tree().get_first_node_in_group(&"inner_voice") if is_inside_tree() else null
+	if iv == null:
+		iv = load("res://scripts/story/inner_voice.gd").new()
+		thought_source_label.text = iv.backend_summary()
+		iv.free()
+	else:
+		thought_source_label.text = iv.backend_summary()
+	src_row.add_child(thought_source_label)
 	var controls := Label.new()
 	controls.text = tr("SET_CONTROLS") + ": " + tr("CONTROLS_TEXT")
 	controls.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

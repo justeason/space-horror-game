@@ -251,6 +251,13 @@ func _button(parent: Node, text: String, cb: Callable) -> Button:
 	return b
 
 
+func _calendar_anomaly(kind: StringName) -> void:
+	var cal: Node = get_tree().current_scene.find_child("WallCalendar", true, false) if get_tree().current_scene != null else null
+	if cal != null:
+		cal.set_anomaly(kind, true)
+		last_action = "calendar preview: %s" % (String(kind) if kind != &"" else "cleared")
+
+
 func _row(parent: Node) -> HBoxContainer:
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 4)
@@ -277,6 +284,20 @@ func _build_story_controls(box: VBoxContainer) -> void:
 		var m: String = spec[1]
 		_button(h3, spec[0], func(): se._dev_touch(); se.window.call(m); last_action = "window " + m)
 	var h4 := _row(box)
+	# Round 48: compare the window-figure animation variants from the real
+	# spot (developer only; "B" ships). Replays at normal speed.
+	var vl := Label.new()
+	vl.text = "Figure variant:"
+	h4.add_child(vl)
+	for v in ["A", "B", "C"]:
+		var vv: String = v
+		_button(h4, vv + (" (ship)" if vv == "B" else ""), func(): se._dev_touch(); se.window.figure.variant = vv; se.window.dev_replay(); last_action = "window figure variant " + vv)
+	# Round 48: the wall calendar's future-anomaly hook (presentation only;
+	# never in Phase 1 play; the real day is untouched).
+	var hcal := _row(box)
+	_button(hcal, "Calendar: tomorrow marked", func(): _calendar_anomaly(&"tomorrow_marked"))
+	_button(hcal, "mark missing", func(): _calendar_anomaly(&"mark_missing"))
+	_button(hcal, "Clear", func(): _calendar_anomaly(&""))
 	# Round 47: the window / camera contradiction variants (previews).
 	var hm := _row(box)
 	for mv in [["Mismatch: shadow", &"mismatch_shadow"], ["day/night", &"mismatch_daynight"], ["EVA worker", &"mismatch_eva"]]:

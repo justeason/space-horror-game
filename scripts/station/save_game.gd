@@ -634,6 +634,11 @@ func apply_state(data: Dictionary) -> Dictionary:
 		if carry.is_reaching():
 			carry.complete_grasp()
 	dp.day_started.emit(dp.day_number)
+	# Round 48: re-evaluate "is the technician up?" from the LOADED state (the
+	# first frames before the load may have latched it from the menu scene's
+	# standing default); the poll re-arms the clock next frame if up.
+	if dp.has_method("begin_waking"):
+		dp.begin_waking(false)
 	# Round 34: an AUTOSAVE is the start of a day -> wake in the bunk. A
 	# manual (mid-day) save restores the saved position exactly.
 	if data.get("start_in_bed", false):

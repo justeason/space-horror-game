@@ -1466,9 +1466,14 @@ func _hatch_begin() -> bool:
 	# a muffling per bulkhead -- it used to be its own player at unit size
 	# 6 m, i.e. full volume anywhere in the Control Room ("someone knocking
 	# right beside me").
+	# Round 48: two heavy knocks (the sound now really exists -- Round 47
+	# logged it with no stream, so it was silent).
 	var snd: Node = get_tree().get_first_node_in_group(&"station_sounds")
 	if snd != null:
 		snd.play_at(&"hatch_knock", HATCH_KNOCK_POS, false)
+		get_tree().create_timer(0.48).timeout.connect(func():
+			if is_instance_valid(snd) and active == &"hatch_handle":
+				snd.play_at(&"hatch_knock", HATCH_KNOCK_POS, false))
 	return true
 
 
@@ -1522,26 +1527,6 @@ func _hatch_end() -> void:
 
 func hatch_clone_count() -> int:
 	return _hatch_clones.filter(func(c): return is_instance_valid(c)).size()
-
-
-static func _knock_stream() -> AudioStreamWAV:
-	var rate := 22050
-	var n: int = int(rate * 1.1)
-	var data := PackedByteArray()
-	data.resize(n * 2)
-	for i in n:
-		var t: float = float(i) / rate
-		var v: float = 0.0
-		for hit in [0.0, 0.42]:
-			var u: float = t - hit
-			if u >= 0.0:
-				v += sin(u * TAU * 70.0) * exp(-u * 18.0) * 0.8 + (randf() - 0.5) * exp(-u * 60.0) * 0.4
-		data.encode_s16(i * 2, int(clampf(v, -1.0, 1.0) * 26000.0))
-	var w := AudioStreamWAV.new()
-	w.format = AudioStreamWAV.FORMAT_16_BITS
-	w.mix_rate = rate
-	w.data = data
-	return w
 
 
 # ------------------------------------------------------------- visuals

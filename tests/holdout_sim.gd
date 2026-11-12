@@ -172,3 +172,102 @@ static func charge_test(h: Control, weapon: String, kind: String, n: int, dist: 
 	h.damage_taken = 0.0
 	var t: float = clear_time(h, weapon, kind, n, dist, spacing, {}, false)
 	return [t, h.damage_taken]
+
+
+## Round 48: a FRESH run (sidearm, nothing bought) with a realistic
+## "save for the next gun" policy: buy the next weapon tier as soon as it is
+## affordable; otherwise spend at most `upgrade_share` of the wallet on the
+## cheapest survival upgrade and save the rest. Returns {wave, alive,
+## per_wave (income), bought: {weapon: wave}, upgrades: {wave: ranks}}.
+static func progression(h: Control, difficulty: String, seed: int, max_wave: int = 12, upgrade_share: float = 0.4, tiers: Array = ["smg", "rifle", "launcher", "arc"]) -> Dictionary:
+	h.load_state({"difficulty": difficulty})
+	h.difficulty = difficulty
+	h.start_seeded(seed)
+	var t: float = 0.0
+	var per_wave: Array = []
+	var bought := {}
+	var ups := {}
+	var c0: int = h.credits
+	while t < 60.0 * 30.0:
+		if h.mode == "shop":
+			per_wave.append(h.credits - c0)
+			for w in tiers:
+				if bought.has(w):
+					continue
+				if h.credits >= h.weapon_cost(w):
+					h.weapon_action(w)
+					bought[w] = h.wave
+				break
+			var budget: int = int(h.credits * upgrade_share)
+			var more := true
+			while more:
+				more = false
+				var best_id: String = ""
+				var best_c: int = 1 << 30
+				for id in ["damage", "rate", "health", "armor", "regen", "speed"]:
+					var cst: int = h.upgrade_cost(id)
+					if cst > 0 and cst < best_c:
+						best_c = cst
+						best_id = id
+				if best_id != "" and best_c <= budget and h.buy(best_id):
+					budget -= best_c
+					more = true
+			var r := 0
+			for id in h.UPGRADES:
+				r += h.rank(id)
+			ups[h.wave] = r
+			c0 = h.credits
+			if h.wave >= max_wave:
+				break
+			h.action("continue")
+			continue
+		if h.mode != "play":
+			break
+		_kite(h)
+		h.step(DT)
+		t += DT
+	return {"wave": h.wave - (0 if h.mode == "shop" else 1), "alive": h.mode == "shop", "per_wave": per_wave, "bought": bought, "upgrades": ups}
+
+
+## Round 48: replays the "save for the next gun" policy on a MEASURED
+## income curve (credits earned per wave), using the game's real prices --
+## pricing vs income without the bot's survival noise. Returns
+## {bought: {weapon: wave}, ranks: {wave: total ranks}}.
+static func ledger(h: Control, income: Array, upgrade_share: float = 0.4, tiers: Array = ["smg", "rifle", "launcher", "arc"]) -> Dictionary:
+	var credits := 0
+	var bought := {}
+	var ranks := {}
+	for id in h.UPGRADES:
+		ranks[id] = 0
+	var per_wave := {}
+	for i in income.size():
+		var wave: int = i + 1
+		credits += int(income[i])
+		for w in tiers:
+			if bought.has(w):
+				continue
+			if credits >= int(h.WEAPONS[w]["cost"]):
+				credits -= int(h.WEAPONS[w]["cost"])
+				bought[w] = wave
+			break
+		var budget: int = int(credits * upgrade_share)
+		var more := true
+		while more:
+			more = false
+			var best_id := ""
+			var best_c: int = 1 << 30
+			for id in ["damage", "rate", "health", "armor", "regen", "speed"]:
+				var c: Array = h.UPGRADES[id][2]
+				if int(ranks[id]) < c.size() and int(c[ranks[id]]) < best_c:
+					best_c = int(c[ranks[id]])
+					best_id = id
+			if best_id != "" and best_c <= budget:
+				budget -= best_c
+				credits -= best_c
+				ranks[best_id] = int(ranks[best_id]) + 1
+				more = true
+		var tot := 0
+		for id in ranks:
+			tot += int(ranks[id])
+		per_wave[wave] = tot
+	return {"bought": bought, "ranks": per_wave}

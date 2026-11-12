@@ -38,7 +38,16 @@ const UNIT_SIZE := 1.6
 const WALL_DB := -7.0
 const MAX_WALLS := 4
 const OPEN_CUTOFF := 9000.0
-const KIND_DB := {&"hatch_knock": -2.0, &"glass_knock": -4.0, &"creak": -3.0, &"fan": -4.0}
+## Round 48: per-kind levels. Mouth / hand foley is QUIET (it plays a few
+## centimetres from the ears); impacts on the hull read across a room.
+const KIND_DB := {&"hatch_knock": -1.0, &"glass_knock": -1.0, &"creak": -3.0, &"fan": -4.0,
+	&"sip": -17.0, &"swallow": -20.0, &"liquid_tilt": -22.0, &"cup_lift": -16.0, &"cup_down": -9.0,
+	&"pouch_crinkle": -15.0, &"pouch_tear": -13.0, &"bite": -19.0, &"chew": -22.0, &"fork_clink": -13.0,
+	&"tray_down": -9.0, &"brush_tap": -14.0, &"brush_scrub": -18.0, &"trickle": -11.0}
+const Foley = preload("res://scripts/audio/foley_synth.gd")
+## Kinds with several recorded-style takes (no machine-gun repetition).
+const TAKES := {&"glass_knock": 3, &"hatch_knock": 3}
+var _take: Dictionary = {}
 const MIN_GAP_S := 120.0
 const MAX_OPS_PER_DAY := 4
 const AIRLOCK_POS := Vector3(-4.8, 1.6, -2.0)
@@ -78,8 +87,37 @@ func _main() -> Node:
 
 
 func _stream(kind: StringName) -> AudioStream:
+	# Round 48: physical foley (foley_synth.gd). Round 47 left glass_knock /
+	# hatch_knock WITHOUT any stream: play_at() logged them and played
+	# nothing -- the "inaudible knocks". Every kind used now has a stream
+	# (test_r48_audio checks it).
+	if TAKES.has(kind):
+		var n: int = int(_take.get(kind, 0))
+		_take[kind] = n + 1
+		var key := StringName("%s#%d" % [kind, n % int(TAKES[kind])])
+		if not _streams.has(key):
+			_streams[key] = Foley.glass_knock(n % 3) if kind == &"glass_knock" else Foley.hatch_knock(n % 3)
+		return _streams[key]
 	if _streams.has(kind):
 		return _streams[kind]
+	var fs: AudioStream = null
+	match kind:
+		&"sip": fs = Foley.sip()
+		&"swallow": fs = Foley.swallow()
+		&"liquid_tilt": fs = Foley.liquid_tilt()
+		&"cup_lift": fs = Foley.cup_lift()
+		&"cup_down": fs = Foley.cup_down()
+		&"pouch_crinkle": fs = Foley.pouch_crinkle()
+		&"pouch_tear", &"wrapper": fs = Foley.pouch_tear()
+		&"bite": fs = Foley.bite()
+		&"chew": fs = Foley.chew()
+		&"fork_clink": fs = Foley.fork_clink()
+		&"tray_down", &"tray": fs = Foley.tray_down()
+		&"brush_tap": fs = Foley.brush_tap()
+		&"trickle": fs = Foley.trickle()
+	if fs != null:
+		_streams[kind] = fs
+		return fs
 	var mech: Node = _main().get_node_or_null("Player/HUD/MechanicalSfx")
 	var s: AudioStream = null
 	if mech != null:
@@ -95,22 +133,10 @@ func _stream(kind: StringName) -> AudioStream:
 			# normal sounds like.
 			&"dispense":            # water filling a cup at the dispenser
 				s = mech._tone(0.9, func(t, i): return (fmod(sin(float(i) * 12.9898) * 43758.5453, 1.0) - 0.5) * 0.3 * minf(t * 12.0, 1.0) * (1.0 - smoothstep(0.8, 1.0, t)) * (0.7 + 0.3 * sin(t * TAU * (30.0 + 40.0 * t))))
-			&"sip":                 # a short sip / swallow, at the mouth
-				s = mech._tone(0.42, func(t, i): return ((fmod(sin(float(i) * 3.77) * 9301.0, 1.0) - 0.5) * 0.22 * exp(-pow((t - 0.25) * 9.0, 2.0)) + sin(t * 0.42 * TAU * (160.0 + 120.0 * t)) * 0.18 * exp(-pow((t - 0.7) * 10.0, 2.0))))
-			&"chew":                # three soft muffled chews
-				s = mech._tone(0.8, func(t, i): return (fmod(sin(float(i) * 5.13) * 7919.0, 1.0) - 0.5) * 0.25 * pow(maxf(sin(t * PI * 3.0), 0.0), 3.0) + sin(t * 0.8 * TAU * 85.0) * 0.12 * pow(maxf(sin(t * PI * 3.0), 0.0), 4.0))
-			&"wrapper":             # a foil meal pouch torn and crinkled
-				s = mech._tone(0.5, func(t, i): return (fmod(sin(float(i) * 17.31) * 31337.0, 1.0) - 0.5) * 0.4 * (1.0 if fmod(float(i) * 0.37, 7.0) < 1.4 else 0.15) * (1.0 - t))
-			&"tray":                # a dinner tray set down, cutlery clink
-				s = mech._tone(0.35, func(t, _i): return sin(t * 0.35 * TAU * 2300.0) * 0.12 * exp(-t * 18.0) + sin(t * 0.35 * TAU * 140.0) * 0.3 * exp(-t * 14.0))
-			&"brush":               # toothbrush strokes, ~5 a second
-				s = mech._tone(1.6, func(t, i): return (fmod(sin(float(i) * 9.71) * 4513.0, 1.0) - 0.5) * 0.26 * pow(absf(sin(t * 1.6 * PI * 5.0)), 2.0) * minf(t * 6.0, 1.0) * minf((1.0 - t) * 6.0, 1.0))
 			&"kettle":              # the hot-water unit heating: rumble rising to a hiss
 				s = mech._tone(2.9, func(t, i): return (sin(t * 2.9 * TAU * 70.0) * 0.12 * (1.0 - t) + (fmod(sin(float(i) * 2.71) * 1777.0, 1.0) - 0.5) * 0.3 * t * t) * minf(t * 10.0, 1.0) * minf((1.0 - t) * 12.0, 1.0))
 			&"kettle_done":         # its thermostat switching off
 				s = mech._tone(0.12, func(t, _i): return sin(t * 0.12 * TAU * 1700.0) * 0.4 * exp(-t * 30.0) + sin(t * 0.12 * TAU * 220.0) * 0.3 * exp(-t * 20.0))
-			&"trickle":             # a little water poured on soil
-				s = mech._tone(1.1, func(t, i): return (fmod(sin(float(i) * 6.31) * 2203.0, 1.0) - 0.5) * 0.18 * minf(t * 8.0, 1.0) * (1.0 - t) * (0.6 + 0.4 * sin(t * TAU * 23.0)))
 			&"creak":
 				s = mech._tone(0.7, func(t, i): return sin(t * TAU * (140.0 - 60.0 * t)) * 0.3 * pow(1.0 - t, 2.0) + (fmod(sin(float(i) * 7.7) * 311.0, 1.0) - 0.5) * 0.08 * (1.0 - t))
 			_:
@@ -129,18 +155,49 @@ func play_at(kind: StringName, pos: Vector3, real: bool = true) -> void:
 	if heard.size() > 60:
 		heard.pop_front()
 	var s: AudioStream = _stream(kind)
+	# Round 48: record whether a sound REALLY started (stream + free voice),
+	# so a silent event can never pass for an audible one again.
+	heard.back()["played"] = false
 	if s == null:
+		push_warning("station_sounds: no stream for '%s' (silent)" % kind)
 		return
+	var ap: AudioStreamPlayer3D = null
 	for p in _pool:
-		var ap: AudioStreamPlayer3D = p
-		if not ap.playing:
-			ap.global_position = pos
-			ap.stream = s
-			ap.volume_db = db
-			ap.attenuation_filter_cutoff_hz = float(path["cutoff"])
-			ap.pitch_scale = randf_range(0.97, 1.03)
-			ap.play()
-			return
+		if not (p as AudioStreamPlayer3D).playing:
+			ap = p
+			break
+	if ap == null:
+		# all voices busy: take the one closest to finishing
+		var best := INF
+		for p in _pool:
+			var q: AudioStreamPlayer3D = p
+			var left: float = q.stream.get_length() - q.get_playback_position() if q.stream != null else 0.0
+			if left < best:
+				best = left
+				ap = q
+	ap.stop()
+	ap.global_position = pos
+	ap.stream = s
+	ap.volume_db = db
+	ap.attenuation_filter_cutoff_hz = float(path["cutoff"])
+	ap.pitch_scale = randf_range(0.97, 1.03)
+	ap.play()
+	heard.back()["played"] = true
+	heard.back()["len"] = s.get_length()
+	heard.back()["bus"] = String(ap.bus)
+
+
+## Round 48: a one-off stream (e.g. a brush scrub phase-locked to the
+## animation) through the same positional / acoustic path.
+func play_custom(kind: StringName, stream: AudioStream, pos: Vector3) -> void:
+	_streams[kind] = stream
+	play_at(kind, pos, true)
+	_streams.erase(kind)
+
+
+## Developer / tests: the stream a kind resolves to (null = would be silent).
+func stream_for(kind: StringName) -> AudioStream:
+	return _stream(kind)
 
 
 func _listener() -> Node3D:

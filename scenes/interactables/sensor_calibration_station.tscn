@@ -57,7 +57,6 @@ material = SubResource("StandardMaterial3D_label")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.18, 0.116)
 pixel_size = 0.001
 billboard = 0
-no_depth_test = true
 modulate = Color(0.85, 0.85, 0.82, 0.95)
 font_size = 20
 text = "ENV SENSOR CAL"

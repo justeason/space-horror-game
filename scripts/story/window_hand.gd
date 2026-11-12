@@ -9,7 +9,7 @@ extends Node3D
 ## starts and freed when it ends (no permanent hidden actor).
 ##
 ## Sequence (deterministic; story_events drives it with tick()):
-##   knock     three soft taps (0.00 / 0.38 / 0.72 s) -- the index finger
+##   knock     three taps (0.00 / 0.62 / 0.86 s: one, a pause, two) -- the index finger
 ##             lifts and taps the glass on each one. In vacuum there is no
 ##             airborne knock: the sound is STRUCTURE-BORNE ("glass_knock",
 ##             a dull thud through the frame) from the port itself, through
@@ -34,8 +34,12 @@ const PORT_CENTRE := Vector3(-1.2, 1.5, 1.4)
 const PORT_R := 0.3
 const OUTER_X := -1.52
 const OUTER_R := 0.33
-const KNOCK_TIMES := [0.0, 0.38, 0.72]
-const KNOCK_POS := Vector3(-1.47, 1.4, 1.5)       # in the port's frame
+## Round 48: knock ... (pause) ... knock-knock. The sound source is the
+## pane's CABIN face: the knock is on the glass itself, which radiates into
+## the Control Room -- Round 47 placed it outside the pane, so the pane
+## counted as a wall (-7 dB + low-pass) on top of having no stream at all.
+const KNOCK_TIMES := [0.0, 0.62, 0.86]
+const KNOCK_POS := Vector3(-1.16, 1.4, 1.5)
 const WAIT_S := 9.0
 const SEEN_HOLD_S := 0.55
 const WITHDRAW_S := 0.3
@@ -163,7 +167,12 @@ func tick(delta: float, looking: bool) -> void:
 				state = "withdraw"
 				_seen_t = 0.0
 		"seen":
-			_seen_t += delta
+			# Round 48: the knock sequence always completes (looking during
+			# it never cuts the last knocks); the hold starts after it.
+			while knocks_played < KNOCK_TIMES.size() and t >= float(KNOCK_TIMES[knocks_played]):
+				_knock()
+			if knocks_played >= KNOCK_TIMES.size():
+				_seen_t += delta
 			if _seen_t >= SEEN_HOLD_S:
 				state = "withdraw"
 				_seen_t = 0.0
@@ -207,7 +216,15 @@ func _pose(tt: float) -> void:
 				# Almost nothing: the little finger creeps a few degrees.
 				(_fingers[3][0] as Node3D).rotation.x = deg_to_rad(12.0 + 4.0 * smoothstep(1.0, WAIT_S, tt))
 		"seen":
-			_pose_drawn(clampf(_seen_t / SEEN_HOLD_S, 0.0, 1.0))
+			if knocks_played < KNOCK_TIMES.size():
+				var lift2 := 0.0
+				for kt in KNOCK_TIMES:
+					var u2: float = tt - float(kt)
+					if u2 > -0.14 and u2 < 0.06:
+						lift2 = maxf(lift2, 1.0 - absf(u2 + 0.04) / 0.1)
+				(_fingers[0][0] as Node3D).rotation.z = deg_to_rad(-38.0) * clampf(lift2, 0.0, 1.0)
+			else:
+				_pose_drawn(clampf(_seen_t / SEEN_HOLD_S, 0.0, 1.0))
 		"withdraw":
 			_pose_drawn(1.0)
 			var w: float = clampf(_seen_t / WITHDRAW_S, 0.0, 1.0)

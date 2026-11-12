@@ -53,6 +53,7 @@ var _cool: float = 0.0
 var _player: AudioStreamPlayer
 var _task: int = -1
 var _task_path: String = ""
+var interrupted: int = 0
 signal thought(id: String, text: String)
 
 
@@ -118,6 +119,7 @@ static func _ensure_bus() -> void:
 	eq.set_band_gain_db(1, 2.5)          # ~230 Hz: proximity warmth
 	eq.set_band_gain_db(4, -2.0)         # ~3.3 kHz: less announcer edge
 	AudioServer.add_bus_effect(i, eq)
+	GS.apply_one("thought_volume")       # Round 48: its own volume setting
 
 
 func _lang() -> String:
@@ -200,15 +202,85 @@ func is_showing() -> bool:
 	return not current.is_empty()
 
 
+## Round 48 Priorities 20-22: WHICH VOICE speaks the technician's thoughts.
+## Sources, best first -- the first one available for the language is used
+## for EVERY line of the session (the character never switches voices):
+##   1. "recorded"  original lines recorded by an authorised voice actor:
+##                  res://audio/inner_voice/<lang>/<line>.ogg|wav (shipped)
+##                  or user://inner_voice/<lang>/<line>.ogg|wav (a pack the
+##                  player installs). <line> is the thought id with ':' -> '_'.
+##                  A line that pack does not have is shown as a caption
+##                  only -- it is never filled in by a different (synthetic)
+##                  voice.
+##   2. "system"    a NATURAL macOS voice (Enhanced / Premium) via `say`.
+##   3. "captions"  nothing human-sounding is available: captions only,
+##                  with the exact reason (never the robotic voices).
+static var RECORDED_DIRS: Array = ["res://audio/inner_voice/", "user://inner_voice/"]   # tests may point this at a temp dir
+const RECORDED_EXT := ["ogg", "wav"]
+
+
+static func line_key(id: String) -> String:
+	return id.replace(":", "_").replace("/", "_").replace(" ", "_")
+
+
+## Path of a recorded performance of thought `id` in `lang`, or "".
+static func recorded_line(id: String, lang: String) -> String:
+	for d in RECORDED_DIRS:
+		for ext in RECORDED_EXT:
+			var p: String = "%s%s/%s.%s" % [d, lang, line_key(id), ext]
+			if FileAccess.file_exists(p) or ResourceLoader.exists(p):
+				return p
+	return ""
+
+
+## Is a recorded pack installed for `lang` (any line)?
+static func has_recorded_pack(lang: String) -> bool:
+	for d in RECORDED_DIRS:
+		var da := DirAccess.open(d + lang)
+		if da == null:
+			continue
+		for f in da.get_files():
+			if f.get_extension() in RECORDED_EXT or f.ends_with(".import"):
+				return true
+	return false
+
+
+## "recorded" | "system" | "captions" for `lang` (see above).
+func voice_source(lang: String = "") -> String:
+	if lang == "":
+		lang = _lang()
+	if not bool(GS.get_value("thought_voice")):
+		return "captions"
+	if has_recorded_pack(lang):
+		return "recorded"
+	if DisplayServer.get_name() != "headless" and FileAccess.file_exists(SAY) and natural_voice(lang) != "":
+		return "system"
+	return "captions"
+
+
 func backend() -> String:
 	if not bool(GS.get_value("thought_voice")):
 		return "captions (voice off)"
+	match voice_source():
+		"recorded":
+			return "recorded voice pack (%s)" % _lang()
+		"system":
+			return "local voice (say: %s)" % natural_voice(_lang())
 	if DisplayServer.get_name() == "headless" or not FileAccess.file_exists(SAY):
 		return "captions only (no local voice)"
-	var v: String = natural_voice(_lang())
-	if v == "":
-		return "captions only (no natural local voice installed: add an Enhanced/Premium voice in System Settings > Accessibility > Spoken Content)"
-	return "local voice (say: %s)" % v
+	return "captions only (no natural local voice installed: add an Enhanced/Premium voice in System Settings > Accessibility > Spoken Content, or install a recorded voice pack)"
+
+
+## One line for the settings screen: what the player will hear and why.
+func backend_summary() -> String:
+	match voice_source():
+		"recorded":
+			return tr("VOICE_SRC_RECORDED")
+		"system":
+			return tr("VOICE_SRC_SYSTEM") % natural_voice(_lang())
+	if not bool(GS.get_value("thought_voice")):
+		return tr("VOICE_SRC_OFF")
+	return tr("VOICE_SRC_NONE")
 
 
 ## Installed voices as [[name, locale]] (parsed once from `say -v ?`).
@@ -243,6 +315,11 @@ func _process(delta: float) -> void:
 	if not current.is_empty():
 		_show_t -= delta
 		_poll_voice()
+		# Round 48: the station assistant always wins -- a thought being
+		# spoken stops (its caption stays) the moment the assistant talks.
+		if _player.playing and _ai_busy():
+			_player.stop()
+			interrupted += 1
 		_set_duck(_player.playing)
 		if _show_t <= 0.0 and not _player.playing:
 			current = {}
@@ -306,14 +383,20 @@ static func duck_effect(bus: String) -> AudioEffectAmplify:
 
 
 func _start_voice(text: String, lang: String) -> void:
-	if not backend().begins_with("local voice"):
+	_task = -1
+	var src: String = voice_source(lang)
+	if src == "recorded":
+		var rp: String = recorded_line(String(current.get("id", "")), lang)
+		if rp != "":
+			_play(rp)
+		return                                   # missing line: caption only
+	if src != "system":
 		return
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(CACHE_DIR))
 	var v: Array = [natural_voice(lang), int(VOICE.get(lang, VOICE["en"])[1])]
 	var path: String = CACHE_DIR + "thought_%s.wav" % ("%s|%s|%s|%d" % [v[0], lang, text, v[1]]).md5_text()
 	_task_path = path
 	if FileAccess.file_exists(path):
-		_task = -1
 		_play(path)
 		return
 	_task = WorkerThreadPool.add_task(_render.bind(text, ProjectSettings.globalize_path(path), String(v[0]), int(v[1])), false, "thought render")
@@ -336,10 +419,20 @@ func _poll_voice() -> void:
 
 
 func _play(path: String) -> void:
-	var s: AudioStreamWAV = AudioStreamWAV.load_from_file(path) if FileAccess.file_exists(path) else null
+	var s: AudioStream = null
+	if path.begins_with("res://") and ResourceLoader.exists(path):
+		s = load(path) as AudioStream
+	elif FileAccess.file_exists(path):
+		match path.get_extension():
+			"wav": s = AudioStreamWAV.load_from_file(path)
+			"ogg": s = AudioStreamOggVorbis.load_from_file(path)
 	if s != null:
 		_player.stream = s
 		_player.play()
+		last_played = path
+
+
+var last_played: String = ""
 
 
 ## Developer / tests: flush the queue (show the next one now).

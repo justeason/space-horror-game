@@ -229,6 +229,23 @@ func gameplay_delta(delta: float) -> float:
 ## The day starts once the technician is up (sleep_state reports not
 ## sleeping / not lying). Polled, so every path (new game, autosave load,
 ## a mid-day load, tests without a bunk) resolves without bespoke calls.
+## Round 48: back to "waking" (the clock waits) -- called when the
+## technician is put in the bunk at the start of a day (a new game) and
+## after a save is applied. Round 47 only reset this in the new-day reset:
+## on a NEW GAME (and on loading a morning save) the first frames had
+## already latched day_active = true before the player was placed in the
+## bunk, so the clock ran while lying and through the whole get-up (~8
+## station minutes before the first controllable frame -- part of the
+## reported "09:00 shortly after waking"). The poll re-arms it as soon as
+## the technician is really up.
+func begin_waking(new_game: bool = false) -> void:
+	day_active = false
+	if new_game and not shift_ended:
+		shift_elapsed_s = 0.0           # frames before the bunk placement never count
+		laptop_clock_s = 0.0
+	clock_hold_changed.emit(clock_paused())
+
+
 func _poll_day_active() -> void:
 	if day_active:
 		return
@@ -349,7 +366,7 @@ func time_diagnostics() -> Dictionary:
 	var domain: String = "rest (after shift)" if shift_ended else ("waking" if not day_active else ("laptop: budget held, clock real-pace" if _holds.has(&"laptop") and _holds.size() == 1 else ("held" if not _holds.is_empty() else "active shift")))
 	return {"clock": clock_text_hhmm(), "elapsed_s": shift_elapsed_s, "remaining_s": shift_remaining_s(),
 		"pause": ", ".join(clock_hold_reasons().map(func(r): return String(r))),
-		"multiplier": CLOCK_DAY_SPAN_MIN * 60.0 / maxf(shift_duration_s(), 1.0), "domain": domain,
+		"multiplier": clock_rate_at(shift_elapsed_s) * 60.0, "domain": domain,
 		"laptop_clock_s": laptop_clock_s, "after_shift_s": awake_after_shift_s}
 
 
@@ -381,10 +398,41 @@ const CLOCK_SHIFT_MIN := CLOCK_DAY_SPAN_MIN       # (Round 42 name)
 var laptop_clock_s: float = 0.0
 
 
+## Round 48 Priority 4: PIECEWISE station-clock mapping. Round 47 ran the
+## 15 station hours linearly over the 600 s budget (one hour every 40 s),
+## so the watch read 09:00 about 40 s after getting up -- technically right,
+## psychologically far too fast. The morning now runs slower and the long
+## afternoon / evening a little faster; the curve is continuous and
+## strictly increasing (never backwards, never a jump) and still ends at
+## exactly 23:00 when the 600 s budget does. Points are (share of the
+## active shift, station minutes after 08:00); overtime continues at the
+## last segment's pace.
+##   08:00 -> 09:15  first 20 % (120 s; ~96 s per station hour)
+##   09:15 -> 13:30  next 30 %  (180 s; ~42 s per hour)
+##   13:30 -> 23:00  last 50 %  (300 s; ~32 s per hour)
+const CLOCK_CURVE := [Vector2(0.0, 0.0), Vector2(0.2, 75.0), Vector2(0.5, 330.0), Vector2(1.0, 900.0)]
+
+
+## Station minutes after 08:00 for `real_s` of eligible shift time.
+func clock_offset_min(real_s: float) -> float:
+	var f: float = maxf(real_s, 0.0) / maxf(shift_duration_s(), 1.0)
+	for i in range(1, CLOCK_CURVE.size()):
+		var a: Vector2 = CLOCK_CURVE[i - 1]
+		var b: Vector2 = CLOCK_CURVE[i]
+		if f <= b.x or i == CLOCK_CURVE.size() - 1:
+			return a.y + (f - a.x) * (b.y - a.y) / (b.x - a.x)
+	return 0.0
+
+
+## Station minutes per real second at `real_s` (diagnostics / tests).
+func clock_rate_at(real_s: float) -> float:
+	return (clock_offset_min(real_s + 0.5) - clock_offset_min(maxf(real_s - 0.5, 0.0))) / (1.0 if real_s >= 0.5 else real_s + 0.5)
+
+
 func clock_minutes() -> int:
 	var real_s: float = shift_elapsed_s + (awake_after_shift_s if shift_ended else 0.0)
-	var m: float = CLOCK_START_MIN + real_s * CLOCK_DAY_SPAN_MIN / maxf(shift_duration_s(), 1.0) + laptop_clock_s / 60.0
-	return int(m)
+	var m: float = CLOCK_START_MIN + clock_offset_min(real_s) + laptop_clock_s / 60.0
+	return int(m + 1e-4)          # (frame-summed time: 119.99999 s still reads 09:15)
 
 
 func clock_text_hhmm() -> String:

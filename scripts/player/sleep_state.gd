@@ -320,6 +320,10 @@ func _task_message(text: String) -> void:
 ## wristwatch glance, E sits up and gets up). Never used for loading a
 ## mid-day save (that restores the saved position).
 func start_day_in_bed() -> void:
+	# Round 48: the day's clock waits while the technician is in the bunk.
+	var dp: Node = get_tree().get_first_node_in_group(&"day_plan") if is_inside_tree() else null
+	if dp != null and dp.has_method("begin_waking"):
+		dp.begin_waking(true)
 	_kill_tween()
 	_kill_zoom_tween()
 	_kill_eyes_tween()

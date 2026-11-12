@@ -11121,3 +11121,237 @@ the owner's Round 46 playtest; fixes before new systems.
   local voice is installed here, so thoughts are captions on this machine.
   Windows build not run on Windows. Fresh Easy runs are now hard for the
   simulator's sidearm bot (it often falls in waves 1-3) -- a tuning item.
+
+
+# Round 48 — Horror cinematography, human inner voice, sound redesign, wristwatch time, handover app, calendar, Holdout progression
+
+Baseline: 8284676 (Round 47), 163/163 twice. Everything below was found by
+measuring the running game (headless tests + rendered frames + exported
+audio), not assumed.
+
+## A. Wristwatch "09:00 shortly after waking" (Priorities 2-4)
+Two separate causes, both real:
+1. NEW GAME / LOADED SAVE (a bug). DayPlan.day_active (the waking hold) is
+   latched by a poll. On a new game the first frames saw a standing
+   technician and latched it TRUE before SaveGame placed the player in the
+   bunk; only the next-day reset ever set it false again. So on day 1 (and
+   after loading a morning save) the clock ran while lying in the bunk and
+   through the whole get-up: the first controllable frame read ~08:08.
+   Fix: DayPlan.begin_waking() -- called by SleepState.start_day_in_bed()
+   (new game: also zeroes time from the first frames) and after every
+   SaveGame.apply_state(); the poll re-arms it the moment the technician
+   is really up. Days 2+ were already correct (one update source, the
+   new-day reset zeroes elapsed time, waking/lying/get-up hold the clock).
+2. PACING (correct but psychologically too fast). 15 station hours were
+   mapped LINEARLY over the 600 s budget: one hour every 40 s, so 09:00
+   arrived 40 s after getting up. Now a piecewise, strictly increasing
+   curve (DayPlan.CLOCK_CURVE):
+     08:00 -> 09:15  first 20 % (120 s; ~96 s per station hour)
+     09:15 -> 13:30  next 30 %  (180 s; ~42 s per hour)
+     13:30 -> 23:00  last 50 %  (300 s; ~32 s per hour)
+   600 eligible seconds still end the shift at exactly 23:00; overtime
+   continues at the last pace; the laptop's real-pace station clock,
+   emergencies (own timers), scheduling (keyed to elapsed seconds) are
+   unchanged; dinner (18:00) now comes at ~443 s (was 400 s).
+   Snapshots (test_r48_clock_calendar): 0 s 08:00 · 5 s 08:03 · 15 s 08:09
+   · 30 s 08:18 · 40 s 08:24 · 60 s 08:37 · 300 s 13:29 · 600 s 23:00.
+
+## B. Wall calendar (Priorities 5-6)
+scripts/station/wall_calendar.gd replaces the static prop (which always
+showed 10 fixed marks). Fiction: Day 1 = 1 October 2026 (the laptop's
+files and the previous rotation's archive are dated around it); never the
+computer's date. Real month pages, real weekdays: past days on the page
+slashed in red, TODAY circled, future blank; day 32 turns to November, day
+93 to January 2027. Reads the authoritative DayPlan.day_number (polled,
+so wake / load / dev changes all update it). 0.36 x 0.5 m, readable from
+the desk. set_anomaly(&"tomorrow_marked" | &"mark_missing") is a
+PRESENTATION hook for later phases (another hand's ring around tomorrow,
+yesterday's slash missing); never called by the story in Phase 1, never
+touches the day; F8 developer preview only.
+
+## C. Window figure (Priorities 7-12)
+Frame-by-frame capture from the real observation spot (OBS_SPOT, normal
+FOV + the encounter's own focus zoom) confirmed the screenshot analysis:
+an UNSHADED black cut-out, egg head on a 3.6 cm stick neck, square to the
+window, centred in the port, symmetric simple arm angles, random 14 Hz
+"vibration" as the shudder.
+Redesign (window_figure.gd):
+- Body: human proportions (head 1.74 m, arms 0.70 m), a skull deeper than
+  wide with a jaw and the line of a nose (turning it changes the
+  silhouette), a 5 cm neck flowing into trapezius slopes, deltoids,
+  clavicle pivots (a shoulder hitches without detaching), separate legs,
+  boots, one hand half closed. SHADED near-black materials in four tones
+  (coverall / skin / hair / face) with a figure-only cold rim light (cull
+  mask = the eye-only layer; cameras never see it); the face parts never
+  catch light (no identity).
+- Staging: 0.23 m right of the port's centre line, body turned 42 deg away
+  down the tunnel, head a further 30 deg -- for a moment, another
+  technician waiting at the hatch. Standing off-centre also gives the
+  retreat the whole width of the port to cross.
+- Variants compared from the real spot (frame sheets in the scratchpad):
+  A subtle body, extreme neck (readable but mild); C a stare then a yank
+  backwards (mostly static, the only event is the exit); B CHOSEN -- the
+  impossible posture reads at 4.3 m and is the most disturbing without
+  looking broken. Variant buttons stay in the F8 panel only.
+- Sequence B (react time): 0.00-0.42 still (it has noticed you) ->
+  0.42 RECOGNITION the head comes round in 0.1 s, overshoots and settles
+  onto you while the torso does not move (88 deg vs 0 deg measured) ->
+  1.05-1.6 IMPOSSIBLE POSTURE chest twisted 57 deg against the hips, one
+  shoulder hitched toward the ear and the other dropped, a 29 deg sideways
+  bend under a head held level -> 1.85 SHUDDER four deliberate snapped key
+  poses (40 ms each, held between: head over / chest back / body drops +
+  hand flips / head snaps level onto you) -> 2.65 RETREAT 0.12 s hold, a
+  slow 0.6 m/s slide, then the speed jumps to ~6 m/s; feet still, body
+  dragged against its travel, the head kept turned to the viewer ->
+  gone only once behind the far frame (measured: never mid-glass).
+  ~3.4 s from the head turn to empty glass.
+- Reduced effects: every snap eased over 0.22 s, shudder amplitude halved
+  (max 1.2 px/frame vs 10.1). No focus zoom (unchanged).
+
+## D. Sound (Priorities 13-19)
+- ROOT CAUSE of the silent knocks: glass_knock and hatch_knock had NO
+  stream -- station_sounds.play_at() logged them (all Round 47 tests read
+  that log) and returned without playing. play_at() now records whether a
+  voice actually STARTED (played / length / bus) and warns on a missing
+  stream; test_r48_audio checks every kind the code plays resolves to a
+  stream.
+- New scripts/audio/foley_synth.gd: physically modelled synthesis (contact
+  transients, resonant modes, band-shaped noise, flow modulation),
+  deterministic, no assets / network. Knock (window): pane modes 410-3840
+  Hz + a low frame thump + a faint hull ring, 0.55 s, centroid ~500 Hz;
+  three takes rotate. Hatch: 68 Hz steel thud + a 1.2 s metallic ring
+  (63 Hz dominant) -- they cannot be confused.
+- Window hand: knock ... (pause 0.62 s) ... knock-knock; the source is the
+  pane's cabin face (Round 47 put it outside the pane, so the pane counted
+  as a wall: -7 dB + low-pass on top of being silent). Control Room: 0
+  walls, unfiltered, -1 to -5 dB; Engineering: 4 walls, -36 dB, muffled.
+  The sequence always completes (looking at the port during it no longer
+  cut the last knocks). Hatch-handle event: two knocks again.
+- Routine foley (quarters_life FOLEY timelines): Round 47 played one sip /
+  chew AFTER the gesture had ended. Now each action plays at the phases of
+  the actual hand-to-mouth animation: tea = mug lift / liquid / sip at the
+  tilt / swallow / mug set down while lowering; pouch meal = tear / 2 bites
+  on the hand's bobs / chews / swallow / pouch away; tray dinner = tray /
+  fork clinks / bites / chews / swallow / tray; brushing = holder tap /
+  bristle strokes phase-locked to the scrub for exactly the at-mouth phase
+  / tap (no running water: the animation has no rinse); watering = trickle
+  while the drops fall. Interrupted actions stop their sounds. Mouth foley
+  is quiet (-17 to -22 dB at the ear).
+- Horror sound audit (intent per event):
+  window figure      SILENT by design (two panes + vacuum; the cue creak
+                     in the room before it is the only sound)
+  window hand        3 structure-borne knocks (fixed), positional, SFX bus
+  corridor crossing  SILENT (camera-only, cameras have no audio)
+  peripheral figure  SILENT by design (silence reads stronger)
+  hatch handle       2 hatch knocks at the outer hatch (fixed: was silent)
+  phantom airlock    latch / hiss / hiss / latch from the airlock (streams
+                     exist, positional, "real" = false)
+  mismatches         SILENT (a visual contradiction)
+  wrong reading      the instrument's normal confirm tone is ABSENT on
+                     purpose (players learn it in ordinary play)
+  daily-note anomaly SILENT (a text change)
+  family contradiction SILENT (a text change)
+  basil resurrection SILENT
+  All positional sounds: inverse distance + -7 dB / wall + low-pass, SFX
+  bus, no captions (sound effects), nothing persists across reset.
+- Verification: streams exported to WAV and measured (duration, peak, RMS,
+  envelope, -40 dB decay, spectral bands); levels / routing / timing in
+  tests. NOT verified by ear on this machine (no human listening) -- see
+  the manual checklist in the round report.
+
+## E. Inner voice (Priorities 20-22)
+- No natural voice can be produced on this machine: no Enhanced/Premium
+  macOS voice is installed (176 standard voices only) and no local TTS
+  engine exists (checked: piper, espeak(-ng), festival, flite, mimic3,
+  python TTS packages). Nothing was downloaded or installed.
+- inner_voice.gd now picks ONE source per session, best first:
+  1. recorded: res://audio/inner_voice/<lang>/<line>.ogg|wav (shipped) or
+     user://inner_voice/<lang>/<line>.ogg|wav (a pack the player installs)
+     -- original lines recorded by an authorised voice actor; a line the
+     pack lacks is caption-only (never filled in by a synthetic voice);
+  2. system: a NATURAL macOS voice (Enhanced/Premium) via `say`;
+  3. captions only, with the exact reason (never the robotic voices).
+  Non-positional AudioStreamPlayer on its own InnerVoice bus (light band,
+  no echo, no metallic EQ) -> Voice; new setting "Inner-voice volume"; the
+  settings screen states what will be heard and how to add a voice (EN +
+  ZH); the station assistant interrupts a spoken thought (its caption
+  stays); ids / cooldown / dedupe / save unchanged.
+- To get a spoken human voice on macOS: System Settings > Accessibility >
+  Spoken Content > System Voice > Manage Voices..., add an English (and/or
+  Chinese) "Enhanced" or "Premium" voice, restart the game. Or record the
+  thought lines (ids in story_events / quarters_life / inner_voice) as an
+  authorised pack. tools/voice_samples.sh renders comparison samples.
+
+## F. Shift Handover app (Priorities 23-27)
+SHIFT HANDOVER is now its own laptop app (session_log_screen
+_build_handover_view) instead of a jump into Files/Work/Shift Handover.
+It reads ONE archive (laptop_files.handover_archive: the previous
+technician's released shift notes, oldest first, then the handover note
+written for the incoming technician) -- the Files folder lists the same
+records. One entry at a time: PREVIOUS ROTATION — ENTRY 03 / historical
+date / author line / NEW or READ, < PREVIOUS · n / N · NEXT > (ends
+disabled), Desktop. Opens on: the handover note while unread, else
+today's newly released note, else the oldest unread (catch-up), else the
+newest. Read flags = the saved handover_read; opening the handover note is
+the same story discovery. Simplified Chinese: chrome and all eleven
+texts. Release rule unchanged (day k -> notes 1..k), dated 2026-09.
+
+## G. Holdout progression (Priorities 28-31)
+Measured income (sim, rifle loadout, Easy): ~83 CR after wave 1, ~700 by
+wave 4, ~2200 by wave 8; Hard ~1.6x. At Round 47 prices the bot maxed
+every survival upgrade by ~wave 8 and could buy the Arc by wave 5 (Hard).
+New prices (by stable id): cutter 45, carbine 160, scatter 240, rifle
+520, Gravity Mortar 1000, Arc Projector 1400 (Mortar < Arc kept). Upgrade
+ranks 1-2 stay near their old price; from rank 3 each costs ~2x the last
+(e.g. DAMAGE 12/26/60/115/200); maxing the survival lines 1652 CR (was
+1066). Replaying the "save for the next gun" policy on measured income:
+Easy carbine w2, rifle w5, mortar w9; Hard carbine w2, rifle w4, mortar
+w6, arc w9; upgrades not maxed before wave 10.
+Also fixed: start_seeded() seeded the run AFTER wave 1 was laid out, so
+wave 1 of every "deterministic" balance run was random (the Round 47
+"Easy is hard for the bot" variance). Finding: with the real map, the
+simple bot dies in waves 1-3 of sidearm-only fresh runs at the old prices
+too -- bot skill, not price; the economy test therefore replays the
+policy on measured income (Sim.ledger) and checks one real fresh run.
+
+## H. Chapter One (Priority 34)
+test_r48_chapter_one drives the chapter through real entry points: new
+day in the bunk (08:00 at the first controllable frame), the laptop
+button -> SHIFT HANDOVER app, breakfast + drink at the galley, CHECK IN
+button, camera feeds on the CAMERAS page, access rises to MAINTENANCE, the
+bunk each night, the handover read on purpose -> Phase 2 on day 3, the
+window encounter ready on day 5 (Phase 2 + 2), the cue in the Control
+Room, the figure triggered by gaze from the observation spot, the
+physical check at the tunnel port, the chapter card. Repairs themselves
+are signalled via DayPlan.order_closed (each has its own e2e test); the
+clock between steps is fast-forwarded with end_shift_now(). Findings
+fixed: the day-1 waking clock (A1). No soft lock found.
+
+## I. Control Room "reversed text" (Priority 32)
+Cause: 22 world Label3Ds (Signal / Sensor / Valve / Filter / Circuit
+station dioramas, toggle switches, the engineering cabinet) had
+no_depth_test = true -- they drew THROUGH every wall, and being
+double-sided they read mirrored from behind. Removed (labels sit 4-80 mm
+in front of their plates; renders confirm they still read). Speck energy
+on the Living Quarters wall 372 -> 45 (= the bare wall).
+
+## J. Tests
+New: test_r48_window_figure, test_r48_audio, test_r48_handover,
+test_r48_holdout_economy, test_r48_clock_calendar, test_r48_chapter_one.
+Ported for requirement changes (not weakened): R46/R47 window-figure
+timelines (now measured more strictly in test_r48_window_figure), R47
+knock position / foley timing (sounds now play during the action), R43 /
+R45 handover shortcut (now the app), R47 exact-price check (now: free
+sidearm + price order), price fixtures in r44 / r47 Holdout tests.
+Note: test_r46_horror's peripheral checks fail when that file is run
+directly with piped output (the aim helper settles the eye behind the
+circuit-tracer station); through tests/run_tests.sh they pass -- same at
+the 8284676 baseline (pre-existing timing sensitivity, not this round).
+
+## K. Limitations
+Not manually playtested; the figure's motion is verified as measured
+frames and contact sheets, not as felt fear. Audio verified by stream
+analysis / routing / timing, not by ear. No human-sounding inner voice
+exists on this machine (captions + exact instructions). Windows build not
+run on Windows. Optional narrative polish (Priority 35) not added: the
+critical fixes took the round.

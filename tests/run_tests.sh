@@ -190,6 +190,12 @@ TESTS=(
   test_r47_life_audio
   test_r47_horror
   test_r47_messages_scroll
+  test_r48_window_figure
+  test_r48_audio
+  test_r48_handover
+  test_r48_holdout_economy
+  test_r48_clock_calendar
+  test_r48_chapter_one
 )
 
 if [ "$#" -gt 0 ]; then

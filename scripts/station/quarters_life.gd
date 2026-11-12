@@ -17,6 +17,8 @@ extends "res://scripts/station/equipment_base.gd"
 ## lived in. The day's activities are saved.
 
 const Files = preload("res://scripts/ui/laptop_files.gd")
+const WallCalendar = preload("res://scripts/station/wall_calendar.gd")
+var calendar: Node3D
 const GALLEY := Vector3(3.1, 0.0, -1.18)
 const FRAME := Vector3(5.62, 1.55, 1.3)
 const DRINK_S := 2.2
@@ -156,17 +158,12 @@ func _build_lived_in() -> void:
 		_leaves.append(leaf)
 	part(&"basil", Vector3(0.16, 0.2, 0.16), Vector3(bp.x, 0.88, bp.z), d)
 	label("BASIL", Vector3(bp.x, 0.79, bp.z - 0.07), 8, Color(0.95, 0.9, 0.8), d).rotation_degrees.y = 180.0
-	# Wall calendar above the desk, with crossed-off days.
-	var cal := Node3D.new()
-	cal.position = Vector3(3.62, 1.42, 2.385)
+	# Round 48: the wall calendar follows the real game day (wall_calendar.gd).
+	var cal: Node3D = WallCalendar.new()
+	cal.position = Vector3(3.62, 1.42, 2.383)
 	cal.rotation_degrees.y = 180.0
 	d.add_child(cal)
-	box(Vector3(0.26, 0.32, 0.005), Vector3.ZERO, Color(0.93, 0.92, 0.88), cal, 0.0)
-	box(Vector3(0.26, 0.07, 0.006), Vector3(0, 0.125, 0), Color(0.75, 0.3, 0.25), cal, 0.0)
-	for r in 4:
-		for c in 7:
-			var on: bool = r * 7 + c < 10
-			box(Vector3(0.024, 0.024, 0.007), Vector3(-0.105 + c * 0.035, 0.05 - r * 0.045, 0.0), Color(0.55, 0.2, 0.2) if on else Color(0.8, 0.8, 0.78), cal, 0.0)
+	calendar = cal
 	# A rug beside the bunk.
 	box(Vector3(0.7, 0.008, 1.1), Vector3(3.95, 0.004, -0.55), Color(0.28, 0.33, 0.45), d, 0.0)
 
@@ -238,9 +235,85 @@ func _consume(kind: String, seconds: float) -> bool:
 	if b != null and b.has_method("begin_consume") and b.begin_consume(kind, seconds):
 		if not b.consume_finished.is_connected(_on_consumed):
 			b.consume_finished.connect(_on_consumed)
+		start_foley(kind, seconds)
 	else:
 		_on_consumed(kind)          # no rig (headless edge): apply at once
 	return true
+
+
+# ======================================================================
+# Round 48 Priorities 15-18: FOLEY TIMELINES. Round 47 played a sip / chew
+# once, when the gesture had already ENDED (cup lowered) -- the reported
+# "inaccurate" drinking / eating. Each action now plays its sounds at the
+# phases of the real hand-to-mouth animation (player_body._pose_consume_arm:
+# 0-0.28 raise, 0.28-0.78 at the mouth -- bites on the hand's two bobs,
+# the sip at the tilt's peak -- 0.78-1 lower). [share of the action, sound,
+# where]; where = "mouth" | "mug" | "galley" | "tray" | "basil" | "hand".
+# ======================================================================
+const FOLEY := {
+	"water": [[0.04, &"pouch_crinkle", "hand"], [0.42, &"sip", "mouth"], [0.6, &"swallow", "mouth"]],
+	"tea": [[0.03, &"cup_lift", "mug"], [0.33, &"liquid_tilt", "mouth"], [0.43, &"sip", "mouth"], [0.62, &"swallow", "mouth"], [0.93, &"cup_down", "mug"]],
+	"meal": [[0.02, &"pouch_tear", "hand"], [0.29, &"bite", "mouth"], [0.36, &"chew", "mouth"], [0.53, &"bite", "mouth"], [0.6, &"chew", "mouth"], [0.76, &"swallow", "mouth"], [0.95, &"pouch_crinkle", "hand"]],
+	"dinner": [[0.02, &"tray_down", "tray"], [0.26, &"fork_clink", "tray"], [0.3, &"bite", "mouth"], [0.37, &"chew", "mouth"], [0.5, &"fork_clink", "tray"], [0.54, &"bite", "mouth"], [0.61, &"chew", "mouth"], [0.77, &"swallow", "mouth"], [0.96, &"tray_down", "tray"]],
+	"brush": [[0.03, &"brush_tap", "hand"], [0.28, &"brush_scrub", "mouth"], [0.96, &"brush_tap", "hand"]],
+	"pour": [[0.4, &"trickle", "basil"]],
+}
+const BRUSH_HZ := 3.2              # player_body: sin(consume_t * TAU * 3.2)
+var _foley: Array = []
+var _foley_t: float = 0.0
+var _foley_kind: String = ""
+var _foley_dur: float = 0.0
+var foley_log: Array = []         # [{kind, t}] tests: what played when
+
+
+func start_foley(kind: String, seconds: float) -> void:
+	_foley = (FOLEY.get(kind, []) as Array).duplicate()
+	_foley_t = 0.0
+	_foley_kind = kind
+	_foley_dur = seconds
+	foley_log = []
+	_tick_foley(0.0)
+
+
+func _tick_foley(delta: float) -> void:
+	if _foley.is_empty():
+		return
+	if _pending != _foley_kind:
+		_foley = []                # the action ended / was cancelled: nothing more
+		return
+	_foley_t += delta
+	while not _foley.is_empty() and _foley_t >= float(_foley[0][0]) * _foley_dur:
+		var e: Array = _foley.pop_front()
+		_foley_play(StringName(e[1]), String(e[2]))
+
+
+func _foley_play(kind: StringName, where: String) -> void:
+	foley_log.append({"kind": String(kind), "t": _foley_t})
+	var pos: Vector3
+	match where:
+		"mouth", "hand":
+			var cam: Camera3D = get_viewport().get_camera_3d() if is_inside_tree() and get_viewport() != null else null
+			if cam == null:
+				return
+			pos = cam.global_position - cam.global_basis.z * (0.15 if where == "mouth" else 0.35) - Vector3(0, 0.08 if where == "mouth" else 0.3, 0)
+		"mug":
+			pos = _mug.global_position if _mug != null else GALLEY + Vector3(-0.02, 1.0, 0.1)
+		"tray", "galley":
+			pos = GALLEY + Vector3(0.0, 0.94, 0.1)
+		"basil":
+			pos = _basil_pos()
+	if kind == &"brush_scrub":
+		# The bristle strokes are phase-locked to the visible scrub.
+		var snd: Node = get_tree().get_first_node_in_group(&"station_sounds") if is_inside_tree() else null
+		if snd != null:
+			snd.play_custom(kind, preload("res://scripts/audio/foley_synth.gd").brush_scrub(_foley_dur * 0.5, BRUSH_HZ, _foley_t), pos)
+		return
+	if kind == &"trickle":
+		var snd2: Node = get_tree().get_first_node_in_group(&"station_sounds") if is_inside_tree() else null
+		if snd2 != null:
+			snd2.play_custom(kind, preload("res://scripts/audio/foley_synth.gd").trickle(_foley_dur * 0.3), pos)
+		return
+	_snd(kind, pos)
 
 
 signal consumed(kind: String)     # Round 46: everyday thoughts listen
@@ -293,14 +366,8 @@ func _on_consumed(kind: String) -> void:
 		return
 	_pending = ""
 	consumed.emit(kind)
-	# Round 47: the action's own sound, at the mouth (eating / drinking).
-	match kind:
-		"water", "tea":
-			_snd_mouth(&"sip")
-		"meal", "dinner":
-			_snd_mouth(&"chew")
-		"pour":
-			_snd(&"trickle", _basil_pos())
+	# Round 48: the action's sounds played DURING it (start_foley), in step
+	# with the animation -- nothing is tacked on at the end any more.
 	match kind:
 		"water", "tea":
 			drank_day = _today()
@@ -360,15 +427,13 @@ func on_part(id: StringName) -> void:
 				_mug_drunk = true
 		&"meal":
 			if not ate_today():
-				if _consume("meal", EAT_S):
-					_snd_mouth(&"wrapper")
+				_consume("meal", EAT_S)
 				return
 			var why: String = dinner_refusal()
 			if why != "":
 				say(why)
 				return
-			if _consume("dinner", EAT_S + 0.6):
-				_snd(&"tray", GALLEY + Vector3(0.0, 0.94, 0.1))
+			_consume("dinner", EAT_S + 0.6)
 		&"brush":
 			if brushed_today() and (brush_pm_day == _today() or _hour() < DINNER_FROM_MIN):
 				say("Already brushed. Teeth are fine.")
@@ -376,7 +441,6 @@ func on_part(id: StringName) -> void:
 			if _consume("brush", BRUSH_S):
 				if _brush_holder != null:
 					_brush_holder.visible = false
-				_snd_mouth(&"brush")
 		&"basil":
 			if basil_dead and basil_return_day < 0:
 				basil_seen_dead = true
@@ -439,6 +503,7 @@ func bunk_glow_energy() -> float:
 func _process(delta: float) -> void:
 	_update_bunk_glow(delta)
 	_watch_basil()
+	_tick_foley(delta)
 	if brewing < 0.0:
 		return
 	brewing += delta
@@ -500,6 +565,7 @@ func _approach_then_pour() -> void:
 	if b != null and b.has_method("begin_consume") and b.begin_consume("pour", 2.6, pot):
 		if not b.consume_finished.is_connected(_on_consumed):
 			b.consume_finished.connect(_on_consumed)
+		start_foley("pour", 2.6)
 	else:
 		_on_consumed("pour")
 

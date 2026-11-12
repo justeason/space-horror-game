@@ -183,9 +183,9 @@ func _handover() -> void:
 	_check("Today: 'Review handover' unticked", "\n".join(scr.daily_note_lines()).find("[ ] Review handover") != -1)
 	scr.set_editing(true)
 	scr._on_app(&"handover")
-	_check("shortcut opens the welcome handover first", scr._report.text.find("HANDOVER NOTE") != -1)
+	_check("shortcut opens the welcome handover first", scr._ho_head.text.find("HANDOVER NOTE") != -1)
 	scr._on_app(&"handover")
-	_check("...then today's newest note", scr._report.text.find("day 34") != -1 and scr.handover_read.has(2))
+	_check("...then today's newest note", scr._ho_meta.text.find("day 34") != -1 and scr.handover_read.has(2))
 	_check("Today ticks 'Review handover' automatically", "\n".join(scr.daily_note_lines()).find("[x] Review handover") != -1)
 	dp.day_number = 5
 	scr._refresh_unread()

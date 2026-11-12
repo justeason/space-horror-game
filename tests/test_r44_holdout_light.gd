@@ -137,7 +137,7 @@ func _combat() -> void:
 		h.step(0.05)
 	_check("standing in acid hurts (forces repositioning)", h.hp < hp0)
 	h.acid = []
-	h.credits = 1000
+	h.credits = 5000             # Round 48 prices: enough for the cutter + the mortar
 	h.weapon_action("machete")
 	for k in 3:
 		var z: Dictionary = h.spawn_zombie("walker")

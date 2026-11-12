@@ -117,24 +117,29 @@ const BLAST_DMG := 16.0
 ## spread rad (cone / jitter), pierce (extra targets), ap (armour piercing), cost.
 const WEAPONS := {
 	"pistol": {"name": "SIDEARM", "interval": 0.62, "dmg": 10.0, "range": 140.0, "speed": 260.0, "pellets": 1, "spread": 0.0, "pierce": 0, "ap": false, "cost": 0, "color": Color(1.0, 0.92, 0.45)},
-	"smg": {"name": "BURST CARBINE", "interval": 0.17, "dmg": 4.5, "range": 120.0, "speed": 290.0, "pellets": 1, "spread": 0.14, "pierce": 0, "ap": false, "cost": 120, "color": Color(1.0, 0.75, 0.35)},
-	"shotgun": {"name": "SCATTER GUN", "interval": 0.95, "dmg": 6.0, "range": 85.0, "speed": 240.0, "pellets": 6, "spread": 0.55, "pierce": 0, "ap": false, "cost": 170, "color": Color(1.0, 0.6, 0.3)},
-	"rifle": {"name": "PULSE RIFLE", "interval": 1.1, "dmg": 34.0, "range": 230.0, "speed": 430.0, "pellets": 1, "spread": 0.0, "pierce": 3, "ap": true, "cost": 300, "color": Color(0.85, 0.95, 1.0)},
+	"smg": {"name": "BURST CARBINE", "interval": 0.17, "dmg": 4.5, "range": 120.0, "speed": 290.0, "pellets": 1, "spread": 0.14, "pierce": 0, "ap": false, "cost": 160, "color": Color(1.0, 0.75, 0.35)},
+	"shotgun": {"name": "SCATTER GUN", "interval": 0.95, "dmg": 6.0, "range": 85.0, "speed": 240.0, "pellets": 6, "spread": 0.55, "pierce": 0, "ap": false, "cost": 240, "color": Color(1.0, 0.6, 0.3)},
+	"rifle": {"name": "PULSE RIFLE", "interval": 1.1, "dmg": 34.0, "range": 230.0, "speed": 430.0, "pellets": 1, "spread": 0.0, "pierce": 3, "ap": true, "cost": 520, "color": Color(0.85, 0.95, 1.0)},
 	# Round 46: ARC = precise, never-missing CHAIN for mobile packs (runners,
 	# swarms): fewer links (3 targets), each jump weaker (ARC_FALLOFF) --
 	# no longer the best answer to everything. Top tier.
-	"arc": {"name": "ARC PROJECTOR", "interval": 0.72, "dmg": 14.0, "range": 150.0, "speed": 0.0, "pellets": 1, "spread": 0.0, "pierce": 2, "ap": true, "cost": 480, "color": Color(0.55, 0.85, 1.0)},
+	"arc": {"name": "ARC PROJECTOR", "interval": 0.72, "dmg": 14.0, "range": 150.0, "speed": 0.0, "pellets": 1, "spread": 0.0, "pierce": 2, "ap": true, "cost": 1400, "color": Color(0.55, 0.85, 1.0)},
 	# Round 44: MACHETE (emergency melee: a wide swing at everything close)
 	# and LAUNCHER (late unlock: a lobbed grenade, area blast at the target).
-	"machete": {"name": "PLASMA CUTTER", "interval": 0.45, "dmg": 16.0, "range": 26.0, "speed": 0.0, "pellets": 1, "spread": 0.0, "pierce": 0, "ap": false, "cost": 40, "color": Color(0.9, 0.9, 0.85)},
+	"machete": {"name": "PLASMA CUTTER", "interval": 0.45, "dmg": 16.0, "range": 26.0, "speed": 0.0, "pellets": 1, "spread": 0.0, "pierce": 0, "ap": false, "cost": 45, "color": Color(0.9, 0.9, 0.85)},
 	# Round 46: GRAVITY MORTAR = the most expensive weapon, for DENSE waves:
 	# a slow shell (misses fast single targets) whose impact leaves a
 	# GRAVITY WELL that pulls nearby creatures together and slows them,
 	# then the blast. Area denial + clustering nothing else offers.
-	"launcher": {"name": "GRAVITY MORTAR", "interval": 2.1, "dmg": 28.0, "range": 175.0, "speed": 170.0, "pellets": 1, "spread": 0.0, "pierce": 0, "ap": true, "cost": 380, "color": Color(1.0, 0.55, 0.25)},
+	"launcher": {"name": "GRAVITY MORTAR", "interval": 2.1, "dmg": 28.0, "range": 175.0, "speed": 170.0, "pellets": 1, "spread": 0.0, "pierce": 0, "ap": true, "cost": 1000, "color": Color(1.0, 0.55, 0.25)},
 }
 ## Round 47: the Gravity Mortar (area control) is weaker in play than the
 ## Arc Projector (chain damage), so it now costs LESS (380 < 480; was 560).
+## Round 48: LONGER PROGRESSION, priced against measured income (holdout
+## sim, fresh runs, Easy ~75 CR after wave 1, ~630 by wave 4, ~1570 by
+## wave 7; Hard ~1.6x): a cheap melee backup; intermediate guns ~2-3 waves
+## of saving; the rifle ~wave 4-6; the mortar ~wave 7-10; the arc
+## (strongest in play) later still. Mortar < Arc kept (1000 < 1400).
 ## Prices live on the stable weapon ids above; the armory lists by price.
 const WEAPON_ORDER := ["pistol", "machete", "smg", "shotgun", "rifle", "launcher", "arc"]
 const CATALOG_DISCOUNT := 0.75
@@ -161,16 +166,20 @@ const WELL_PULL := 34.0          # px/s toward the centre
 const WELL_SLOW := 0.45          # speed multiplier inside the well
 
 ## id -> [label, max rank, [costs per rank], per-rank effect text]
+## Round 48: ranks 1-2 stay near their old price (a first run must not feel
+## hopeless -- the sim's fresh runs died early when they rose too); from
+## rank 3 each rank costs ~2x the last, so maxing a line is a real
+## opportunity cost against the next weapon.
 const UPGRADES := {
-	"rate": ["FIRE RATE", 5, [10, 20, 35, 55, 80], "-12% time between shots"],
-	"damage": ["DAMAGE", 5, [12, 24, 40, 60, 90], "+25% damage"],
-	"multishot": ["MULTISHOT", 3, [40, 90, 160], "+1 projectile"],
-	"health": ["MAX HEALTH", 4, [15, 30, 50, 80], "+25 max health"],
-	"armor": ["ARMOR", 3, [25, 50, 90], "-15% damage taken"],
-	"speed": ["SPEED", 3, [15, 35, 60], "+12% move speed"],
-	"regen": ["REGEN", 3, [30, 60, 100], "+1 health / s"],
-	"magnet": ["MAGNET", 3, [15, 30, 55], "+14 px pickup radius"],
-	"crit": ["CRIT", 4, [20, 40, 70, 110], "+8% chance of x2 damage"],
+	"rate": ["FIRE RATE", 5, [10, 22, 50, 100, 180], "-12% time between shots"],
+	"damage": ["DAMAGE", 5, [12, 26, 60, 115, 200], "+25% damage"],
+	"multishot": ["MULTISHOT", 3, [50, 140, 300], "+1 projectile"],
+	"health": ["MAX HEALTH", 4, [15, 32, 70, 125], "+25 max health"],
+	"armor": ["ARMOR", 3, [25, 60, 140], "-15% damage taken"],
+	"speed": ["SPEED", 3, [15, 40, 90], "+12% move speed"],
+	"regen": ["REGEN", 3, [30, 75, 160], "+1 health / s"],
+	"magnet": ["MAGNET", 3, [15, 30, 65], "+14 px pickup radius"],
+	"crit": ["CRIT", 4, [20, 50, 105, 190], "+8% chance of x2 damage"],
 }
 const UPGRADE_ORDER := ["rate", "damage", "multishot", "health", "armor", "speed", "regen", "magnet", "crit"]
 const MILESTONES := {5: 25, 10: 60, 15: 120, 20: 200}
@@ -755,8 +764,11 @@ func reset_run_loadout() -> void:
 	weapon = "pistol"
 
 
-func start_run(loadout: Dictionary = {}) -> void:
-	_rng.seed = hash([Time.get_ticks_usec(), runs])
+func start_run(loadout: Dictionary = {}, seed_v: int = -1) -> void:
+	# Round 48: a seeded run is seeded BEFORE wave 1 is laid out (it used to
+	# be seeded after, so wave 1 of every "deterministic" balance run was
+	# random -- the sim's fresh runs varied from call to call).
+	_rng.seed = seed_v if seed_v >= 0 else hash([Time.get_ticks_usec(), runs])
 	runs += 1
 	reset_run_loadout()
 	# Tests / balance tools only: a prepared loadout for this one run.
@@ -799,8 +811,7 @@ func start_run(loadout: Dictionary = {}) -> void:
 
 ## Tests: a reproducible run.
 func start_seeded(s: int, loadout: Dictionary = {}) -> void:
-	start_run(loadout)
-	_rng.seed = s
+	start_run(loadout, s)
 
 
 func diff() -> Dictionary:

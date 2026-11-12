@@ -87,8 +87,10 @@ func _window_figure() -> void:
 	f.set_process(false)
 	f.step_pose(0.0)
 	var head_top: float = f.head_point().y
-	var reach: float = (f.hand_point(1) - f._arms[1][0].global_position).length() + 0.15
-	_check("believable height (head %.2f m), arms slightly too long (%.2f m)" % [head_top, reach], head_top > 1.7 and head_top < 1.95 and reach > 0.82)
+	var reach: float = (f.hand_point(1) - f._arms[1][0].global_position).length() + 0.12
+	# Round 48: ordinary (not "slightly too long") arms -- the redesign
+	# removed the cartoon proportions; see test_r48_window_figure.
+	_check("believable height (head %.2f m), human arm length (%.2f m)" % [head_top, reach], head_top > 1.65 and head_top < 1.95 and reach > 0.6 and reach < 0.82)
 	_check("eye-only, no collision, no shadow", meshes.all(func(m): return (m as GeometryInstance3D).layers == f.DIRECT_ONLY and (m as GeometryInstance3D).cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF) and f.find_children("*", "CollisionObject3D", true, false).is_empty())
 	await _aim(we.OBS_SPOT, we.FIGURE_POS + Vector3(0, 1.4, 0))
 	_check("observable from the real observation spot (through both ports)", we.observable())
@@ -104,84 +106,15 @@ func _window_figure() -> void:
 	var eb: Script = load("res://scripts/exterior/exterior_builder.gd")
 	var sill: float = eb.TUNNEL_PORT_CENTRE.y - eb.TUNNEL_PORT_SIZE.y * 0.5
 	_check("the torso down to the hips is inside the tunnel port's frame (sight line at y %.2f > sill %.2f)" % [at_port.y, sill], at_port.y > sill)
-	# Stages, in order, with measured on-screen movement.
-	var names: Array = []
-	var head_px: Array = []
-	var hand_px: Array = []
-	f.state = "react"
-	f.t = 0.0
-	var dt := 1.0 / 60.0
-	var tt := 0.0
-	while f.state == "react" and tt < 5.0:
-		f.t = tt
-		f.step_pose(tt)
-		var nm: String = f.stage_name()
-		if names.is_empty() or names.back() != nm:
-			names.append(nm)
-		head_px.append(cam.unproject_position(f.head_point()))
-		hand_px.append(cam.unproject_position(f.hand_point(f.RAISED)))
-		tt += dt
-	_check("stages in order: %s" % str(names), names == ["recognition", "first_movement", "shudder", "retreat"])
-	_check("recognition is a real PAUSE (%.2f s) before anything happens" % f.RECOG_END, f.RECOG_END >= 0.6)
-	# First movement: a SNAP -- most of it within ~70 ms.
-	var i0: int = int(f.RECOG_END / dt)
-	var snap_px: float = head_px[i0 + 5].distance_to(head_px[i0 - 1]) / float(cam.get_viewport().get_visible_rect().size.y)
-	_check("first movement is abrupt: the head jumps %.1f%% of the view in 80 ms" % (snap_px * 100.0), snap_px > 0.02)
-	# Shudder: stepped jerks -- many large frame-to-frame jumps.
-	var i1: int = int(f.FIRST_END / dt)
-	var jumps := 0
-	var hand_travel := 0.0
-	for i in range(i1 + 1, head_px.size()):
-		if head_px[i].distance_to(head_px[i - 1]) > 2.0:
-			jumps += 1
-		hand_travel = maxf(hand_travel, hand_px[i].distance_to(hand_px[i1]))
-	_check("shudder: %d visible head jerks (stepped, not a smooth sway)" % jumps, jumps >= 8)
-	_check("one arm rises out of sync: the hand travels %.0f px on screen" % hand_travel, hand_travel / float(cam.get_viewport().get_visible_rect().size.y) > 0.05)
-	_check("...while the other hangs (dead arm %.0f deg max)" % rad_to_deg(absf(f._arms[f.DEAD][0].rotation.x)), absf(f._arms[f.DEAD][0].rotation.x) < deg_to_rad(15.0))
-	# The shudder's end hands over to the retreat.
-	_check("then the impossible retreat", f.state == "retreat" and f.t == 0.0)
-	var zs: Array = []
-	var visible_at_end := true
-	var r := 0.0
-	while f.state == "retreat" and r < 2.0:
-		r += dt
-		f.t = r
-		f.step_pose(r)
-		zs.append(f.position.z)
-		if f.state == "retreat" and r > f.RETREAT_S * 0.9:
-			var hp: Vector3 = f.head_point()
-			var dv: Vector3 = hp - cam.global_position
-			var kk: float = (-4.2 - cam.global_position.x) / dv.x
-			var hit: Vector3 = cam.global_position + dv * kk
-			visible_at_end = absf(hit.z - 2.5) < eb.TUNNEL_PORT_SIZE.x * 0.5 + 0.02
-	var speed: float = (float(zs[-2]) - float(zs[-6])) / (4.0 * dt) if zs.size() > 6 else 0.0
-	_check("retreat glides at an inhuman speed at the end (%.1f m/s)" % speed, speed > 4.0)
-	var accel := true
-	for i in range(2, zs.size() - 1):
-		accel = accel and (float(zs[i]) - float(zs[i - 1])) >= (float(zs[i - 1]) - float(zs[i - 2])) - 0.0005
-	_check("...accelerating, feet still (no walk cycle)", accel)
-	_check("disappears behind the port frame (sight line leaves the opening), never mid-glass", not visible_at_end and not f.visible)
-	# Reduced effects: the slow shudder.
-	f.reset()
-	f.appear()
-	f.reduced = true
-	f.state = "react"
-	var rj := 0
-	var last: Vector2 = Vector2.ZERO
-	for i in 60:
-		var t2: float = f.FIRST_END + i * dt
-		f.step_pose(t2)
-		var p: Vector2 = cam.unproject_position(f.head_point())
-		if i > 0 and p.distance_to(last) > 2.0:
-			rj += 1
-		last = p
-	_check("reduced effects: far fewer jerks per second (%d in 1 s)" % rj, rj <= 4)
-	f.reduced = false
+	# Round 48: the R47 timeline (recognition pause / snap / 14 Hz shudder /
+	# accelerating glide) was REDESIGNED; its stages, speeds, holds, retreat
+	# and disappearance are now measured (more strictly) by
+	# test_r48_window_figure.gd.
 	f.reset()
 	# Developer: replay, slow motion, status; gating unchanged.
 	we.dev_replay_slow()
 	_check("developer slow-motion replay (x%.2f), reacting" % f.time_scale, is_equal_approx(f.time_scale, 0.25) and we.stage == "reacting" and f.state == "react")
-	_check("developer status line shows the true stage", we.dev_status().find("recognition") != -1)
+	_check("developer status line shows the true stage", we.dev_status().find("noticed") != -1)
 	we.dev_reset()
 	_check("reset: figure hidden, time scale normal", not f.visible and is_equal_approx(f.time_scale, 1.0) and we.stage == "locked")
 	dp.day_number = 1
@@ -222,7 +155,7 @@ func _window_hand() -> void:
 	for i in 40:
 		h.tick(1.0 / 30.0, false)
 	var knocks: Array = snd.heard.filter(func(e): return e["kind"] == "glass_knock")
-	_check("three soft taps, structure-borne, FROM the port (%d)" % knocks.size(), knocks.size() == 3 and knocks.all(func(e): return (e["pos"] as Vector3).distance_to(Vector3(-1.47, 1.4, 1.5)) < 0.05))
+	_check("three taps, structure-borne, FROM the port and really played (%d)" % knocks.size(), knocks.size() == 3 and knocks.all(func(e): return (e["pos"] as Vector3).distance_to(h.KNOCK_POS) < 0.05 and bool(e.get("played", false))))
 	_check("...not an airborne knock beside the player (they come from %.1f m away)" % float(knocks[0]["dist"]), float(knocks[0]["dist"]) > 1.2)
 	_check("still pressed to the glass while unseen", h.state == "wait" and h.visible)
 	# Look at it: brief, then withdraws behind the rim.

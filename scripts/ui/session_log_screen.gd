@@ -220,6 +220,7 @@ func _build_app_bar() -> void:
 	_files_box.visible = false
 	vbox.add_child(_files_box)
 	vbox.move_child(_files_box, vbox.get_children().find(_photo_box) + 1)
+	_build_handover_view(vbox)
 	# Game.
 	_game = preload("res://scripts/ui/cargo_drop_game.gd").new()
 	_game.name = "CargoDrop"
@@ -280,6 +281,12 @@ var _photo_box: VBoxContainer
 var _photo: TextureRect
 var _photo_caption: Label
 var _files_box: VBoxContainer
+var _handover_box: VBoxContainer
+var handover_index: int = -1       # Round 48: position in the archive (app view)
+var _ho_head: Label
+var _ho_meta: Label
+var _ho_text: Label
+var _ho_pos: Label
 var _game: Control
 var holdout: Control
 var _zoomed: bool = false
@@ -336,6 +343,10 @@ func _on_app(id: StringName) -> void:
 		&"photo_next":
 			photo_index = posmod(photo_index + 1, Files.list("Photos").size())
 			_show_view(&"photos")
+		&"handover_prev":
+			handover_go(-1)
+		&"handover_next":
+			handover_go(1)
 		_:
 			if _zoomed:
 				open_app(id)
@@ -349,6 +360,8 @@ func _on_app(id: StringName) -> void:
 func open_app(id: StringName) -> void:
 	if id == &"files":
 		folder = ""
+	if id == &"handover":
+		handover_index = -1          # Round 48: opens on the right entry each time
 	if is_entertainment(id) and _day_plan != null and _day_plan.has_method("entertainment_allowed"):
 		var ok: Dictionary = _day_plan.entertainment_allowed()
 		if not ok["ok"]:
@@ -381,22 +394,6 @@ func _show_view(v: StringName) -> void:
 		folder = "Work/Archived Reports"
 		open_entry({"kind": "txt", "rec": _report_record(-1)})
 		return
-	if v == &"handover":
-		# The desktop shortcut LINKS to the real records in Files: the
-		# welcome handover until it is read, then the newest released
-		# archive note if unread, else the archive folder.
-		folder = Files.HANDOVER_PATH
-		var welcome: Dictionary = Files.find(Files.HANDOVER_PATH, Files.HANDOVER_FILE)
-		var notes: Array = Files.handover_records(int(_day_plan.day_number) if _day_plan != null else 1)
-		if not handover_read.has(0):
-			handover_read[0] = true
-			open_entry({"kind": "txt", "rec": welcome})
-		elif not notes.is_empty() and not handover_read.has(int(notes.back()["handover"])):
-			open_entry({"kind": "txt", "rec": notes.back()})
-		else:
-			_show_view(&"files")
-		_refresh_unread()
-		return
 	var text_view: bool = v in [&"report", &"schedule", &"file", &"note", &"note_record", &"journal", &"observations", &"mail_sent"]
 	if _report != null:
 		_report.add_theme_font_size_override("font_size", 12)
@@ -408,6 +405,7 @@ func _show_view(v: StringName) -> void:
 	_report.visible = text_view
 	_photo_box.visible = v == &"photos"
 	_files_box.visible = v == &"files"
+	_handover_box.visible = v == &"handover"
 	_game.visible = v == &"game"
 	holdout.visible = v == &"holdout"
 	_subtitle.visible = false
@@ -487,6 +485,10 @@ func _show_view(v: StringName) -> void:
 			_photo_caption.text = "%s  ·  %s  (%d/%d)" % [rec["caption"], rec["date"], photo_index + 1, ph.size()]
 		&"files":
 			_build_file_list()
+		&"handover":
+			if handover_index < 0:
+				handover_index = _handover_default()
+			_render_handover()
 		&"game":
 			if _zoomed:
 				_game.grab_focus()
@@ -641,6 +643,122 @@ func schedule_lines() -> Array:
 
 ## Round 45: archive notes read (0 = the welcome handover); saved.
 var handover_read: Dictionary = {}
+
+
+# ======================================================================
+# Round 48 Priorities 23-27: the SHIFT HANDOVER app. The desktop shortcut
+# opened the generic Files browser (Work/Shift Handover) -- a file-path
+# detour. It is now its own small reader over the SAME records
+# (laptop_files.handover_archive: the previous technician's released
+# shift notes, oldest first, then the handover note written for the
+# incoming technician): one entry at a time, its historical date, NEW /
+# READ, < PREVIOUS / NEXT >, Home. Read flags are the same handover_read
+# (saved), and opening the handover note is the same story discovery.
+# ======================================================================
+static func _zh() -> bool:
+	return String(preload("res://scripts/station/game_settings.gd").get_value("language")).begins_with("zh")
+
+
+func handover_entries() -> Array:
+	return Files.handover_archive(int(_day_plan.day_number) if _day_plan != null else 1, _zh())
+
+
+## Where the app opens: the handover note until it has been read (day 1),
+## else TODAY's newly released note if unread (the daily "Review handover"),
+## else the OLDEST unread shift note (catching up in order), else the newest.
+func _handover_default() -> int:
+	var es: Array = handover_entries()
+	var d: int = int(_day_plan.day_number) if _day_plan != null else 1
+	for i in es.size():
+		if int(es[i]["idx"]) == 0 and not handover_read.has(0):
+			return i
+	for i in es.size():
+		if int(es[i]["idx"]) == d and not handover_read.has(d):
+			return i
+	for i in es.size():
+		if not handover_read.has(int(es[i]["idx"])):
+			return i
+	return es.size() - 1
+
+
+func handover_go(step: int) -> void:
+	var es: Array = handover_entries()
+	handover_index = clampi(handover_index + step, 0, es.size() - 1)
+	_render_handover()
+
+
+func _build_handover_view(vbox: Node) -> void:
+	_handover_box = VBoxContainer.new()
+	_handover_box.name = "HandoverView"
+	_handover_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_handover_box.add_theme_constant_override("separation", 6)
+	_handover_box.visible = false
+	vbox.add_child(_handover_box)
+	vbox.move_child(_handover_box, vbox.get_children().find(_files_box) + 1)
+	_ho_head = Label.new()
+	_ho_head.name = "HandoverHead"
+	_ho_head.add_theme_font_size_override("font_size", 13)
+	_ho_head.add_theme_color_override("font_color", Color(0.95, 0.75, 0.6))
+	_handover_box.add_child(_ho_head)
+	_ho_meta = Label.new()
+	_ho_meta.name = "HandoverMeta"
+	_ho_meta.add_theme_font_size_override("font_size", 10)
+	_ho_meta.add_theme_color_override("font_color", Color(0.6, 0.7, 0.68))
+	_handover_box.add_child(_ho_meta)
+	var sep := HSeparator.new()
+	_handover_box.add_child(sep)
+	_ho_text = Label.new()
+	_ho_text.name = "HandoverText"
+	_ho_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_ho_text.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_ho_text.add_theme_font_size_override("font_size", 12)
+	_ho_text.add_theme_color_override("font_color", Color(0.85, 0.92, 0.86))
+	_ho_text.add_theme_constant_override("line_spacing", 3)
+	_handover_box.add_child(_ho_text)
+	var nav := HBoxContainer.new()
+	nav.name = "HandoverNav"
+	nav.add_theme_constant_override("separation", 10)
+	_handover_box.add_child(nav)
+	_add_button(nav, &"handover_prev", "<  PREVIOUS")
+	_ho_pos = Label.new()
+	_ho_pos.name = "HandoverPos"
+	_ho_pos.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_ho_pos.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_ho_pos.add_theme_font_size_override("font_size", 11)
+	_ho_pos.add_theme_color_override("font_color", Color(0.65, 0.75, 0.72))
+	nav.add_child(_ho_pos)
+	_add_button(nav, &"handover_next", "NEXT  >")
+
+
+func _render_handover() -> void:
+	var es: Array = handover_entries()
+	if es.is_empty():
+		return
+	handover_index = clampi(handover_index, 0, es.size() - 1)
+	var e: Dictionary = es[handover_index]
+	var k: int = int(e["idx"])
+	var zh: bool = _zh()
+	var was_new: bool = not handover_read.has(k)
+	var lines: PackedStringArray = String(e["text"]).split("\n")
+	if k == 0:
+		_ho_head.text = "交接说明 — 致下一位技术员" if zh else "HANDOVER NOTE — FOR THE INCOMING TECHNICIAN"
+	else:
+		_ho_head.text = ("上一轮值 — 第 %02d 条" if zh else "PREVIOUS ROTATION — ENTRY %02d") % k
+	var who: String = lines[0] if lines.size() > 0 else ""
+	_ho_meta.text = "%s  ·  %s  ·  %s" % [String(e["date"]), who, (("新" if zh else "NEW") if was_new else ("已读" if zh else "READ"))]
+	_ho_text.text = "\n".join(lines.slice(1)) if lines.size() > 1 else String(e["text"])
+	_ho_pos.text = "%d / %d" % [handover_index + 1, es.size()]
+	_buttons[&"handover_prev"].text = ("<  上一条" if zh else "<  PREVIOUS")
+	_buttons[&"handover_next"].text = ("下一条  >" if zh else "NEXT  >")
+	_buttons[&"handover_prev"].disabled = handover_index <= 0
+	_buttons[&"handover_next"].disabled = handover_index >= es.size() - 1
+	_app_title.text = "交接记录" if zh else "SHIFT HANDOVER"
+	if was_new:
+		handover_read[k] = true
+		_refresh_unread()
+		_refresh_note()
+		if String(e.get("story", "")) != "" and is_inside_tree():
+			get_tree().call_group(&"story_events", &"on_story_discovery", String(e["story"]))
 
 
 func handover_unread() -> int:

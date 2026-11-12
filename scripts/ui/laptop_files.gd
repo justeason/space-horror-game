@@ -315,6 +315,39 @@ const HANDOVER_NOTES := [
 ]
 
 
+## Round 48: Simplified Chinese for the archive (same order as above).
+const HANDOVER_NOTES_ZH := [
+	"交班记录 · R.V. · 第4轮值，第33天\nL-3过滤器外壳60%。还能撑一周。\n断路器B-02在14:20跳闸一次。已复位，原因不明。\n库存：16号线剩4卷。需要补货。\n罗勒：活着。勉强。",
+	"交班记录 · R.V. · 第34天\n上午太阳能故障后重新调谐通讯。稳定在63。\n清理了外舱门密封圈；上次货运留下的砂砾。\n厨房计时器偏慢。还是。",
+	"交班记录 · R.V. · 第35天\n安静的一班。清理了生命维持舱的通风格栅。\n断电重启后INT-02向左偏。推回去了。\n又梦见那栋房子了。",
+	"交班记录 · R.V. · 第36天\n热成像巡检：TB-A的2号端子偏热。已紧固。\n货运日。之后检查了密封。\n凌晨3点风扇换了音调，把我吵醒了。",
+	"交班记录 · R.V. · 第37天\n冷却歧管正常。储物盘点：备用过滤器2个。\n22:40听到气闸锁扣声。日志里什么也没有。大概是热胀冷缩。\n（还是记下来。）",
+	"交班记录 · R.V. · 第38天\n左太阳翼铰链又发紧。再恶化就要出舱。\n给妈妈发了行星的照片。她说看起来很冷。",
+	"交班记录 · R.V. · 第39天\n出舱：松开了左铰链。系绳A1 -> L3。没问题。\n从外面看，气闸通道的舷窗是暗的。\n我明明开着灯。回来查了：灯是开着的。",
+	"交班记录 · R.V. · 第40天\n例行巡检。读数全部一致。\n我总是从控制室的舷窗看向通道舷窗。\n那里什么也没有。当然没有。",
+	"交班记录 · R.V. · 第41天\nB-03过载，我的错：两个负载同时开。\n新规矩：一次只开一个负载。\n走廊摄像头是我看得最多的那个。",
+	"交班记录 · R.V. · 第42天\n最后一个完整班次。明天交接。\n如果你在读这个：空间站状况良好。相信标签。\n好好睡觉。别在舷窗前站太久。",
+]
+const WELCOME_ZH := "交接说明（上一轮值）\n欢迎登站。空间站状况良好。\n- 断路器面板的标签是对的。相信它们。\n- 太阳能故障后通讯会漂移；重新调谐，就能稳住。\n- 货运后保持外舱门密封圈干净。\n- 我看到的一切都记录了。你也应该这样。\n  哪怕看起来什么都不是，也要写下来。\n- 走廊摄像头是我看得最多的那个。\n祝你好运。好好睡觉。"
+
+
+## Round 48 Priorities 23-27: the SHIFT HANDOVER archive as ONE ordered
+## list (the dedicated laptop app reads this; the Files folder lists the
+## same records -- no second copy). Chronological: the previous
+## technician's released shift notes (oldest first), then the handover note
+## written for the incoming technician (the newest). Each entry:
+## {idx (0 = welcome handover, k = shift note k), date, title, text}.
+static func handover_archive(day: int, zh: bool = false) -> Array:
+	var out: Array = []
+	for r in handover_records(day):
+		var k: int = int(r["handover"])
+		var text: String = HANDOVER_NOTES_ZH[k - 1] if zh else String(r["text"])
+		out.append({"idx": k, "date": String(r["date"]), "text": text, "name": String(r["name"])})
+	var w: Dictionary = find(HANDOVER_PATH, HANDOVER_FILE)
+	out.append({"idx": 0, "date": String(w.get("date", "")), "text": WELCOME_ZH if zh else String(w.get("text", "")), "name": HANDOVER_FILE, "story": String(w.get("story", ""))})
+	return out
+
+
 ## Released archive notes on `day` (note k needs day >= k), as file records.
 static func handover_records(day: int) -> Array:
 	var out: Array = []

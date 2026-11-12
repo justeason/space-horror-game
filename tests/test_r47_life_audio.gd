@@ -89,9 +89,11 @@ func _acoustics() -> void:
 	var src: String = FileAccess.get_file_as_string("res://scripts/story/story_events.gd")
 	_check("the hatch-handle event's knock goes through the acoustic path", src.find("play_at(&\"hatch_knock\"") != -1 and src.find("_hatch_sound.unit_size") == -1)
 	await _at(Vector3(0.3, 1.6, 0.4))
-	snd.play_at(&"glass_knock", Vector3(-1.47, 1.4, 1.5), false)
+	# Round 48: the knock is on the glass itself (its cabin face): no wall in
+	# between, clearly audible in the room (see test_r48_audio).
+	snd.play_at(&"glass_knock", load("res://scripts/story/window_hand.gd").KNOCK_POS, false)
 	var gk: Dictionary = _last("glass_knock")
-	_check("window taps come from the port itself, through its glass (%d wall, %.1f dB)" % [int(gk["walls"]), float(gk["db"])], int(gk["walls"]) <= 1 and float(gk["db"]) > -16.0 and float(gk["db"]) < -4.0)
+	_check("window taps come from the port itself (%d wall, %.1f dB, played %s)" % [int(gk["walls"]), float(gk["db"]), gk.get("played")], int(gk["walls"]) == 0 and float(gk["db"]) > -8.0 and bool(gk.get("played", false)))
 
 
 # --------------------------------------------- life sounds + inner thoughts
@@ -108,7 +110,7 @@ func _life_sounds_and_thoughts() -> void:
 	q.on_part(&"water")
 	var disp: Dictionary = _last("dispense")
 	_check("water: the dispenser sound comes from the dispenser", not disp.is_empty() and (disp["pos"] as Vector3).distance_to(q.GALLEY + Vector3(-0.26, 1.0, 0.02)) < 0.05)
-	q._on_consumed("water")
+	_finish("water", q.DRINK_S)
 	var sip: Dictionary = _last("sip")
 	_check("...and a sip at the technician's own mouth", not sip.is_empty() and (sip["pos"] as Vector3).distance_to(cam.global_position) < 0.3)
 	_check("water's reaction is an inner thought, not a HUD remark", iv.queue.any(func(x): return String(x["id"]).begins_with("routine:water")) and (ml == null or ml.text.find("Water. Better") == -1))
@@ -119,7 +121,7 @@ func _life_sounds_and_thoughts() -> void:
 	q._process(3.2)
 	_check("...and its thermostat clicks off when ready (not an interface chime)", not _last("kettle_done").is_empty() and _last("success").is_empty())
 	q.on_part(&"mug")
-	q._on_consumed("tea")
+	_finish("tea", q.DRINK_S)
 	_check("tea: a sip + an inner thought ('Still warm.' family)", not _last("sip").is_empty() and iv.queue.any(func(x): return String(x["id"]).begins_with("routine:tea")))
 	snd.heard = []
 	q.on_part(&"tea")
@@ -128,13 +130,13 @@ func _life_sounds_and_thoughts() -> void:
 	snd.heard = []
 	iv.queue = []
 	q.on_part(&"meal")
-	q._on_consumed("meal")
-	_check("breakfast: a foil pouch + chewing at the mouth", not _last("wrapper").is_empty() and not _last("chew").is_empty())
+	_finish("meal", q.EAT_S)
+	_check("breakfast: a foil pouch + chewing at the mouth", not _last("pouch_tear").is_empty() and not _last("chew").is_empty())
 	var first: String = String(iv.queue.filter(func(x): return String(x["id"]).begins_with("routine:meal"))[0]["text"]) if iv.queue.any(func(x): return String(x["id"]).begins_with("routine:meal")) else ""
 	dp.day_number = 4
 	iv.queue = []
 	q.on_part(&"meal")
-	q._on_consumed("meal")
+	_finish("meal", q.EAT_S)
 	var second: String = String(iv.queue.filter(func(x): return String(x["id"]).begins_with("routine:meal"))[0]["text"]) if iv.queue.any(func(x): return String(x["id"]).begins_with("routine:meal")) else ""
 	_check("meal thoughts rotate ('%s' -> '%s')" % [first, second], first != "" and second != "" and first != second)
 	_check("no second, generic everyday thought on top of the meal thought", not iv.queue.any(func(x): return String(x["id"]).begins_with("everyday:breakfast")))
@@ -146,8 +148,8 @@ func _life_sounds_and_thoughts() -> void:
 	# Brushing at the hygiene niche.
 	snd.heard = []
 	q.on_part(&"brush")
-	q._on_consumed("brush")
-	_check("brushing: the brush sound at the mouth, and it counts", not _last("brush").is_empty() and q.brushed_today())
+	_finish("brush", q.BRUSH_S)
+	_check("brushing: the brush sound at the mouth, and it counts", not _last("brush_scrub").is_empty() and q.brushed_today())
 	var sd: Dictionary = JSON.parse_string(JSON.stringify(q.state_dict()))
 	_check("thought rotation survives save/load", sd.has("routine_uses") and int(sd["routine_uses"].get("meal", 0)) >= 2)
 	iv.queue = []
@@ -198,11 +200,18 @@ func _holdout() -> void:
 	var h: Control = Sim.make(get_root())
 	await process_frame
 	_check("Gravity Mortar costs LESS than the Arc Projector (%d < %d), by stable id" % [int(h.WEAPONS["launcher"]["cost"]), int(h.WEAPONS["arc"]["cost"])], int(h.WEAPONS["launcher"]["cost"]) < int(h.WEAPONS["arc"]["cost"]))
-	_check("...and the other prices are unchanged", int(h.WEAPONS["pistol"]["cost"]) == 0 and int(h.WEAPONS["machete"]["cost"]) == 40 and int(h.WEAPONS["smg"]["cost"]) == 120 and int(h.WEAPONS["shotgun"]["cost"]) == 170 and int(h.WEAPONS["rifle"]["cost"]) == 300 and int(h.WEAPONS["arc"]["cost"]) == 480)
+	# Round 48 re-priced the whole armory for a longer progression (see
+	# test_r48_holdout_economy); the R47 intent kept: the sidearm is free and
+	# the price ORDER of the other weapons is unchanged.
+	var order: Array = ["pistol", "machete", "smg", "shotgun", "rifle", "launcher", "arc"]
+	var ordered := true
+	for i in range(1, order.size()):
+		ordered = ordered and int(h.WEAPONS[order[i]]["cost"]) > int(h.WEAPONS[order[i - 1]]["cost"])
+	_check("...sidearm free, the other weapons keep their price order", int(h.WEAPONS["pistol"]["cost"]) == 0 and ordered)
 	_check("distinct roles kept (arc = chain damage, mortar = area control)", String(h.WEAPON_ROLE["arc"]).length() > 0 and String(h.WEAPON_ROLE["launcher"]).length() > 0 and h.WEAPON_ROLE["arc"] != h.WEAPON_ROLE["launcher"])
 	h.load_state({})
 	h.start_seeded(11)
-	h.credits = 900
+	h.credits = 2000
 	h.mode = "shop"
 	h.shop_return = "wave"
 	_check("inside a run: buy the mortar + an upgrade", h.weapon_action("launcher") and h.buy("damage") and h.weapon == "launcher")
@@ -220,7 +229,7 @@ func _holdout() -> void:
 				h.mode = "paused"
 		h.action("restart" if case != "same-day restart" else "start")
 		_check("%s: wave 1, sidearm, 0 credits, no upgrades, nothing bought" % case, h.wave == 1 and h.weapon == "pistol" and h.credits == 0 and h.rank("damage") == 0 and h.unlocked.keys() == ["pistol"])
-		h.credits = 900
+		h.credits = 2000
 		h.mode = "shop"
 		h.shop_return = "wave"
 		h.weapon_action("launcher")
@@ -259,6 +268,21 @@ func _holdout() -> void:
 		print("  %s: fresh sidearm runs cleared waves %s, earned %d CR on average" % [d, str(waves), tot / 3])
 		_check("%s: a fresh run earns enough for a first weapon (avg %d CR >= 120)" % [d, tot / 3], tot / 3 >= 120)
 	h.queue_free()
+
+
+## Round 48: the action's sounds play DURING it (quarters_life foley
+## timeline) -- run the timeline through, then finish the action.
+func _finish(kind: String, seconds: float) -> void:
+	for i in int(seconds * 60.0) - 2:
+		q._tick_foley(1.0 / 60.0)
+	# End it through the REAL path: the body's gesture completes and emits
+	# consume_finished (-> _on_consumed), so the next action can start.
+	var b: Node = q._body()
+	if b != null and b.is_consuming():
+		b._consume_t = b._consume_dur - 0.001
+		b._pose_consume_arm(0.01)
+	else:
+		q._on_consumed(kind)
 
 
 func _check(name: String, cond: bool) -> void:

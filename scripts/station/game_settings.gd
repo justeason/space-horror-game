@@ -130,6 +130,8 @@ const DEFAULTS := {
 	"ui_scale": 1.0, "steady_warnings": false,
 	# Round 44: the technician's inner voice + display brightness.
 	"thought_voice": true, "thought_captions": true, "brightness": 1.0,
+	# Round 48: the inner voice's own volume (its InnerVoice bus).
+	"thought_volume": 1.0,
 }
 const UI_SCALES := [0.8, 0.9, 1.0, 1.15, 1.3, 1.5]
 static var _values: Dictionary = {}
@@ -179,6 +181,12 @@ static func apply_one(key: String) -> void:
 			var lin: float = clampf(float(get_value(key)), 0.0, 1.0)
 			AudioServer.set_bus_volume_db(idx, linear_to_db(maxf(lin, 0.0001)))
 			AudioServer.set_bus_mute(idx, lin <= 0.001)
+	elif key == "thought_volume":
+		var ti: int = AudioServer.get_bus_index("InnerVoice")
+		if ti != -1:
+			var tl: float = clampf(float(get_value(key)), 0.0, 1.0)
+			AudioServer.set_bus_volume_db(ti, linear_to_db(maxf(tl, 0.0001)))
+			AudioServer.set_bus_mute(ti, tl <= 0.001)
 	elif key == "fullscreen" or key == "window_size":
 		if DisplayServer.get_name() == "headless":
 			return

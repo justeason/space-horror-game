@@ -121,7 +121,9 @@ func _desktop_and_files() -> void:
 	var se: Node = main.get_node("StoryEvents")
 	scr.set_editing(true)
 	scr._on_app(&"handover")
-	_check("the shortcut opens the ONE real handover record", scr.current_view() == &"file" and scr._report.text.find("HANDOVER NOTE") != -1 and scr.open_file == Files.HANDOVER_PATH + "/" + Files.HANDOVER_FILE)
+	# Round 48: the shortcut opens the dedicated SHIFT HANDOVER app (no Files
+	# detour) on the same one record.
+	_check("the shortcut opens the ONE real handover record (in its own app)", scr.current_view() == &"handover" and scr._ho_head.text.find("HANDOVER NOTE") != -1 and scr._ho_text.text.find("Welcome aboard") != -1)
 	_check("reading it via the shortcut is the story discovery", se.investigations.has("_handover_early") or se.has_milestone("handover_read"))
 	var n_handover := 0
 	for k in Files.FILES:

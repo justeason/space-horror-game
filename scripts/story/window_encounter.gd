@@ -33,8 +33,11 @@ extends Node
 ## tunnel port (0.6 m behind the glass), turned to face the Control Room --
 ## it used to stand square behind the port, i.e. at the frame's edge for an
 ## oblique viewer, mostly hidden.
-const FIGURE_POS := Vector3(-4.72, 0.0, 2.65)
-const FIGURE_YAW_DEG := 19.6
+## Round 48: a little OFF-CENTRE in the port (right of centre from the
+## observation spot), so the sideways bend and the retreat carry it across
+## the whole opening before it leaves behind the far frame.
+const FIGURE_POS := Vector3(-4.72, 0.0, 2.44)
+const FIGURE_YAW_DEG := 17.0
 ## Gentle FOCUS while staring at the far port (squinting): the field of
 ## view narrows so the figure's movement reads. Never with reduced effects.
 const FOCUS_FOV_K := 0.42
@@ -208,6 +211,9 @@ func _process(delta: float) -> void:
 	if figure == null:
 		return
 	_update_focus(delta)
+	# Round 48: the head tracks the real eye during the recognition/retreat.
+	if figure.visible and _cam() != null:
+		figure.watch_point = _cam().global_position
 	if stage == "locked" and is_ready_now():
 		stage = "ready"
 	match stage:
