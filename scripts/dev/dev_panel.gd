@@ -273,10 +273,24 @@ func _build_story_controls(box: VBoxContainer) -> void:
 	var wl := Label.new()
 	wl.text = "Window:"
 	h3.add_child(wl)
-	for spec in [["Prepare", "dev_prepare"], ["Cue", "dev_cue"], ["Go to spot", "dev_goto"], ["Spawn", "dev_spawn"], ["Gaze react", "dev_react"], ["Guide", "dev_guide"], ["Reset", "dev_reset"]]:
+	for spec in [["Prepare", "dev_prepare"], ["Cue", "dev_cue"], ["Go to spot", "dev_goto"], ["Idle pose", "dev_spawn"], ["Gaze react", "dev_react"], ["Replay", "dev_replay"], ["Slow replay", "dev_replay_slow"], ["Guide", "dev_guide"], ["Reset", "dev_reset"]]:
 		var m: String = spec[1]
 		_button(h3, spec[0], func(): se._dev_touch(); se.window.call(m); last_action = "window " + m)
 	var h4 := _row(box)
+	# Round 47: the window / camera contradiction variants (previews).
+	var hm := _row(box)
+	for mv in [["Mismatch: shadow", &"mismatch_shadow"], ["day/night", &"mismatch_daynight"], ["EVA worker", &"mismatch_eva"]]:
+		var mid: StringName = mv[1]
+		_button(hm, mv[0], func(): se.dev_trigger(mid); last_action = "preview " + String(mid))
+	_button(hm, "Clear", func(): se.dev_cancel(); last_action = "mismatch cleared")
+	# Round 47: the hand at the observation port (separate event).
+	var hh := _row(box)
+	_button(hh, "Hand: prepare", func(): se.dev_prepare_hand(); last_action = "hand armed (stand in the Control Room, face away)")
+	_button(hh, "Trigger", func(): se.dev_trigger(&"window_hand"); last_action = "hand: knock")
+	_button(hh, "Replay", func(): se.dev_cancel(); se.dev_trigger(&"window_hand"); last_action = "hand: replay")
+	_button(hh, "Cancel", func(): se.dev_cancel(); last_action = "hand cancelled")
+	_button(hh, "Reset", func(): se.dev_reset(&"window_hand"); se._pending_investigation.erase("window_hand"); last_action = "hand reset")
+	_button(hh, "Test investigation", func(): se._dev_touch(); se._investigated("window_hand"); last_action = "hand: glass checked")
 	# Round 46: the task-linked wrong reading (prepare a REAL setup, then
 	# trigger; status shows true vs displayed).
 	var hc := _row(box)
@@ -478,6 +492,11 @@ func story_text() -> String:
 		lines.append("Investigation state: %s" % (", ".join(inv) if not inv.is_empty() else "nothing observed yet"))
 		if se.get("window") != null:
 			lines.append("Window encounter: stage %s · witnessed day %d · guide days %s · ready %s · observable %s" % [se.window.stage, se.window.witnessed_day, str(se.window.guide_days), se.window.is_ready_now(), se.window.observable()])
+			lines.append("Window figure: " + se.window.dev_status())
+			var odn: Node = main.get_tree().get_first_node_in_group(&"observation_discrepancy")
+			lines.append("Window/camera contradiction: mode '%s' · EXT-03 night %s · shadow %s · eva %s" % [odn.active_mode if odn != null else "?", odn.ext03_night() if odn != null else false, se.eligibility(&"mismatch_shadow"), se.eligibility(&"mismatch_eva")])
+			var hn: Node3D = se.hand_node()
+			lines.append("Window hand: %s · seen %s · knocks %d · armed %s · eligibility '%s' · investigation %s" % [hn.state if hn != null else "-", hn.seen if hn != null else false, hn.knocks_played if hn != null else 0, se.is_armed(&"window_hand"), se.eligibility(&"window_hand"), se.investigation_state("window_hand")])
 		var dpc: Node = main.get_node_or_null("DayPlan")
 		if dpc != null and "cal_task" in se:
 			lines.append("Calibration: L07 TRUE %s · M02 TRUE %s · workstation shows %s" % ["done" if dpc.is_task_done(&"l07") else "pending", "done" if dpc.is_task_done(&"m02") else "pending", ("%s NOT CALIBRATED (story)" % se.cal_task_shown) if se.cal_task_shown != "" else "the truth"])

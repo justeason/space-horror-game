@@ -561,70 +561,14 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.2, 2.02, 1.85)
 size = Vector3(0.62, 0.04, 0.72)
 material = SubResource("StandardMaterial3D_fixture")
 
-[node name="WashCabinet" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.15, 0.45, 2.15)
-size = Vector3(0.7, 0.9, 0.5)
-material = SubResource("StandardMaterial3D_panel")
-use_collision = true
-
-[node name="WashCounterTop" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.15, 0.91, 2.15)
-size = Vector3(0.76, 0.04, 0.56)
-material = SubResource("StandardMaterial3D_fixture")
-
-[node name="WashBasinWallNorth" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.15, 0.875, 2.27)
-size = Vector3(0.42, 0.07, 0.03)
-material = SubResource("StandardMaterial3D_hull")
-
-[node name="WashBasinWallSouth" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.15, 0.875, 1.93)
-size = Vector3(0.42, 0.07, 0.03)
-material = SubResource("StandardMaterial3D_hull")
-
-[node name="WashBasinWallWest" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.94, 0.875, 2.1)
-size = Vector3(0.03, 0.07, 0.38)
-material = SubResource("StandardMaterial3D_hull")
-
-[node name="WashBasinWallEast" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.36, 0.875, 2.1)
-size = Vector3(0.03, 0.07, 0.38)
-material = SubResource("StandardMaterial3D_hull")
-
-[node name="WashBasinFloor" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.15, 0.84, 2.1)
-size = Vector3(0.36, 0.02, 0.32)
-material = SubResource("StandardMaterial3D_basin")
-
-[node name="WashFaucetBase" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.15, 0.98, 2.3)
-size = Vector3(0.05, 0.1, 0.05)
-material = SubResource("StandardMaterial3D_fixture")
-
-[node name="WashFaucetSpout" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.15, 1.05, 2.15)
-size = Vector3(0.04, 0.04, 0.22)
-material = SubResource("StandardMaterial3D_fixture")
-
 [node name="WashMirrorCabinet" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.15, 1.53, 2.36)
-size = Vector3(0.62, 0.96, 0.08)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.15, 0.99, 2.36)
+size = Vector3(0.68, 1.96, 0.05)
 material = SubResource("StandardMaterial3D_panel_dark")
 
 [node name="WashMirrorGlass" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.15, 1.53, 2.32)
-size = Vector3(0.56, 0.9, 0.02)
-material = SubResource("StandardMaterial3D_fixture")
-
-[node name="WashUnderStoragePanel" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.15, 0.25, 1.91)
-size = Vector3(0.5, 0.3, 0.03)
-material = SubResource("StandardMaterial3D_panel_dark")
-
-[node name="WashUnderHandle" type="CSGBox3D" parent="Geometry"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.15, 0.25, 1.885)
-size = Vector3(0.1, 0.03, 0.03)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.15, 0.99, 2.32)
+size = Vector3(0.6, 1.9, 0.02)
 material = SubResource("StandardMaterial3D_fixture")
 
 [node name="DeskCarcass" type="CSGBox3D" parent="Geometry"]
@@ -1976,7 +1920,7 @@ use_collision = true
 [node name="LifeSupportFloor" type="CSGBox3D" parent="Geometry"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.9, -0.1, 10.8)
 size = Vector3(3.2, 0.2, 2.4)
-material = SubResource("StandardMaterial3D_floor")
+material = SubResource("StandardMaterial3D_corridor")
 use_collision = true
 
 [node name="LifeSupportCeiling" type="CSGBox3D" parent="Geometry"]
@@ -2427,8 +2371,8 @@ omni_range = 3.0
 [node name="Light_LifeSupport" type="OmniLight3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.9, 2.9, 10.8)
 light_color = Color(0.85, 0.95, 0.9, 1)
-light_energy = 0.95
-omni_range = 3.2
+light_energy = 1.15
+omni_range = 4.4
 
 [node name="MovementNodes" type="Node3D" parent="."]
 

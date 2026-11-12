@@ -8,8 +8,8 @@ extends CanvasLayer
 ## Distinct from the Station Operations Assistant in every channel:
 ##   - caption: centred, warm pale tone in quotation marks, above the
 ##     assistant's caption strip; no speaker label;
-##   - voice (optional, setting "thought_voice"): a quieter, more natural
-##     local voice (macOS `say`, "Flo"), NON-spatial, on its own
+##   - voice (optional, setting "thought_voice"): a quieter, NATURAL
+##     local voice (macOS `say`, Enhanced/Premium only -- Round 47), NON-spatial, on its own
 ##     "InnerVoice" bus (low-passed, a touch of room) feeding Voice -- it
 ##     sounds inside the head, never from a wall speaker. Headless runs and
 ##     platforms without `say` show captions only (honestly reported by
@@ -19,8 +19,23 @@ extends CanvasLayer
 
 const GS = preload("res://scripts/station/game_settings.gd")
 const SAY := "/usr/bin/say"
-## Round 46: slower, softer delivery -- reflective, not announced.
-const VOICE := {"en": ["Flo (English (US))", 142], "zh": ["Flo (Chinese (China mainland))", 160]}
+## Round 47: VOICE NATURALNESS AUDIT. The Round 46 voice "Flo" is an
+## Eloquence FORMANT voice -- the most robotic class macOS ships; no EQ could
+## make it sound like a person (the player's verdict). The local options are
+## (a) Eloquence voices (Flo, Eddy, Reed, Sandy, Shelley, Rocko, Grand*),
+## (b) older compact concatenative voices (Samantha, Daniel, Karen, Moira,
+## Tessa -- the station assistant uses Samantha, so they also read as "the
+## machine"), (c) the neural "Enhanced" / "Premium" voices, which are
+## natural but are a free optional download the user installs (System
+## Settings > Accessibility > Spoken Content > System voice > Manage
+## Voices). A poor spoken voice is worse than a well-presented silent
+## thought, so thoughts are SPOKEN ONLY with a (c) voice; otherwise they are
+## captions, and backend() says exactly why. Rate: natural conversational
+## pace (the 142 wpm "slow" delivery made short lines sound read out).
+## [fallback display name (unused for speech unless natural), rate]
+const VOICE := {"en": ["(none installed)", 156], "zh": ["(none installed)", 170]}
+const NATURAL_MARKERS := ["(Premium)", "(Enhanced)"]
+static var _voice_list: Array = []         # [[name, locale]] from `say -v ?`
 const VOICE_DB := -11.0             # well under the station assistant
 const DUCK_DB := -5.0               # the room recedes while a thought plays
 const DUCK_BUSES := ["Ambient", "SFX"]
@@ -91,11 +106,13 @@ static func _ensure_bus() -> void:
 	# Round 46: CLOSE and dry -- no room reverb (a room = a speaker in a
 	# room); a gentle band (no boom, no hiss) with a little low-mid warmth,
 	# like a voice right at the ear.
+	# Round 47: lighter -- the 140 Hz / 3.4 kHz band was telephone-narrow
+	# and itself made the voice sound processed.
 	var hp := AudioEffectHighPassFilter.new()
-	hp.cutoff_hz = 140.0
+	hp.cutoff_hz = 90.0
 	AudioServer.add_bus_effect(i, hp)
 	var lp := AudioEffectLowPassFilter.new()
-	lp.cutoff_hz = 3400.0
+	lp.cutoff_hz = 7000.0
 	AudioServer.add_bus_effect(i, lp)
 	var eq := AudioEffectEQ6.new()
 	eq.set_band_gain_db(1, 2.5)          # ~230 Hz: proximity warmth
@@ -188,7 +205,38 @@ func backend() -> String:
 		return "captions (voice off)"
 	if DisplayServer.get_name() == "headless" or not FileAccess.file_exists(SAY):
 		return "captions only (no local voice)"
-	return "local voice (say: %s)" % VOICE[_lang()][0]
+	var v: String = natural_voice(_lang())
+	if v == "":
+		return "captions only (no natural local voice installed: add an Enhanced/Premium voice in System Settings > Accessibility > Spoken Content)"
+	return "local voice (say: %s)" % v
+
+
+## Installed voices as [[name, locale]] (parsed once from `say -v ?`).
+static func installed_voices() -> Array:
+	if not _voice_list.is_empty() or not FileAccess.file_exists(SAY):
+		return _voice_list
+	var out: Array = []
+	if OS.execute(SAY, ["-v", "?"], out, true) != 0 or out.is_empty():
+		return _voice_list
+	var rx := RegEx.new()
+	rx.compile("^(.+?)\\s+([a-z]{2}_[A-Z]{2})\\s+#")
+	for line in String(out[0]).split("\n"):
+		var m: RegExMatch = rx.search(line)
+		if m != null:
+			_voice_list.append([m.get_string(1).strip_edges(), m.get_string(2)])
+	return _voice_list
+
+
+## The most natural installed voice for a language ("" = none good enough).
+static func natural_voice(lang: String) -> String:
+	var prefix: String = "zh_" if lang == "zh" else "en_"
+	for v in installed_voices():
+		if not String(v[1]).begins_with(prefix):
+			continue
+		for mk in NATURAL_MARKERS:
+			if String(v[0]).contains(mk):
+				return String(v[0])
+	return ""
 
 
 func _process(delta: float) -> void:
@@ -261,8 +309,8 @@ func _start_voice(text: String, lang: String) -> void:
 	if not backend().begins_with("local voice"):
 		return
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(CACHE_DIR))
-	var v: Array = VOICE.get(lang, VOICE["en"])
-	var path: String = CACHE_DIR + "thought_%s.wav" % ("%s|%s|%s" % [v[0], lang, text]).md5_text()
+	var v: Array = [natural_voice(lang), int(VOICE.get(lang, VOICE["en"])[1])]
+	var path: String = CACHE_DIR + "thought_%s.wav" % ("%s|%s|%s|%d" % [v[0], lang, text, v[1]]).md5_text()
 	_task_path = path
 	if FileAccess.file_exists(path):
 		_task = -1

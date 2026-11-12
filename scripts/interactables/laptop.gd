@@ -134,6 +134,38 @@ func screen_uv(global_point: Vector3, viewer_right: Vector3) -> Vector2:
 	return Vector2(u, v)
 
 
+## Round 47: screen coordinates of a CURSOR RAY, clamped to the screen --
+## a drag that leaves the screen keeps tracking its edge (and its release
+## is still delivered), like a real pointer. (-1,-1) if the ray misses the
+## screen's plane.
+func ray_uv_clamped(from: Vector3, dir: Vector3, viewer_right: Vector3) -> Vector2:
+	return ray_uv(from, dir, viewer_right, true)
+
+
+## Round 47: the cursor ray against the DISPLAY plane itself (exact). The
+## physics click collider sits slightly off that plane, which shifted the
+## mapping ~1% toward the edges at the close focused-use angle. clamp=false
+## returns (-1,-1) off the screen.
+func ray_uv(from: Vector3, dir: Vector3, viewer_right: Vector3, clamp: bool) -> Vector2:
+	var n: Vector3 = _screen.global_basis.y.normalized()
+	var pl := Plane(n, _screen.global_position)
+	var hit: Variant = pl.intersects_ray(from, dir)
+	if hit == null:
+		return Vector2(-1, -1)
+	var lp: Vector3 = _screen.to_local(hit)
+	var hinge_local: Vector3 = _screen.to_local(_hinge.global_position)
+	var down_x: float = signf(hinge_local.x) if absf(hinge_local.x) > 0.0001 else 1.0
+	var right_local: Vector3 = (_screen.global_basis.inverse() * viewer_right)
+	var right_z: float = signf(right_local.z) if absf(right_local.z) > 0.0001 else 1.0
+	var u: float = 0.5 + (lp.z * right_z) / _screen.size.z
+	var v: float = 0.5 + (lp.x * down_x) / _screen.size.x
+	if clamp:
+		return Vector2(clampf(u, 0.0, 1.0), clampf(v, 0.0, 1.0))
+	if u < 0.0 or u > 1.0 or v < 0.0 or v > 1.0:
+		return Vector2(-1, -1)
+	return Vector2(u, v)
+
+
 ## The inverse (for tests/tools): normalized screen coordinates -> world.
 func screen_point(uv: Vector2, viewer_right: Vector3) -> Vector3:
 	var hinge_local: Vector3 = _screen.to_local(_hinge.global_position)

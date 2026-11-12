@@ -58,6 +58,10 @@ const OBSERVED := {
 	"window_figure": "I thought I saw someone behind the airlock tunnel port. It moved wrong. Then it was gone.",
 	"basil_return": "The basil is green again. I watched it die. I haven't watered it since.",
 	"peripheral_figure": "Turned round too fast and thought someone was standing at the edge of the room. Nobody.",
+	"window_hand": "Something tapped on the Control Room window. From outside. I looked, and for a second there was a hand on the glass.",
+	"mismatch_shadow": "On EXT-03 there was a shadow on the tunnel hull. A person's. Through the window the wall was bare.",
+	"mismatch_daynight": "The camera showed the courtyard in eclipse. Out of the window, the sun was on it.",
+	"mismatch_eva": "Someone was outside at the antenna, in a suit, working. Nobody else is here.",
 }
 const CHECKED := {
 	"corridor_presence": "Went to the Junction. Nobody. Just the doorways.",
@@ -66,9 +70,11 @@ const CHECKED := {
 	"phantom_cycle": "Went to the airlock. Pressure normal, both hatches as I left them.",
 	"access_ghost": "Went and looked. Nothing moved, nothing missing.",
 	"window_figure": "I went to the tunnel. Empty. The glass was clean. The suit was where it always is.",
+	"window_hand": "Went right up to the window. Nothing on the glass. Not a smudge. Only the hull, and the dark.",
 }
 const CONTRA := {
 	"note_archive": "The note archive says the note was never edited.",
+	"feed": "On EXT-03 the worksite was empty. Nobody in the restraints. No tools.",
 	"airlock_log": "The airlock log has no cycle at that time. None.",
 	"access_log": "The access log has the entry. I wasn't there.",
 	"environment_log": "The environment log shows normal pressure all day.",
@@ -117,6 +123,10 @@ const ZH_OBSERVED := {
 	"window_figure": "我好像看到气闸通道的观察窗后面有人。它动得不对劲。然后就不见了。",
 	"basil_return": "罗勒又绿了。我亲眼看着它死掉的。之后我一次都没浇过水。",
 	"peripheral_figure": "转身太快，以为屋子边上站着一个人。没人。",
+	"window_hand": "控制室的窗户被敲了几下。是从外面敲的。我转过去看，有那么一秒，玻璃上有一只手。",
+	"mismatch_shadow": "EXT-03 画面里，通道外壳上有一道影子。是个人的影子。可从窗户看出去，墙上什么都没有。",
+	"mismatch_daynight": "摄像头里的作业区处在地影中。可窗外明明是阳光。",
+	"mismatch_eva": "外面天线那里有人，穿着宇航服在干活。可这里只有我一个人。",
 }
 const ZH_CHECKED := {
 	"corridor_presence": "我去了枢纽舱。没有人。只有那几个门洞。",
@@ -125,9 +135,11 @@ const ZH_CHECKED := {
 	"phantom_cycle": "去了气闸。气压正常，两道舱门都和我离开时一样。",
 	"access_ghost": "去看了。什么都没动，什么都没少。",
 	"window_figure": "我去了通道。空的。玻璃很干净。宇航服还在老地方。",
+	"window_hand": "我走到窗前。玻璃上什么都没有，连一点污迹都没有。只有船体，和外面的黑暗。",
 }
 const ZH_CONTRA := {
 	"note_archive": "便条存档说那张便条从没被修改过。",
+	"feed": "EXT-03 画面里作业点是空的。限位器里没人，也没有工具。",
 	"airlock_log": "气闸日志在那个时间没有任何循环记录。一条都没有。",
 	"access_log": "门禁记录里有那一条。我不在那里。",
 	"environment_log": "环境日志显示全天气压正常。",

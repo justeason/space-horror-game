@@ -691,6 +691,59 @@ func click_at(uv: Vector2) -> void:
 		push_input(b)
 
 
+## Round 47: a REAL POINTER for focused use (zoomed in). The Messages
+## scrollbar could not be dragged: every click used to arrive as an instant
+## press + release (click_at) with no held button, no motion and no wheel,
+## so a press on the thumb could never become a drag and a press on the
+## track only paged. Now press, motion (with the held button mask) and
+## release arrive as separate events at the cursor's real position, and the
+## wheel is forwarded -- Godot's own ScrollContainer / ScrollBar behaviour
+## (thumb drag, track click, wheel) applies unchanged. A release is always
+## delivered, even off the screen, so nothing keeps scrolling or stays held.
+var _ptr_pos: Vector2 = Vector2(-1, -1)
+var _ptr_mask: int = 0
+
+
+func pointer_button(uv: Vector2, pressed: bool, index: MouseButton = MOUSE_BUTTON_LEFT, factor: float = 1.0) -> void:
+	var pos := Vector2(uv.x * size.x, uv.y * size.y)
+	if pos != _ptr_pos:
+		pointer_motion(uv)
+	var bit: int = 1 << (int(index) - 1)
+	var is_wheel: bool = index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN, MOUSE_BUTTON_WHEEL_LEFT, MOUSE_BUTTON_WHEEL_RIGHT]
+	if not is_wheel:
+		_ptr_mask = (_ptr_mask | bit) if pressed else (_ptr_mask & ~bit)
+	var b := InputEventMouseButton.new()
+	b.button_index = index
+	b.pressed = pressed
+	b.factor = factor
+	b.button_mask = _ptr_mask
+	b.position = pos
+	b.global_position = pos
+	push_input(b)
+
+
+func pointer_motion(uv: Vector2) -> void:
+	var pos := Vector2(uv.x * size.x, uv.y * size.y)
+	var mv := InputEventMouseMotion.new()
+	mv.position = pos
+	mv.global_position = pos
+	mv.relative = pos - _ptr_pos if _ptr_pos.x >= 0.0 else Vector2.ZERO
+	mv.button_mask = _ptr_mask
+	_ptr_pos = pos
+	push_input(mv)
+
+
+## A wheel notch (pressed + released, as the OS sends it).
+func pointer_wheel(uv: Vector2, up: bool, factor: float = 1.0) -> void:
+	var idx: MouseButton = MOUSE_BUTTON_WHEEL_UP if up else MOUSE_BUTTON_WHEEL_DOWN
+	pointer_button(uv, true, idx, factor)
+	pointer_button(uv, false, idx, factor)
+
+
+func pointer_held() -> bool:
+	return _ptr_mask != 0
+
+
 ## Normalized screen coordinates of a control's centre (tests/tools).
 func uv_of(c: Control) -> Vector2:
 	var r: Rect2 = c.get_global_rect()
@@ -1133,6 +1186,7 @@ func _ensure_mail_ui() -> void:
 	_mail_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_mail_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	right.add_child(_mail_scroll)
+	_style_mail_bar(_mail_scroll.get_v_scroll_bar())
 	_mail_text = Label.new()
 	_mail_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_mail_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1180,6 +1234,27 @@ func _build_mail() -> void:
 
 
 var _mail_scroll: ScrollContainer
+
+
+## Round 47: a GRABBABLE scrollbar. The default bar was 8 layout px wide
+## with a thumb ~8 px long on a laptop screen seen in 3D -- hard to hit at
+## all. 16 px wide, a thumb at least 28 px long, visible track + states.
+func _style_mail_bar(bar: VScrollBar) -> void:
+	bar.custom_minimum_size.x = 16
+	var track := StyleBoxFlat.new()
+	track.bg_color = Color(0.12, 0.13, 0.15)
+	track.set_corner_radius_all(4)
+	bar.add_theme_stylebox_override("scroll", track)
+	bar.add_theme_stylebox_override("scroll_focus", track)
+	for st in [["grabber", Color(0.48, 0.52, 0.58)], ["grabber_highlight", Color(0.62, 0.67, 0.74)], ["grabber_pressed", Color(0.85, 0.8, 0.6)]]:
+		var g := StyleBoxFlat.new()
+		g.bg_color = st[1]
+		g.set_corner_radius_all(4)
+		g.content_margin_top = 14
+		g.content_margin_bottom = 14
+		g.content_margin_left = 3
+		g.content_margin_right = 3
+		bar.add_theme_stylebox_override(st[0], g)
 
 
 func scroll_mail_to_end() -> void:

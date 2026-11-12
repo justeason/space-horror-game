@@ -243,6 +243,7 @@ func _process(delta: float) -> void:
 				if looking_at_figure():
 					_gaze += delta
 					if _gaze >= GAZE_S:
+						figure.reduced = _reduce_effects()
 						figure.react()
 						stage = "reacting"
 				else:
@@ -533,7 +534,32 @@ func dev_react() -> void:
 	if figure.state != "idle":
 		figure.appear()
 	stage = "reacting"
+	figure.reduced = _reduce_effects()
 	figure.react()
+
+
+func _reduce_effects() -> bool:
+	return bool(preload("res://scripts/station/game_settings.gd").get_value("reduce_effects"))
+
+
+## Round 47: replay the whole reaction (developer); speed < 1 = slow motion.
+## Never reachable in ordinary play (time_scale resets when it ends).
+func dev_replay(speed: float = 1.0) -> void:
+	figure.reset()
+	figure.appear()
+	figure.time_scale = speed
+	figure.reduced = _reduce_effects()
+	stage = "reacting"
+	figure.react()
+
+
+func dev_replay_slow() -> void:
+	dev_replay(0.25)
+
+
+## Round 47: one line of true state for the developer panel.
+func dev_status() -> String:
+	return "stage %s · figure %s/%s t=%.2f x%.2f · observable %s · looking %s · investigation %s" % [stage, figure.state, figure.stage_name(), figure.t, figure.time_scale, observable(), looking_at_figure(), _se.investigation_state("window_figure")]
 
 
 func dev_reset() -> void:

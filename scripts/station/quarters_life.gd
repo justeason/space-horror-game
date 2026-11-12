@@ -245,27 +245,77 @@ func _consume(kind: String, seconds: float) -> bool:
 
 signal consumed(kind: String)     # Round 46: everyday thoughts listen
 
+## Round 47: eating / drinking reactions are the technician's own INNER
+## THOUGHTS (the same caption / voice path as every other thought), not a
+## HUD remark -- short, contextual, rotating so the same line does not come
+## back meal after meal. Never the station assistant. Falls back to the
+## old HUD line only if no inner voice exists (tools / isolated scenes).
+const ROUTINE_THOUGHTS := {
+	"meal": [["That's better.", "好多了。"], ["Oats and apricot. Warm enough.", "燕麦配杏干。够热了。"], ["Breakfast. Right. Day's started.", "早饭。好，一天开始了。"], ["Could use something fresh.", "要是有点新鲜的就好了。"]],
+	"dinner": [["Could use something fresh.", "要是有点新鲜的就好了。"], ["Lentils. It's... fine.", "扁豆。还……行吧。"], ["Warm, at least.", "至少是热的。"]],
+	"tea": [["Still warm.", "还是热的。"], ["That's better.", "好多了。"], ["Tea helps.", "喝茶有用。"]],
+	"water": [["Better.", "好些了。"], ["Needed that.", "正需要这个。"], ["Recycled. Tastes of nothing.", "循环水。没什么味道。"]],
+}
+const ROUTINE_FALLBACK := {"meal": "Breakfast pouch: oats and apricot. Warm enough.", "dinner": "Dinner tray: savoury lentil stew. It's... fine.", "tea": "Hot tea. Better.", "water": "Water. Better."}
+var routine_uses: Dictionary = {}     # kind -> times (saved: rotation)
+
+
+## Round 47: a REAL action's sound from where it happens (station_sounds:
+## positional, through the acoustic path). Nothing plays for an action that
+## did not happen.
+func _snd(kind: StringName, pos: Vector3) -> void:
+	var snd: Node = get_tree().get_first_node_in_group(&"station_sounds") if is_inside_tree() else null
+	if snd != null:
+		snd.play_at(kind, pos, true)
+
+
+## ...at the technician's own mouth (eating, drinking, brushing).
+func _snd_mouth(kind: StringName) -> void:
+	var cam: Camera3D = get_viewport().get_camera_3d() if is_inside_tree() and get_viewport() != null else null
+	if cam != null:
+		_snd(kind, cam.global_position - cam.global_basis.z * 0.15 - Vector3(0, 0.08, 0))
+
+
+func _remark(kind: String) -> void:
+	var iv: Node = get_tree().get_first_node_in_group(&"inner_voice") if is_inside_tree() else null
+	var pool: Array = ROUTINE_THOUGHTS.get(kind, [])
+	if iv == null or pool.is_empty():
+		say(String(ROUTINE_FALLBACK.get(kind, "")))
+		return
+	var n: int = int(routine_uses.get(kind, 0))
+	routine_uses[kind] = n + 1
+	var line: Array = pool[n % pool.size()]
+	iv.think("routine:%s:%d" % [kind, n], String(line[0]), String(line[1]), false)
+
 
 func _on_consumed(kind: String) -> void:
 	if _pending != kind:
 		return
 	_pending = ""
 	consumed.emit(kind)
+	# Round 47: the action's own sound, at the mouth (eating / drinking).
+	match kind:
+		"water", "tea":
+			_snd_mouth(&"sip")
+		"meal", "dinner":
+			_snd_mouth(&"chew")
+		"pour":
+			_snd(&"trickle", _basil_pos())
 	match kind:
 		"water", "tea":
 			drank_day = _today()
-			say("Water. Better." if kind == "water" else "Hot tea. Better.")
+			_remark(kind)
 			if _dp != null:
 				_dp.log_event("Drink break" if kind == "water" else "Tea break")
 		"meal":
 			meal_day = _today()
 			missed_dinner = false
-			say("Breakfast pouch: oats and apricot. Warm enough.")
+			_remark("meal")
 			if _dp != null:
 				_dp.log_event("Breakfast")
 		"dinner":
 			dinner_day = _today()
-			say("Dinner tray: savoury lentil stew. It's... fine.")
+			_remark("dinner")
 			if _dp != null:
 				_dp.log_event("Dinner")
 		"pour":
@@ -295,7 +345,7 @@ func on_part(id: StringName) -> void:
 				say("You've had a drink today.")
 				return
 			if _consume("water", DRINK_S):
-				sfx(&"click")
+				_snd(&"dispense", GALLEY + Vector3(-0.26, 1.0, 0.02))
 		&"tea":
 			if tea_day == _today():
 				say("You've had your tea today.")
@@ -303,23 +353,22 @@ func on_part(id: StringName) -> void:
 			if brewing >= 0.0:
 				return
 			brewing = 0.0
-			sfx(&"hiss")
+			_snd(&"kettle", GALLEY + Vector3(0.2, 1.08, -0.02))
 			say("Water's heating...")
 		&"mug":
 			if tea_day == _today() and not _mug_drunk and _consume("tea", DRINK_S):
 				_mug_drunk = true
-				sfx(&"click")
 		&"meal":
 			if not ate_today():
 				if _consume("meal", EAT_S):
-					sfx(&"insert")
+					_snd_mouth(&"wrapper")
 				return
 			var why: String = dinner_refusal()
 			if why != "":
 				say(why)
 				return
 			if _consume("dinner", EAT_S + 0.6):
-				sfx(&"insert")
+				_snd(&"tray", GALLEY + Vector3(0.0, 0.94, 0.1))
 		&"brush":
 			if brushed_today() and (brush_pm_day == _today() or _hour() < DINNER_FROM_MIN):
 				say("Already brushed. Teeth are fine.")
@@ -327,7 +376,7 @@ func on_part(id: StringName) -> void:
 			if _consume("brush", BRUSH_S):
 				if _brush_holder != null:
 					_brush_holder.visible = false
-				sfx(&"click")
+				_snd_mouth(&"brush")
 		&"basil":
 			if basil_dead and basil_return_day < 0:
 				basil_seen_dead = true
@@ -397,7 +446,7 @@ func _process(delta: float) -> void:
 		brewing = -1.0
 		tea_day = _today()
 		_mug_drunk = false
-		sfx(&"success")
+		_snd(&"kettle_done", GALLEY + Vector3(0.2, 1.08, -0.02))
 		say("Tea's ready.")
 		_refresh()
 
@@ -599,10 +648,12 @@ func state_dict() -> Dictionary:
 	return {"tea_day": tea_day, "drank_day": drank_day, "meal_day": meal_day, "mug_drunk": _mug_drunk,
 		"dinner_day": dinner_day, "brush_day": brush_day, "brush_pm_day": brush_pm_day, "basil_day": basil_day, "basil_dry": basil_dry_days, "missed_dinner": missed_dinner,
 		"basil_dead": basil_dead, "basil_dead_day": basil_dead_day, "basil_seen_dead": basil_seen_dead,
-		"basil_return_day": basil_return_day if not basil_return_dev else -1, "basil_return_seen": basil_return_seen and not basil_return_dev}
+		"basil_return_day": basil_return_day if not basil_return_dev else -1, "basil_return_seen": basil_return_seen and not basil_return_dev,
+		"routine_uses": routine_uses.duplicate()}
 
 
 func load_dict(d: Dictionary) -> void:
+	routine_uses = (d.get("routine_uses", {}) as Dictionary).duplicate() if d.get("routine_uses", {}) is Dictionary else {}
 	tea_day = int(d.get("tea_day", -1))
 	drank_day = int(d.get("drank_day", -1))
 	meal_day = int(d.get("meal_day", -1))

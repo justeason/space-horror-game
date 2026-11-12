@@ -19,6 +19,7 @@ extends Node3D
 ##     invisible TETHER boundaries (collision) so nobody can drift away.
 
 const EXTERIOR := 1 << 11
+const PortGlass = preload("res://scripts/exterior/port_glass.gd")
 const DECK_Y := 0.0
 ## Walkway / deck pieces (x0, x1, z0, z1) -- floor top at DECK_Y.
 const DECK := [
@@ -300,6 +301,8 @@ func _build_hull(geo: Node) -> void:
 			var sz: Vector3 = Vector3(0.12, s.y + 0.2, s.z - 0.04) if thin_x else Vector3(s.x - 0.04, s.y + 0.2, 0.12)
 			if nm == TUNNEL_PORT_WALL and sgn > 0.0:
 				_plate_with_port(sz, c + off, _module_mat(nm), hull)
+			elif nm == OBS_PORT_WALL and sgn < 0.0:
+				_plate_with_round_port(sz, c + off, _module_mat(nm), hull)
 			else:
 				_box(sz, c + off, _module_mat(nm), hull)
 			panel_count += 1
@@ -433,6 +436,10 @@ func _build_port_exterior() -> void:
 	ring.material_override = rim_m
 	ring.layers = 1 | EXTERIOR
 	port_exterior.add_child(ring)
+	# Round 47: the outer glass is TRANSPARENT (it was an opaque dark disc
+	# with a painted "cabin glow" -- the solid-colour window seen from the
+	# airlock-tunnel port and on EVA). Through it the real, lit Control Room
+	# is visible: the wall and this hull plate now have a real bore.
 	var glass := MeshInstance3D.new()
 	var cyl := CylinderMesh.new()
 	cyl.top_radius = 0.35
@@ -442,9 +449,8 @@ func _build_port_exterior() -> void:
 	glass.mesh = cyl
 	glass.rotation_degrees.z = 90.0
 	glass.position.x = -0.012          # just outside the hull plate (x -1.52)
-	var gm := _m(Color(0.04, 0.06, 0.08), 0.9, Color(0.55, 0.45, 0.3) * 0.75)   # Round 40: warmer cabin glow, readable from outside
-	gm.roughness = 0.04
-	glass.material_override = gm
+	glass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	glass.material_override = PortGlass.material(Color(0.5, 0.6, 0.7))
 	glass.layers = 1 | EXTERIOR
 	port_exterior.add_child(glass)
 	# Round 40: painted surround ring (yellow) so the port reads at a glance.
@@ -721,8 +727,33 @@ func _finish_walls() -> void:
 		# Module belt stripe (identity colour) at 0.55 of the height.
 		var belt_y: float = lerpf(y0, y1, 0.42)
 		if col != Color(0.6, 0.62, 0.65):
-			_box(dims.call(length - 0.1, 0.09, 0.015), Vector3(face.x, belt_y, face.z) + n * 0.008, _m(col.darkened(0.1), 0.2), fin)
-			finish_count += 1
+			# Round 47: the belt is split around keep-outs -- it used to run
+			# straight across the (now transparent, two-way) observation port.
+			var belt_m := _m(col.darkened(0.1), 0.2)
+			var segs: Array = []
+			var cur: Array = []
+			var nseg: int = maxi(int((length - 0.1) / 0.1), 1)
+			for si in nseg:
+				var t0: float = -(length - 0.1) * 0.5 + (length - 0.1) * float(si) / float(nseg)
+				var t1: float = t0 + (length - 0.1) / float(nseg)
+				var mp: Vector3 = Vector3(face.x, belt_y, face.z) + along * ((t0 + t1) * 0.5)
+				var blocked := false
+				for k in keep:
+					if Vector2((k as Vector3).x - mp.x, (k as Vector3).z - mp.z).length() < 0.6 and absf((k as Vector3).y - mp.y) < 0.6:
+						blocked = true
+				if blocked:
+					if not cur.is_empty():
+						segs.append(cur)
+					cur = []
+				elif cur.is_empty():
+					cur = [t0, t1]
+				else:
+					cur[1] = t1
+			if not cur.is_empty():
+				segs.append(cur)
+			for sg in segs:
+				_box(dims.call(float(sg[1]) - float(sg[0]), 0.09, 0.015), Vector3(face.x, belt_y, face.z) + along * ((float(sg[0]) + float(sg[1])) * 0.5) + n * 0.008, belt_m, fin)
+				finish_count += 1
 		# Structural ribs.
 		var bays: int = maxi(int(round(length / 1.5)), 1)
 		for i in range(0, bays + 1):
@@ -871,10 +902,13 @@ func _separate_light_layers() -> void:
 # sealed for the leak sweep), and a dim tunnel light behind it.
 # ======================================================================
 const TUNNEL_PORT_WALL := "AirlockTunnelEastWall"
-const TUNNEL_PORT_CENTRE := Vector3(-4.3, 1.55, 2.5)     # on the wall's centre plane
-## Round 46: enlarged (was 0.50 x 0.42) -- from the Control Room port the
-## figure's movement must read at ~4 m; still a small reinforced port.
-const TUNNEL_PORT_SIZE := Vector2(0.78, 0.6)             # (z width, y height)
+const TUNNEL_PORT_CENTRE := Vector3(-4.3, 1.5, 2.5)      # on the wall's centre plane
+## Round 46: enlarged (was 0.50 x 0.42). Round 47: TALLER (was 0.78 x 0.6,
+## sill at y 1.25) -- through it only the figure's head and shoulders ever
+## showed, so its body movement was invisible. Now 0.84 x 0.9 (sill y 1.05,
+## just above the tunnel handrail at y 1.0): from the Control Room's
+## observation spot the figure reads from the hips up.
+const TUNNEL_PORT_SIZE := Vector2(0.84, 0.9)             # (z width, y height)
 var tunnel_port: Node3D
 
 
@@ -892,6 +926,34 @@ func _plate_with_port(sz: Vector3, centre: Vector3, mat: Material, parent: Node3
 		var h: float = float(piece[3]) - float(piece[2])
 		if w > 0.01 and h > 0.01:
 			_box(Vector3(sz.x, h, w), Vector3(centre.x, (float(piece[2]) + float(piece[3])) * 0.5, (float(piece[0]) + float(piece[1])) * 0.5), mat, parent)
+
+
+## Round 47: the Control Room west hull plate with a real ROUND bore for
+## the observation port (CSG box minus cylinder), so the port is two-way.
+const OBS_PORT_WALL := "ControlRoomWestWall"
+const OBS_PORT_R := 0.345
+var obs_port_plate: CSGBox3D
+
+
+func _plate_with_round_port(sz: Vector3, centre: Vector3, mat: Material, parent: Node3D) -> void:
+	var win: Node3D = get_parent().get_node_or_null("Interactables/WallWatchWindow")
+	obs_port_plate = CSGBox3D.new()
+	obs_port_plate.name = "ObsPortHullPlate"
+	obs_port_plate.size = sz
+	obs_port_plate.material = mat
+	obs_port_plate.position = centre
+	obs_port_plate.layers = 1 | EXTERIOR
+	parent.add_child(obs_port_plate)
+	if win == null:
+		return
+	var bore := CSGCylinder3D.new()
+	bore.operation = CSGShape3D.OPERATION_SUBTRACTION
+	bore.radius = OBS_PORT_R
+	bore.height = sz.x + 0.1
+	bore.sides = 40
+	bore.rotation_degrees.z = 90.0
+	obs_port_plate.add_child(bore)
+	bore.global_position = Vector3(centre.x, win.global_position.y, win.global_position.z)
 
 
 func _build_tunnel_port(geo: Node) -> void:
@@ -932,13 +994,7 @@ func _build_tunnel_port(geo: Node) -> void:
 	q.size = Vector2(w, h)
 	glass.mesh = q
 	glass.rotation_degrees.y = 90.0
-	var gm := StandardMaterial3D.new()
-	gm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	gm.albedo_color = Color(0.55, 0.65, 0.72, 0.12)
-	gm.metallic = 0.2
-	gm.roughness = 0.05
-	gm.cull_mode = BaseMaterial3D.CULL_DISABLED
-	glass.material_override = gm
+	glass.material_override = PortGlass.material(Color(0.55, 0.65, 0.72))     # Round 47: Fresnel glass (no haze)
 	glass.layers = 1 | EXTERIOR
 	glass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	tunnel_port.add_child(glass)

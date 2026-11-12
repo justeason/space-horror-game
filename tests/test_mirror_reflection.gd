@@ -121,10 +121,11 @@ func _init() -> void:
 	_check("mirror camera's frustum vertical size matches the physical glass rectangle's full height", is_equal_approx(mirror_cam.size, glass_size.y))
 	_check("Round 24: mirror glass enlarged (>= 0.85m tall, >= 0.55m wide) for full-torso character review", glass_size.y >= 0.85 and glass_size.x >= 0.55)
 	var glass_bottom: float = glass.global_position.y - glass_size.y * 0.5
-	var counter: CSGBox3D = main.get_node("Geometry/WashCounterTop")
-	var faucet: CSGBox3D = main.get_node("Geometry/WashFaucetBase")
-	_check("Round 24: mirror extends down toward the basin (bottom %.2f within 0.2m of the counter top)" % glass_bottom, glass_bottom - (counter.global_position.y + counter.size.y * 0.5) < 0.2)
-	_check("Round 24: enlarged mirror still clears the faucet (no clipping)", glass_bottom > faucet.global_position.y + faucet.size.y * 0.5)
+	# Round 47 (requirement change): the sink in front of the mirror was
+	# removed and the mirror is FLOOR-LENGTH -- it reaches the deck and
+	# nothing (no basin / faucet) sits in front of it to clip.
+	_check("Round 47: floor-length mirror (bottom %.2f m above the deck)" % glass_bottom, glass_bottom <= 0.06 and glass_size.y >= 1.8)
+	_check("Round 47: no basin / faucet in front of the glass any more", main.get_node_or_null("Geometry/WashCounterTop") == null and main.get_node_or_null("Geometry/WashFaucetBase") == null)
 	var feed_size: Vector2i = mirror_vp.size
 	_check("Round 24: feed texture aspect matches the glass aspect (no stretched reflection)", absf(float(feed_size.x) / float(feed_size.y) - glass_size.x / glass_size.y) < 0.01)
 

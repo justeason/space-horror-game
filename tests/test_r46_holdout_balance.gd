@@ -70,7 +70,8 @@ func _economy() -> void:
 	var c: Dictionary = {}
 	for w in h.WEAPONS:
 		c[w] = int(h.WEAPONS[w]["cost"])
-	_check("tiers: starter < intermediate < advanced < top (%s)" % str(c), c["pistol"] == 0 and c["machete"] <= 50 and c["smg"] > c["machete"] and c["shotgun"] > c["smg"] and c["rifle"] > c["shotgun"] and c["arc"] > c["rifle"] and c["launcher"] > c["arc"])
+	# Round 47: the Gravity Mortar now costs LESS than the Arc (player feedback).
+	_check("tiers: starter < intermediate < advanced < mortar < arc (%s)" % str(c), c["pistol"] == 0 and c["machete"] <= 50 and c["smg"] > c["machete"] and c["shotgun"] > c["smg"] and c["rifle"] > c["shotgun"] and c["arc"] > c["rifle"] and c["launcher"] > c["rifle"] and c["launcher"] < c["arc"])
 	var run: Dictionary = Sim.run(h, "easy", "arc", 1, 6)
 	var pw: Array = run["per_wave"]
 	var cum: Array = []
@@ -144,7 +145,9 @@ func _migration() -> void:
 		"best_by": {"easy": 1500, "hard": 900}, "best_wave_by": {"easy": 14, "hard": 9}})
 	_check("old save: Hard record -> Easy (same balance)", int(h.best_by["easy"]) == 900 and int(h.best_wave_by["easy"]) == 9 and int(h.best_by["hard"]) == 0)
 	_check("old save: Easy record kept as a legacy record (never deleted)", int(h.legacy_best.get("classic_easy", {}).get("score", 0)) == 1500)
-	_check("old save: unlocked weapons + credits kept", h.unlocked.has("arc") and h.weapon == "arc" and h.credits == 75)
+	# Round 47: old purchases become CATALOG weapons (kept, not equipped);
+	# the old wallet stays on record, a new run starts with the sidearm.
+	_check("old save: unlocked weapons -> catalog, wallet on record, not auto-equipped", h.catalog.has("arc") and h.weapon == "pistol" and h.credits == 0 and int(h.legacy_progress.get("wallet", 0)) == 75 and h.migration_note != "")
 	var sd: Dictionary = JSON.parse_string(JSON.stringify(h.state_dict()))
 	h.load_state(sd)
 	_check("new save round-trip: no double migration", int(h.best_by["easy"]) == 900 and int(h.legacy_best["classic_easy"]["score"]) == 1500)

@@ -243,7 +243,9 @@ func _loop_and_save() -> void:
 	h.load_state({})
 	_check("blank load resets to pistol", h.weapon == "pistol" and h.unlocked.size() == 1)
 	h.load_state(sd)
-	_check("save/load: weapons, equipped, ranks, best wave persist; never a live run", h.unlocked.has("arc") and h.weapon == "arc" and h.rank("magnet") == 1 and h.best_wave >= 6 and h.mode == "title" and h.zombies.is_empty())
+	# Round 47 (requirement change): records and the weapon CATALOG persist;
+	# this run's weapons / ranks / credits do not (a new run starts fresh).
+	_check("save/load: catalog (the bought SMG) + best wave persist, run loadout does not; never a live run", h.catalog.has("smg") and h.weapon == "pistol" and h.rank("magnet") == 0 and h.credits == 0 and h.best_wave >= 6 and h.mode == "title" and h.zombies.is_empty())
 	var fb: Node3D = main.get_node("FreeMoveBody")
 	var p: Vector3 = fb.global_position
 	h.start_seeded(7)

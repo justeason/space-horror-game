@@ -105,7 +105,14 @@ extends SubViewport
 ## Reducing depth, as first suggested, would have made the reported
 ## symptom measurably worse, not better -- the fix follows the actual
 ## math/render evidence instead.
-const _VIRTUAL_EYE_DEPTH_BEHIND_GLASS: float = 0.8
+const _MIN_EYE_DEPTH: float = 0.8
+## Round 47: with a FIXED 0.8 m depth the floor-length glass (half-height
+## 0.95 m) would be framed at a ~50 deg half-angle -- a too-wide, shrunken
+## reflection. The depth now follows the glass so the half-angle never
+## exceeds MAX_HALF_ANGLE_DEG (same look as the old glass; nearer to a
+## true reflection's scale).
+const MAX_HALF_ANGLE_DEG: float = 44.0
+var _VIRTUAL_EYE_DEPTH_BEHIND_GLASS: float = 0.8
 ## Half-width/half-height of the physical glass rectangle -- the actual
 ## portal window the off-axis frustum is built to exactly frame.
 ##
@@ -119,7 +126,9 @@ var _glass_half_width: float = 0.25
 var _glass_half_height: float = 0.21
 ## Feed texture resolution per metre of glass (the original 0.5 x 0.42
 ## glass used a 500 x 420 viewport, i.e. 1000 px/m).
-const _FEED_PIXELS_PER_METRE: float = 1000.0
+## Round 47: the mirror became FLOOR-LENGTH (0.6 x 1.9 m, was 0.56 x 0.9);
+## 760 px/m keeps the feed's pixel count close to the old one (456 x 1444).
+const _FEED_PIXELS_PER_METRE: float = 760.0
 const _FAR_CLIP: float = 30.0
 
 var _player_camera: Camera3D = null
@@ -171,6 +180,7 @@ func _ready() -> void:
 		_glass_half_width = glass_size.x * 0.5
 		_glass_half_height = glass_size.y * 0.5
 		size = Vector2i(roundi(glass_size.x * _FEED_PIXELS_PER_METRE), roundi(glass_size.y * _FEED_PIXELS_PER_METRE))
+		_VIRTUAL_EYE_DEPTH_BEHIND_GLASS = maxf(_MIN_EYE_DEPTH, _glass_half_height / tan(deg_to_rad(MAX_HALF_ANGLE_DEG)))
 	if glass != null:
 		var mat := StandardMaterial3D.new()
 		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED

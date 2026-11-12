@@ -167,22 +167,32 @@ func trip(i: int, why: String) -> void:
 		_dp.log_event("Breaker %s tripped (%s)" % [BREAKERS[i]["id"], why])
 
 
+## Round 47: a breaker thrown by hand is heard FROM the panel too
+## (positional, like a trip), not as an interface click.
+func _panel_sfx(kind: StringName) -> void:
+	var snd: Node = get_tree().get_first_node_in_group(&"station_sounds") if is_inside_tree() else null
+	if snd != null:
+		snd.play_at(kind, global_position, true)
+	else:
+		sfx(kind)
+
+
 func on_part(id: StringName) -> void:
 	var i: int = int(String(id).substr(1))
 	if on[i]:
 		on[i] = false
 		cause[i] = ""
-		sfx(&"breaker")
+		_panel_sfx(&"breaker")
 		say("%s switched OFF — %s unpowered." % [BREAKERS[i]["id"], BREAKERS[i]["circuit"]])
 		_apply()
 		return
 	if cause_active(i):
-		sfx(&"breaker")
+		_panel_sfx(&"breaker")
 		say("%s re-tripped — %s still present." % [BREAKERS[i]["id"], _cause_word(i)])
 		return
 	on[i] = true
 	cause[i] = ""
-	sfx(&"relay")
+	_panel_sfx(&"relay")
 	say("%s reset — %s restored." % [BREAKERS[i]["id"], BREAKERS[i]["circuit"]])
 	_apply()
 	if _dp != null:

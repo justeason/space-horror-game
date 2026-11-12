@@ -38,7 +38,9 @@ func _init() -> void:
 	# Round 31: the player capsule now collides with furniture (mask 1|4);
 	# furniture itself still never sits on layer 1 (interaction ray).
 	_check("...never on layer 1 (interaction ray unaffected); the player capsule collides with it", mattress.collision_layer & 1 == 0 and (fb.collision_mask & fc.FURNITURE_LAYER) != 0)
-	_check("every listed furniture prop resolved (%d)" % fc.contact_props().size(), fc.contact_props().size() >= 40)
+	# Round 47: stricter than the old ">= 40" count (the removed sink took
+	# 8 props off the list): EVERY listed path resolves to a prop.
+	_check("every listed furniture prop resolved (%d of %d)" % [fc.contact_props().size(), fc.furniture_paths.size()], fc.contact_props().size() == fc.furniture_paths.size() and fc.contact_props().size() >= 30)
 
 	# Both parts start stowed behind shut doors (hidden, non-collidable):
 	# open their cabinets so they are real loose parts once taken.
@@ -53,7 +55,7 @@ func _init() -> void:
 		["bed (mattress, leaning in)", Vector3(4.17, 1.6, -0.45), Vector3(4.7, 0.54, -0.45), BED],
 		["bed (blanket at the foot)", Vector3(5.0, 1.6, 0.76), Vector3(5.0, 0.6, 0.28), BED],
 		["desk", Vector3(3.3, 1.6, 1.57), Vector3(3.3, 0.79, 2.08), ["DeskSurfaceSlab", "DeskNotebook"]],
-		["wash counter", Vector3(2.45, 1.6, 1.52), Vector3(2.45, 0.93, 2.05), ["WashCounterTop", "WashBasinFloor"]],
+		# Round 47: the wash counter in front of the mirror was removed (redundant sink).
 		["console desk", Vector3(-0.5, 1.6, -0.25), Vector3(-0.5, 0.78, -0.78), ["ConsoleDesk"]],
 		["counter edge (aim past it: plain release)", Vector3(1.95, 1.6, 1.5), Vector3(1.95, 1.4, 3.0), []],
 		["near the locker wall", Vector3(4.3, 1.6, 1.7), Vector3(5.5, 1.4, 1.7), []],
@@ -120,7 +122,8 @@ func _init() -> void:
 			carry.drop()
 			await process_frame
 
-	_check("every drop came to rest under physics (%d rests)" % carry.physics_rests, carry.physics_rests >= 20)
+	# Round 47: two items per scenario (the removed wash counter took one).
+	_check("every drop came to rest under physics (%d rests)" % carry.physics_rests, carry.physics_rests >= 2 * scen.size())
 
 	main.get_node("Geometry/StorageCabinet1").interact()
 	main.get_node("Geometry/StorageCabinet2").interact()

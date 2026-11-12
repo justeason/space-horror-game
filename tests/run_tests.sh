@@ -186,6 +186,10 @@ TESTS=(
   test_r46_holdout_balance
   test_r46_life_systems
   test_r46_horror
+  test_r47_windows_floor
+  test_r47_life_audio
+  test_r47_horror
+  test_r47_messages_scroll
 )
 
 if [ "$#" -gt 0 ]; then
@@ -193,7 +197,7 @@ if [ "$#" -gt 0 ]; then
 fi
 
 # Tests that need a real window (GUI mouse events); see the run loop.
-WINDOWED_TESTS=(test_r46_dev_input test_r46_horror)
+WINDOWED_TESTS=(test_r46_dev_input test_r46_horror test_r47_horror test_r47_messages_scroll)
 
 overall_status=0
 summary=()

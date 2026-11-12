@@ -91,9 +91,11 @@ static func _route(h: Control, goal: Vector2) -> Vector2:
 
 ## One run: returns {wave, kills, time, credits, per_wave_credits: Array}.
 static func run(h: Control, difficulty: String, weapon: String, seed: int, max_wave: int = 14, ranks: Dictionary = {}, kite: bool = true, buy: bool = true) -> Dictionary:
-	h.load_state({"unlocked": h.WEAPONS.keys(), "weapon": weapon, "ranks": ranks, "difficulty": difficulty, "credits": 0})
+	h.load_state({"difficulty": difficulty})
 	h.difficulty = difficulty
-	h.start_seeded(seed)
+	# Round 47: a run starts with the sidearm and nothing bought; the
+	# balance tools hand the run its loadout explicitly.
+	h.start_seeded(seed, {"unlocked": h.WEAPONS.keys(), "weapon": weapon, "ranks": ranks, "credits": 0})
 	var t: float = 0.0
 	var per_wave: Array = []
 	var c0: int = h.credits
@@ -132,8 +134,8 @@ static func run(h: Control, difficulty: String, weapon: String, seed: int, max_w
 ## Time (s) for a stationary survivor to kill a pack: `n` of `kind`
 ## clustered `dist` px away (creatures held in place: pure weapon output).
 static func clear_time(h: Control, weapon: String, kind: String, n: int, dist: float, spacing: float = 9.0, ranks: Dictionary = {}, pinned: bool = true) -> float:
-	h.load_state({"unlocked": h.WEAPONS.keys(), "weapon": weapon, "ranks": ranks, "difficulty": "easy"})
-	h.start_seeded(7)
+	h.load_state({"difficulty": "easy"})
+	h.start_seeded(7, {"unlocked": h.WEAPONS.keys(), "weapon": weapon, "ranks": ranks})
 	h._to_spawn = 0
 	h.zombies = []
 	var centre: Vector2 = h.player + Vector2(dist, 0)

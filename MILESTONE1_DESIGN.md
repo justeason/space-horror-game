@@ -10891,3 +10891,233 @@ When the shift ends, a warm glow comes on over the bunk: a wordless "go to bed" 
   small silhouette at ~4 m (focus helps). Laptop app titles, letters,
   handover notes, Holdout and the workstation stay English. The basil
   cannot be replanted (dead stays dead unless the story returns it).
+
+# Round 47 — first-chapter horror polish, window apparitions, physical sound, natural inner voice, two-way spacecraft windows, quarters, Holdout fixes, demo quality
+
+Baseline: Round 46 commit 5b522e1 (159/159 twice at that SHA). Driven by
+the owner's Round 46 playtest; fixes before new systems.
+
+## A. Two-way observation windows (Priority 1)
+- ROOT CAUSE of the "solid colour" Control Room window seen from the
+  airlock-tunnel port / on EVA: the port was a PORTAL -- an opaque quad in
+  the room showing an off-axis SubViewport render, with the west wall and
+  its hull plate left SOLID behind it; outside sat an opaque, emissive
+  "glass" disc with a painted cabin glow. Nothing could be seen inward.
+- FIX: a REAL opening. wall_watch_window.gd cuts a CSG cylinder bore
+  through ControlRoomWestWall; exterior_builder.gd builds that wall's hull
+  plate as a CSG box minus the same bore (ObsPortHullPlate). A cabin pane
+  (in the room) and the outer pressure pane (on the hull) are transparent;
+  the window's collision box now spans the bore, so the hull leak sweep
+  and the player capsule still meet glass. The portal SubViewport is gone
+  (one fewer render target); set_feed_override() is kept (an opaque disc
+  appears only while an override texture is set). The locked visual design
+  (round, bolted, recessed) is unchanged.
+- Glass HAZE: Godot's alpha-blended StandardMaterial still adds its full
+  specular/ambient reflection -- each faint pane put a 20-40/255 grey veil
+  over the view (measured: a black figure behind the three panes rendered
+  (44,53,61); with the panes hidden (3,3,4)). scripts/exterior/port_glass.gd
+  is a shared unshaded Fresnel glass: invisible head-on, a sheen at grazing
+  angles. Used by the Control Room panes and the tunnel port.
+- The hull's painted module belt is split around keep-outs (it ran across
+  the now-transparent port).
+- Verified both ways in renders: Control Room -> courtyard / tunnel port;
+  tunnel port -> lit Control Room; EVA courtyard -> Control Room (the
+  technician visible inside) and -> tunnel interior. CAMERA_ONLY stays out
+  of the eyes (rule unchanged); eye-only story objects are seen through the
+  real opening exactly as through the old portal.
+
+## B. Life Support floor
+- ROOT CAUSE: the deck used the darker generic floor material while its
+  walkway uses the corridor material, and the room's lamp (2.9 m up under a
+  3.3 m ceiling, range 3.2 m) barely reached it -- an unlit dark slab.
+- FIX: corridor material (the walkway's family), lamp range 4.4 / energy
+  1.15, plating seams in the walkway's seam language plus a painted L-3
+  service stripe (decor only). The real CSG floor (with collision) is the
+  floor; nothing decorative covers a hole.
+
+## C. Window figure redesign (Priorities 2-6)
+- ROOT CAUSES (measured from the real observation spot): the tunnel port's
+  sill was at y 1.25, so only the head and shoulder girdle ever showed --
+  the arm/torso animation played below the frame; the body was one capsule
+  for both legs and short straight arms (a head-and-shoulders shadow); the
+  R46 reaction was 1.15 s of small rotations about axes that do not read
+  in silhouette from the port; and the glass haze above greyed it out.
+- Port: 0.84 x 0.9 m (sill y 1.05, just above the tunnel handrail); a
+  vertical panel seam that would cross it is skipped.
+- Body (window_figure.gd): separate legs, a narrow waist under a deep
+  ribcage, UNEVEN sloped shoulders (22 / 14 deg), a long neck, a small
+  elongated head, arms a little too long with forearm, wrist, palm and
+  three long fingers. Unshaded near-black against the lit tunnel wall.
+- Sequence: OBSERVATION (still, asymmetric; the head slowly tips over) ->
+  RECOGNITION (0.9 s held pause; the head slowly rights itself -- it has
+  noticed you) -> FIRST MOVEMENT (a 70 ms snap: head dropped hard to one
+  shoulder, torso jerked the other way, then dead still) -> SHUDDER
+  (stepped ~14 Hz asymmetric jerks; ONE arm rises in the frontal plane
+  beside the head and its forearm hooks over the top of the head, on its
+  own slower beat; the other arm hangs dead) -> IMPOSSIBLE RETREAT (a held
+  beat, then a feet-still glide along the tunnel, accelerating past 4 m/s,
+  leaning away from its travel, head held on the window) -> DISAPPEARANCE
+  behind the port frame / into the Engineering doorway (never a fade).
+  Frontal-plane motion was chosen after renders showed a sideways arm
+  raise and a forward fold both disappeared (frame edge / own silhouette).
+- Reduced effects: the shudder becomes four slow snaps; no focus zoom.
+  Developer: Idle pose, Gaze react, Replay, Slow replay (x0.25), Reset,
+  plus a true status line (stage, figure stage, time, observable,
+  investigation). Gating from Round 45/46 is unchanged.
+- Verified in real-viewport renders (normal + eclipse): standing, tilted,
+  recognition, snap, four shudder frames, retreat, leaving, empty after.
+
+## D. Hand at the glass (Priorities 7-9) -- story id `window_hand`
+- A separate registered event (medium tier): phase 2, not before the
+  window has been looked through on an earlier day (a PORT entry in
+  feed_days after 2 s of looking out), never on the window-figure day,
+  pacing rules of the medium tier, at most twice, cooldown 5 days.
+- Live condition: in the Control Room, within 4.5 m of the port, NOT
+  looking at it, after the first minute of the shift.
+- window_hand.gd: a real 3D hand (palm, four two-segment fingers, thumb,
+  a forearm leaving below the frame) pressed on the EXTERIOR face of the
+  outer pane, eye-only, no collision; created for the event and freed
+  after it. Three soft STRUCTURE-BORNE taps ("glass_knock": a dull thud
+  through the frame, no airborne knock in vacuum) FROM the port, the index
+  finger lifting and tapping on each; it waits up to 9 s; once seen
+  (through the opening, near the view centre) the fingers draw in one
+  after another, the ring finger bending the wrong way, the wrist turning
+  (0.55 s), then it withdraws down and away behind the port's rim / hull
+  (0.3 s). Unseen: it withdraws anyway (the taps were only heard).
+- Investigation: right up at the glass for a second = checked ("Nothing on
+  the glass. Not even a mark."); AIRLOCK record = no EVA, no suit out;
+  CAMERA record = no motion on the hull (record contradictions stay
+  unnarrated). Journal EN/ZH. F8: prepare / trigger / replay / cancel /
+  reset / test investigation + a status line.
+
+## E. Corridor crossing (Priorities 10-11)
+- The same apparition rig; speed changes by PATH DISTANCE (not global
+  playback): an odd walk (0.95 m/s, hitch, a shoulder snapping up every
+  second step) -> it STOPS (no deceleration), the head turns too smoothly
+  to the camera and stays, a shoulder jerks -> a SURGE to 3.4 m/s within
+  0.25 s with the legs still striding slowly (gliding faster than it
+  walks), pitched forward, head held back on the camera, one arm swinging
+  wide -> a sideways lurch into the Engineering doorway. ~4.5 s in total,
+  >2.5 s on INT-02. A faint sheen: lit by the Junction lights, not flat.
+
+## F. Window / camera contradictions (Priorities 12-16)
+- Kept: the maintenance-case mismatch. New, distinct, each a registered
+  event with a stable id, in a FAMILY that never plays two within 2 days:
+  - `mismatch_shadow` (subtle): a tall human lamp-shadow on the airlock
+    tunnel's hull beside the case -- on EXT-03 only (a Decal on the
+    CAMERA_ONLY layer: it wraps the plate, ribs and blankets like a real
+    shadow). The reference: the case's own lamp shadow, in every view.
+  - `mismatch_daynight` (subtle, late phase 2, real daylight only): EXT-03
+    alone gets a day-for-night environment (graded exposure/colour,
+    highlights kept), tuned against a real eclipse render on EXT-03 (mean
+    luminance ~42 real vs ~35 graded vs ~65 daylight) -- landmarks and hull
+    lamps readable, not black. Sun, orbit and solar power untouched.
+  - `mismatch_eva` (medium, late phase 2): a suited technician (helmet,
+    gold visor, backpack, boots in the A1 foot restraints) working the
+    feed box with a ratchet, through the window only; EXT-03 shows the
+    worksite empty ("There's nobody out there." when compared); the airlock
+    record shows no EVA. No EVA / airlock / suit / crew state touched.
+- Shadow / day-night start from WATCHING EXT-03 (3 s) and want a look out
+  of the window to compare; the EVA worker starts from looking out. Never a
+  "MISMATCH" label in play; F8 previews each variant and shows the mode.
+
+## G. Sound (Priorities 20-21)
+- ACOUSTIC PATH (station_sounds.gd): every positional play is inverse-
+  distance from 1.6 m plus -7 dB and a lower low-pass per wall/bulkhead on
+  the straight line (physics ray, up to 4). Recorded per play (walls, dB,
+  cut-off) for tests.
+- HATCH KNOCK ROOT CAUSE: the hatch-handle event had its own
+  AudioStreamPlayer3D with unit_size 6 m -- full volume anywhere within
+  6 m, i.e. the whole Control Room. Now it plays at the outer hatch through
+  the acoustic path: Control Room -26.8 dB (2 walls, 880 Hz), Junction
+  -31.2, Engineering -22.5, inside the airlock -2.0, at the hatch -2.0.
+- Ordinary life now sounds like itself, from where it happens: dispenser
+  fill (dispenser), sip / chew / foil pouch / toothbrush (at the mouth),
+  hot-water unit heating and its thermostat click (the unit; it was a UI
+  success chime), dinner tray (galley), watering trickle (the pot), breaker
+  toggles by hand (the panel). Nothing plays for an action that did not
+  happen (e.g. tea already had).
+
+## H. Inner voice (Priorities 22-24)
+- AUDIT: the R46 voice "Flo" is an Eloquence FORMANT voice -- the most
+  robotic class macOS ships. This machine has only Eloquence, compact
+  (Samantha, Daniel, Moira, Karen, Tessa) and novelty voices; no
+  Enhanced / Premium (neural) voice is installed. EQ could not fix it, and
+  the 140 Hz-3.4 kHz band made it more telephone-like.
+- DECISION: thoughts are SPOKEN only with an Enhanced/Premium voice
+  (auto-detected from `say -v ?`; free optional download in System
+  Settings > Accessibility > Spoken Content); otherwise they are captions,
+  and backend() says why. Rate 156 wpm (natural), bus 90 Hz-7 kHz.
+  tools/voice_samples.sh renders the five-line evaluation set (ordinary,
+  confusion, concern, discomfort, restrained fear) per voice for listening.
+- Meals / tea / water: the HUD remarks became rotating inner thoughts
+  ("That's better.", "Still warm.", "Could use something fresh.") with
+  Simplified Chinese, through the same caption/voice path; the generic
+  everyday thought no longer doubles them. New anomalies stay silent at
+  the moment they happen; only some discoveries get one quiet thought.
+
+## I. Living Quarters (Priorities 25-26)
+- The sink assembly in front of the mirror (cabinet, counter, basin,
+  faucet, under-storage) is removed; the compact HYGIENE niche keeps the
+  toothbrush, the water-saver tap and brushing. The mirror is FLOOR-LENGTH
+  (0.6 x 1.9 m glass from 4 cm above the deck, slim frame); its feed reads
+  the glass size (456 x 1444 px at 760 px/m, about the old pixel count);
+  same rig synchronisation (full body, head, boots in the raw feed).
+- The mirror's virtual eye used a FIXED 0.8 m depth: on the 1.9 m glass
+  that framed a ~50 deg half-angle (too wide, a shrunken reflection; caught
+  by test_hand_mesh_and_mirror_fov). The depth now follows the glass so the
+  half-angle stays <= 44 deg (0.98 m here).
+
+## J. Holdout (Priorities 28-30)
+- Gravity Mortar 560 -> 380 CR (< Arc 480), on the stable id "launcher";
+  no other price changed; armory lists by price.
+- NEW-RUN BUG ROOT CAUSE: one mixed persistent wallet -- credits, ranks,
+  owned and equipped weapons were all saved and carried into every run.
+  Now a run starts at wave 1 with the sidearm, 0 CR, no upgrades, nothing
+  bought (same-day, next-day, after game over, abandoned). PERMANENT:
+  records per difficulty, runs, and the weapon CATALOG (every weapon ever
+  bought; 25% cheaper in later runs, never auto-equipped). Purchases only
+  inside a run. The game-over screen states what is kept and what resets.
+- Migration (run_model 2): an old save's weapons become catalog entries;
+  its wallet and ranks are kept on record (legacy_progress) and the title
+  says once what changed. Fresh-run economy (simulator, 3 seeds): Easy
+  ~290 CR, Hard ~1400 CR per run.
+
+## K. Messages scrollbar (Priority 31)
+- ROOT CAUSE: while the laptop was in focused use every click was sent as
+  an instant press + release (click_at), with no held button, no motion
+  and no wheel -- a press on the thumb could never become a drag, a press
+  on the track only paged. Now sleep_state forwards press, motion (with
+  the button mask) and release separately at the cursor's real position on
+  the 3D screen (clamped to the screen while dragging; release always
+  delivered), plus the wheel; Godot's own ScrollContainer behaviour
+  applies. Verified with real mouse events through the input pipeline.
+- Also found while testing: the Messages bar was 8 layout px wide with an
+  ~8 px thumb on a screen seen in 3D (hard to hit at all) -> 16 px wide,
+  thumb >= 28 px, visible track and hover / pressed states; the cursor is
+  mapped onto the DISPLAY plane exactly (the physics click collider sat
+  slightly off it: ~1% error toward the edges); a wheel notch moves ~3
+  lines (Godot's page/8 was ~17 px).
+
+## L. Tests / verification
+- New: test_r47_windows_floor, test_r47_life_audio, test_r47_horror
+  (windowed), test_r47_messages_scroll (windowed). Ported (requirement
+  changes, not weakened): Holdout persistence / price-order checks
+  (r42_laptop, r43_holdout, r45_laptop_station, r46_holdout_balance; the
+  simulator now hands a run its loadout explicitly), the R46 window-figure
+  timing checks (same intents on the new stages), the R38 portal checks
+  (now: a real opening, a physical sight line to the antenna), the
+  sink-based mirror / furniture checks (now floor-length; "every listed
+  prop resolves" is stricter than the old count; drop rests scale with the
+  scenarios).
+- Renders (scratchpad r47/out): window views both ways, Life Support,
+  window-figure sequence (normal + eclipse), hand sequence, INT-02
+  crossing, the three contradictions (window vs EXT-03), quarters mirror +
+  raw feed + niche.
+
+## M. Limitations
+- Not manually playtested; still frames + measured motion, not "feel".
+  Sound was checked by routing / levels / timing, not by ear. No natural
+  local voice is installed here, so thoughts are captions on this machine.
+  Windows build not run on Windows. Fresh Easy runs are now hard for the
+  simulator's sidearm bot (it often falls in waves 1-3) -- a tuning item.

@@ -41,9 +41,16 @@ extends Control
 ## CREDITS: kills, cleared waves, milestones (waves 5/10/15/20), scrap.
 ## LOOP: start -> survive -> clear a wave -> armory (upgrades / weapons)
 ## -> next wave ... -> die -> summary (wave, kills, score, best) -> restart.
-## SAVE: best score, best wave, credits, ranks, unlocked + equipped weapon
-## and run count persist; an ACTIVE run deliberately does not (a reload
-## returns to the title screen, nothing half-restored).
+## SAVE (Round 47 -- RUN vs PERMANENT): every new run starts at wave 1 with
+## the SIDEARM, 0 credits and no upgrades; credits, upgrade ranks and the
+## weapons bought belong to THAT run only (the player found last run's
+## purchases still active on a new day). PERMANENT: records per difficulty,
+## run count, and the weapon CATALOG -- every weapon ever bought stays
+## "known" and costs CATALOG_DISCOUNT less in later runs (still bought per
+## run, never auto-equipped). Pre-R47 saves (one mixed wallet): their
+## unlocked weapons become catalog entries; the old wallet / ranks are kept
+## on record in `legacy_progress` and the title says so once. An ACTIVE run
+## is never saved (a reload returns to the title screen).
 ## INPUT: W A S D / arrows only while the laptop game has keyboard focus --
 ## the technician never walks around the station while playing.
 ## Original code and procedural shapes only; no external assets.
@@ -124,9 +131,13 @@ const WEAPONS := {
 	# a slow shell (misses fast single targets) whose impact leaves a
 	# GRAVITY WELL that pulls nearby creatures together and slows them,
 	# then the blast. Area denial + clustering nothing else offers.
-	"launcher": {"name": "GRAVITY MORTAR", "interval": 2.1, "dmg": 28.0, "range": 175.0, "speed": 170.0, "pellets": 1, "spread": 0.0, "pierce": 0, "ap": true, "cost": 560, "color": Color(1.0, 0.55, 0.25)},
+	"launcher": {"name": "GRAVITY MORTAR", "interval": 2.1, "dmg": 28.0, "range": 175.0, "speed": 170.0, "pellets": 1, "spread": 0.0, "pierce": 0, "ap": true, "cost": 380, "color": Color(1.0, 0.55, 0.25)},
 }
-const WEAPON_ORDER := ["pistol", "machete", "smg", "shotgun", "rifle", "arc", "launcher"]
+## Round 47: the Gravity Mortar (area control) is weaker in play than the
+## Arc Projector (chain damage), so it now costs LESS (380 < 480; was 560).
+## Prices live on the stable weapon ids above; the armory lists by price.
+const WEAPON_ORDER := ["pistol", "machete", "smg", "shotgun", "rifle", "launcher", "arc"]
+const CATALOG_DISCOUNT := 0.75
 ## Round 46: what each weapon is FOR (armory tooltip + equipped line).
 const WEAPON_ROLE := {
 	"pistol": "Reliable all-rounder.",
@@ -177,6 +188,12 @@ var best_by: Dictionary = {"easy": 0, "hard": 0}
 var best_wave_by: Dictionary = {"easy": 0, "hard": 0}
 ## Round 46: records from an older balance (see load_state()).
 var legacy_best: Dictionary = {}
+## Round 47: PERMANENT weapon catalog (ever bought) + the pre-R47 wallet /
+## ranks on record, and a one-time title note about the change.
+var catalog: Dictionary = {"pistol": true}
+var legacy_progress: Dictionary = {}
+var migration_note: String = ""
+const RUN_MODEL := 2
 ## Run state.
 var mode: String = "title"        # title | play | shop | paused | over
 var player := START
@@ -624,9 +641,25 @@ func upgrade_cost(id: String) -> int:
 	return int(costs[r]) if r < costs.size() else -1
 
 
+## Round 47: purchases happen DURING a run only (between waves); outside a
+## run nothing can be bought that the next run would then take away.
+func in_run() -> bool:
+	return mode in ["play", "paused"] or (mode == "shop" and shop_return == "wave")
+
+
+## A weapon's price for THIS run (catalog weapons are cheaper).
+func weapon_cost(id: String) -> int:
+	var c: int = int(WEAPONS[id]["cost"])
+	return int(round(c * CATALOG_DISCOUNT)) if catalog.get(id, false) and id != "pistol" else c
+
+
 ## Buy one rank; refuses (with a reason in `message`) when maxed / poor.
 func buy(id: String) -> bool:
 	if not UPGRADES.has(id):
+		return false
+	if not in_run():
+		message = "Upgrades are bought between waves, for the current run."
+		_refresh_overlay()
 		return false
 	var cost: int = upgrade_cost(id)
 	if cost < 0:
@@ -653,15 +686,21 @@ func weapon_action(id: String) -> bool:
 		message = "%s equipped." % WEAPONS[id]["name"]
 		_refresh_overlay()
 		return true
-	var cost: int = int(WEAPONS[id]["cost"])
+	if not in_run():
+		message = "Weapons are bought during a run. Every run starts with the sidearm."
+		_refresh_overlay()
+		return false
+	var cost: int = weapon_cost(id)
 	if credits < cost:
-		message = "Need %d CR to unlock the %s (have %d)." % [cost, WEAPONS[id]["name"], credits]
+		message = "Need %d CR to buy the %s (have %d)." % [cost, WEAPONS[id]["name"], credits]
 		_refresh_overlay()
 		return false
 	credits -= cost
 	unlocked[id] = true
+	var first: bool = not catalog.get(id, false)
+	catalog[id] = true
 	weapon = id
-	message = "NEW WEAPON: %s — equipped." % WEAPONS[id]["name"]
+	message = ("NEW WEAPON: %s — equipped. Added to the catalog." if first else "%s bought for this run — equipped.") % WEAPONS[id]["name"]
 	_announce("NEW WEAPON  ·  %s" % WEAPONS[id]["name"])
 	_refresh_overlay()
 	return true
@@ -703,9 +742,34 @@ func action(id: String) -> void:
 	_refresh_overlay()
 
 
-func start_run() -> void:
+## Round 47: what a NEW RUN starts with -- the sidearm, no credits, no
+## upgrades, nothing bought (same day, next day, after a game over or an
+## abandoned run alike). Records and the catalog are untouched.
+func reset_run_loadout() -> void:
+	credits = 0
+	run_credits = 0
+	ranks = {}
+	for id in UPGRADES:
+		ranks[id] = 0
+	unlocked = {"pistol": true}
+	weapon = "pistol"
+
+
+func start_run(loadout: Dictionary = {}) -> void:
 	_rng.seed = hash([Time.get_ticks_usec(), runs])
 	runs += 1
+	reset_run_loadout()
+	# Tests / balance tools only: a prepared loadout for this one run.
+	if not loadout.is_empty():
+		for w in Array(loadout.get("unlocked", [])):
+			if WEAPONS.has(String(w)):
+				unlocked[String(w)] = true
+		if unlocked.has(String(loadout.get("weapon", "pistol"))):
+			weapon = String(loadout.get("weapon", "pistol"))
+		var lr: Dictionary = loadout.get("ranks", {})
+		for id in UPGRADES:
+			ranks[id] = clampi(int(lr.get(id, 0)), 0, int(UPGRADES[id][1]))
+		credits = int(loadout.get("credits", 0))
 	player = START
 	facing = Vector2.RIGHT
 	hp = max_hp()
@@ -734,8 +798,8 @@ func start_run() -> void:
 
 
 ## Tests: a reproducible run.
-func start_seeded(s: int) -> void:
-	start_run()
+func start_seeded(s: int, loadout: Dictionary = {}) -> void:
+	start_run(loadout)
 	_rng.seed = s
 
 
@@ -1477,7 +1541,9 @@ func _refresh_overlay() -> void:
 	match mode:
 		"title":
 			_ov_title.text = "HOLDOUT · %s" % diff()["name"]
-			_ov_text.text = "Hold the colony. WASD moves — your %s fires by itself. Modules can be entered.\n%s best %d (wave %d) · Wallet %d CR" % [WEAPONS[weapon]["name"], diff()["name"], int(best_by.get(difficulty, 0)), int(best_wave_by.get(difficulty, 0)), credits]
+			_ov_text.text = "Hold the colony. WASD moves; your weapon fires by itself.\nEvery run starts with the sidearm. Buy between waves.\n%s best %d (wave %d) · Catalog %d/%d weapons" % [diff()["name"], int(best_by.get(difficulty, 0)), int(best_wave_by.get(difficulty, 0)), catalog.size(), WEAPONS.size()]
+			if migration_note != "":
+				_ov_text.text += "\n" + migration_note
 			if legacy_best.has("classic_easy") and int(legacy_best["classic_easy"].get("score", 0)) > 0:
 				_ov_text.text += "\nClassic Easy record (before the rebalance): %d (wave %d)" % [int(legacy_best["classic_easy"]["score"]), int(legacy_best["classic_easy"]["wave"])]
 			show = {"diff_easy": true, "diff_hard": true, "start": true, "shop": true, "desktop": true}
@@ -1487,28 +1553,30 @@ func _refresh_overlay() -> void:
 			show = {"resume": true, "restart": true, "desktop": true}
 		"shop":
 			_ov_title.text = "ARMORY · %d CR" % credits
-			_ov_text.text = message if message != "" else ("Spend credits before wave %d." % (wave + 1) if shop_return == "wave" else "Upgrades and weapons carry over to every run.")
+			_ov_text.text = message if message != "" else ("Spend this run's credits before wave %d." % (wave + 1) if shop_return == "wave" else "CATALOG — weapons you have bought before cost %d%% less in a run. Buying happens between waves." % int(round((1.0 - CATALOG_DISCOUNT) * 100.0)))
 			_ov_text.text += "\n%s — %s" % [WEAPONS[weapon]["name"], WEAPON_ROLE.get(weapon, "")]
 			show = {"continue": shop_return == "wave", "back": shop_return == "title", "desktop": true}
 			for id in UPGRADE_ORDER:
 				var b: Button = buttons["buy_" + id]
 				var cost: int = upgrade_cost(id)
 				b.text = "%s %d/%d · %s" % [UPGRADES[id][0], rank(id), UPGRADES[id][1], ("MAX" if cost < 0 else "%d CR" % cost)]
-				b.disabled = cost < 0 or credits < cost
+				b.disabled = cost < 0 or credits < cost or not in_run()
 				b.tooltip_text = UPGRADES[id][3]
 			for wid in WEAPON_ORDER:
 				var wb: Button = buttons["weapon_" + wid]
 				if wid == weapon:
 					wb.text = "■ " + String(WEAPONS[wid]["name"])
 				elif unlocked.get(wid, false):
-					wb.text = String(WEAPONS[wid]["name"])
+					wb.text = String(WEAPONS[wid]["name"]) + " (this run)"
+				elif catalog.get(wid, false):
+					wb.text = "%s · KNOWN %dCR" % [WEAPONS[wid]["name"], weapon_cost(wid)]
 				else:
-					wb.text = "%s %dCR" % [WEAPONS[wid]["name"], int(WEAPONS[wid]["cost"])]
-				wb.disabled = not unlocked.get(wid, false) and credits < int(WEAPONS[wid]["cost"])
+					wb.text = "%s · NEW %dCR" % [WEAPONS[wid]["name"], weapon_cost(wid)]
+				wb.disabled = not unlocked.get(wid, false) and (credits < weapon_cost(wid) or not in_run())
 				wb.tooltip_text = String(WEAPON_ROLE.get(wid, ""))
 		"over":
 			_ov_title.text = "GAME OVER · %s" % diff()["name"]
-			_ov_text.text = "Wave %d · %d kills · Score %d · %s best %d (wave %d)\n+%d CR this run (wallet %d CR)" % [wave, kills, score, diff()["name"], best, best_wave, run_credits, credits]
+			_ov_text.text = "Wave %d · %d kills · Score %d · %s best %d (wave %d) · +%d CR\nKEPT: records, weapon catalog (%d)\nRESET next run: credits, upgrades, bought weapons" % [wave, kills, score, diff()["name"], best, best_wave, run_credits, catalog.size()]
 			show = {"diff_easy": true, "diff_hard": true, "restart": true, "shop": true, "desktop": true}
 	for k in ["diff_easy", "diff_hard", "start", "resume", "continue", "shop", "restart", "back", "desktop"]:
 		(buttons[k] as Button).visible = show.get(k, false)
@@ -1892,26 +1960,40 @@ func _draw_minimap(a: Control) -> void:
 
 # ------------------------------------------------------------ save / load
 func state_dict() -> Dictionary:
-	return {"best": best, "best_wave": best_wave, "credits": credits, "ranks": ranks.duplicate(), "runs": runs, "unlocked": unlocked.keys(), "weapon": weapon,
+	# Round 47: only PERMANENT progress is saved (an active run never is).
+	return {"best": best, "best_wave": best_wave, "runs": runs, "catalog": catalog.keys(),
 		"difficulty": difficulty, "best_by": best_by.duplicate(), "best_wave_by": best_wave_by.duplicate(),
-		"balance": BALANCE_VERSION, "legacy_best": legacy_best.duplicate()}
+		"balance": BALANCE_VERSION, "run_model": RUN_MODEL, "legacy_best": legacy_best.duplicate(), "legacy_progress": legacy_progress.duplicate(true)}
 
 
 func load_state(d: Dictionary) -> void:
 	best = maxi(int(d.get("best", 0)), 0)
 	best_wave = maxi(int(d.get("best_wave", 0)), 0)
-	credits = maxi(int(d.get("credits", 0)), 0)
 	runs = maxi(int(d.get("runs", 0)), 0)
-	var rk: Dictionary = d.get("ranks", {})
-	for id in UPGRADES:
-		ranks[id] = clampi(int(rk.get(id, 0)), 0, int(UPGRADES[id][1]))
-	unlocked = {"pistol": true}
-	for w in Array(d.get("unlocked", [])):
+	reset_run_loadout()
+	catalog = {"pistol": true}
+	for w in Array(d.get("catalog", [])):
 		if WEAPONS.has(String(w)):
-			unlocked[String(w)] = true
-	weapon = String(d.get("weapon", "pistol"))
-	if not unlocked.has(weapon):
-		weapon = "pistol"
+			catalog[String(w)] = true
+	legacy_progress = (d.get("legacy_progress", {}) as Dictionary).duplicate(true) if d.get("legacy_progress", {}) is Dictionary else {}
+	migration_note = ""
+	# Round 47 MIGRATION (one mixed wallet -> run / permanent). An old save
+	# cannot tell "bought this run" from "unlocked": every weapon it lists
+	# becomes a CATALOG weapon (kept, cheaper, never auto-equipped). Its
+	# wallet and ranks are kept ON RECORD (legacy_progress), not silently
+	# dropped, and the title says what changed.
+	if int(d.get("run_model", 1)) < RUN_MODEL:
+		var old_w: Array = Array(d.get("unlocked", [])).filter(func(w): return WEAPONS.has(String(w)))
+		for w in old_w:
+			catalog[String(w)] = true
+		var old_ranks: Dictionary = {}
+		var rk: Dictionary = d.get("ranks", {}) if d.get("ranks", {}) is Dictionary else {}
+		for id in rk:
+			if int(rk[id]) > 0:
+				old_ranks[String(id)] = int(rk[id])
+		if int(d.get("credits", 0)) > 0 or not old_ranks.is_empty() or old_w.size() > 1:
+			legacy_progress = {"wallet": maxi(int(d.get("credits", 0)), 0), "ranks": old_ranks, "weapons": old_w.map(func(w): return String(w))}
+			migration_note = "Runs now start fresh. Your %d known weapon(s) stay\nin the catalog, cheaper to buy in a run." % (catalog.size() - 1)
 	difficulty = String(d.get("difficulty", "easy"))
 	if not DIFFICULTY.has(difficulty):
 		difficulty = "easy"

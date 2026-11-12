@@ -20,7 +20,7 @@ func _init() -> void:
 	var scen := [
 		["living desk (beside the stool)", Vector3(3.25, 1.6, 1.15), Vector3(0, 0, 1), "z", 1.92, 1.0],
 		["stool", Vector3(3.8, 1.6, 1.0), Vector3(0, 0, 1), "z", 1.6, 1.0],
-		["wash counter", Vector3(2.1, 1.6, 1.15), Vector3(0, 0, 1), "z", 1.87, 1.0],
+		# Round 47: the wash counter (redundant sink) was removed.
 		["console desk", Vector3(-0.5, 1.6, 0.3), Vector3(0, 0, -1), "z", -0.6, -1.0],
 		["locker", Vector3(4.2, 1.6, 1.7), Vector3(1, 0, 0), "x", 4.87, 1.0],
 	]

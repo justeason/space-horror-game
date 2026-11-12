@@ -18,13 +18,34 @@ extends Node3D
 ## hitch on every second left step, one arm barely swinging, the head held
 ## a few degrees off level and too still. Not a monster: something a tired
 ## technician could talk themselves out of.
+##
+## Round 47 -- the crossing becomes IMPOSSIBLE after its pause (the player
+## found the 0.85 m/s walk unremarkable). Same rig and framework as before:
+##   1 odd walk   0.95 m/s with the hitch, a shoulder that snaps up on
+##                every second step;
+##   2 the stop   no deceleration -- it simply stops; the head turns too
+##                smoothly toward the camera, then one shoulder jerks;
+##   3 the surge  within 0.25 s it is moving at SURGE_SPEED (3.4 m/s), the
+##                legs still striding SLOWLY (the body glides faster than
+##                it walks), torso pitched forward, head held turned back
+##                at the camera while the body goes the other way, one arm
+##                swinging wide, the other rigid;
+##   4 the exit   the last EXIT_LEN metres: a sideways lurch into the
+##                Engineering opening.
+## Speed changes per path distance, not by speeding up playback globally.
 
 signal path_finished
 const CAMERA_ONLY := 1 << 18
 const DIRECT_ONLY := 1 << 19
 
 var layer_mask: int = CAMERA_ONLY
-var speed: float = 0.85                 # m/s along the path
+var speed: float = 0.95                 # m/s along the path (the odd walk)
+const SURGE_SPEED := 3.4                # m/s after the pause (impossible)
+const SURGE_RAMP_S := 0.25
+const EXIT_LEN := 0.7
+var surge: bool = true                  # the R47 crossing behaviour (after a pause)
+var _post_t: float = -1.0               # time since the pause ended (-1 = not yet)
+var path_len: float = 0.0
 var state: String = "hidden"            # hidden | still | walk
 var path: PackedVector3Array = PackedVector3Array()
 var _seg: int = 0
@@ -52,8 +73,10 @@ func _init(p_layer: int = CAMERA_ONLY) -> void:
 func _ready() -> void:
 	_mat = StandardMaterial3D.new()
 	_mat.albedo_color = Color(0.03, 0.03, 0.035)
-	_mat.roughness = 1.0
-	_mat.specular_mode = BaseMaterial3D.SPECULAR_DISABLED      # a dark shape, not a glossy mannequin
+	# Round 47: a faint sheen catches the corridor lights on the shoulders
+	# and head -- a lit dark body in the real space, not a flat cut-out.
+	_mat.roughness = 0.72
+	_mat.metallic_specular = 0.35
 	_hips = _joint(self, Vector3(0, 0.92, 0))
 	_part(_hips, CapsuleMesh, Vector3(0, 0.02, 0), 0.15, 0.32, Vector3(0, 0, 90))      # pelvis
 	for side in [-1, 1]:
@@ -129,6 +152,10 @@ func walk(points: PackedVector3Array, pause_at: float = -1.0, pause_seconds: flo
 	_pause_at = pause_at
 	pause_s = pause_seconds
 	_pause_t = 0.0
+	_post_t = -1.0
+	path_len = 0.0
+	for i in range(1, points.size()):
+		path_len += points[i - 1].distance_to(points[i])
 	global_position = points[0]
 	if points.size() > 1:
 		_face(points[1])
@@ -182,9 +209,15 @@ func step(dt: float) -> void:
 		_pause_t += dt
 		_pose_pause(_pause_t / maxf(pause_s, 0.01))
 		return
-	var move: float = speed * dt
-	# The hitch: every second left step is a beat late.
-	var hitch: bool = fmod(_phase, 2.0) > 1.62 and fmod(_phase, 2.0) < 1.8
+	var surging: bool = surge and _pause_at >= 0.0 and travelled >= _pause_at
+	if surging:
+		_post_t = maxf(_post_t, 0.0) + dt
+	var spd: float = speed
+	if surging:
+		spd = lerpf(speed, SURGE_SPEED, smoothstep(0.0, SURGE_RAMP_S, _post_t))
+	var move: float = spd * dt
+	# The hitch: every second left step is a beat late (the walk only).
+	var hitch: bool = not surging and fmod(_phase, 2.0) > 1.62 and fmod(_phase, 2.0) < 1.8
 	if hitch:
 		move *= 0.25
 	while move > 0.0 and _seg < path.size() - 1:
@@ -202,8 +235,13 @@ func step(dt: float) -> void:
 			global_position = a + (b - a) / left * move
 			travelled += move
 			move = 0.0
-	_phase += dt * speed / 0.62 * (0.35 if hitch else 1.0)       # ~0.62 m per step
-	_pose_walk(_phase)
+	# Stride rate: ~0.62 m per step while walking; in the surge the legs
+	# keep a SLOW stride while the body glides far faster than it walks.
+	_phase += dt * (speed / 0.62 * (0.35 if hitch else 1.0) if not surging else 0.9)
+	if surging:
+		_pose_surge(_phase, smoothstep(0.0, SURGE_RAMP_S, _post_t), clampf((travelled - (path_len - EXIT_LEN)) / EXIT_LEN, 0.0, 1.0))
+	else:
+		_pose_walk(_phase)
 	if _seg >= path.size() - 1:
 		state = "hidden"
 		visible = false
@@ -242,10 +280,41 @@ func _pose_walk(ph: float) -> void:
 	_spine.rotation.x = deg_to_rad(4.0)
 	_head.rotation.z = deg_to_rad(6.0)              # held off level
 	_head.rotation.y = 0.0                           # and never turning with the step
+	# Round 47: one shoulder SNAPS up on every second step (not a sway).
+	_chest.rotation.z = deg_to_rad(7.0) if fmod(ph, 2.0) > 1.0 and fmod(ph, 2.0) < 1.25 else 0.0
 
 
 func _pose_pause(u: float) -> void:
 	_pose_walk(floor(_phase))
-	# Mid-crossing: the head turns -- too smoothly -- toward the camera side.
-	_head.rotation.y = deg_to_rad(-55.0) * smoothstep(0.0, 0.5, u) * (1.0 - smoothstep(0.75, 1.0, u))
+	# Mid-crossing: the head turns -- too smoothly -- toward the camera side
+	# and (Round 47) STAYS turned; at the end one shoulder jerks up.
+	_head.rotation.y = deg_to_rad(-62.0) * smoothstep(0.0, 0.5, u)
 	_neck.rotation.y = _head.rotation.y * 0.3
+	if u > 0.8:
+		_chest.rotation.z = deg_to_rad(-14.0)
+		_arms[1][0].rotation.z = deg_to_rad(-12.0)
+
+
+## Round 47: the SURGE -- gliding faster than its slow stride, pitched
+## forward, the head held turned back toward the camera, one arm swinging
+## wide, the other rigid; `exit` (0..1) adds a sideways lurch at the end.
+func _pose_surge(ph: float, k: float, exit: float) -> void:
+	_reset_pose()
+	var s: float = sin(ph * PI)
+	_legs[-1][0].rotation.x = s * deg_to_rad(30.0)
+	_legs[1][0].rotation.x = -s * deg_to_rad(30.0)
+	_legs[-1][1].rotation.x = maxf(-s, 0.0) * deg_to_rad(40.0)
+	_legs[1][1].rotation.x = maxf(s, 0.0) * deg_to_rad(40.0)
+	_spine.rotation.x = deg_to_rad(4.0 + 18.0 * k)              # pitched into the glide
+	_chest.rotation.z = deg_to_rad(-14.0 + 4.0 * sin(ph * 7.0))  # the hiked shoulder, trembling
+	_neck.rotation.y = deg_to_rad(-25.0) * k
+	_head.rotation.y = deg_to_rad(-62.0 - 30.0 * k)              # still on the camera -- too far round
+	_head.rotation.z = deg_to_rad(6.0)
+	_arms[-1][0].rotation.x = deg_to_rad(-55.0) * k + s * deg_to_rad(10.0)   # swinging wide, back
+	_arms[-1][0].rotation.z = deg_to_rad(18.0) * k
+	_arms[1][0].rotation.x = deg_to_rad(4.0)                     # rigid
+	_arms[1][0].rotation.z = deg_to_rad(-12.0)
+	_hips.position.y = 0.92
+	if exit > 0.0:
+		_hips.rotation.z = deg_to_rad(24.0) * exit               # lurches sideways into the doorway
+		_spine.rotation.z = deg_to_rad(10.0) * exit

@@ -335,41 +335,43 @@ func _window_figure() -> void:
 	var h0: Vector3 = f._head.rotation
 	f.step_pose(3.0)
 	_check("1-2: still, then a small first movement (head tilts %.0f deg)" % rad_to_deg((f._head.rotation - h0).length()), rad_to_deg((f._head.rotation - h0).length()) > 10.0)
+	# Round 47 (redesigned sequence, see test_r47_horror): recognition
+	# pause -> snap -> FROZEN beat -> shudder -> retreat. Same intents.
 	f.state = "react"
-	f.step_pose(0.2)
+	f.step_pose(f.RECOG_END + f.SNAP_S + 0.05)
 	var fz: Vector3 = f._head.rotation
 	f.state = "react"
-	f.step_pose(0.3)
-	_check("4: a twitch, then FROZEN for a beat", f._head.rotation.is_equal_approx(fz))
+	f.step_pose(f.FIRST_END - 0.05)
+	_check("4: a twitch, then FROZEN for a beat", f._head.rotation.is_equal_approx(fz) and fz.length() > deg_to_rad(40.0))
 	var max_head := 0.0
-	var arm_l := 0.0
-	var arm_r := 0.0
+	var arm_up := 0.0
+	var arm_dead := 0.0
 	var off0: Array = [f._arms[1][1].position, f._head.position]
 	for i in 30:
 		f.state = "react"
-		f.step_pose(0.4 + i * 0.025)
+		f.step_pose(f.FIRST_END + 0.04 + i * 0.035)
 		max_head = maxf(max_head, rad_to_deg(absf(f._head.rotation.x)))
-		arm_r = minf(arm_r, rad_to_deg(f._arms[1][0].rotation.x))
-		arm_l = maxf(arm_l, absf(rad_to_deg(f._arms[-1][0].rotation.x)))
+		arm_up = maxf(arm_up, rad_to_deg(f._arms[f.RAISED][0].rotation.x))
+		arm_dead = maxf(arm_dead, absf(rad_to_deg(f._arms[f.DEAD][0].rotation.x)))
 	_check("5: head snaps at unnatural speed/angle (max %.0f deg)" % max_head, max_head >= 50.0)
-	_check("6: asymmetric (one arm jerks up %.0f deg, the other ~still %.0f deg)" % [arm_r, arm_l], arm_r <= -80.0 and arm_l < 15.0)
+	_check("6: asymmetric (one arm jerks up %.0f deg, the other ~still %.0f deg)" % [arm_up, arm_dead], arm_up >= 80.0 and arm_dead < 15.0)
 	_check("limbs stay attached", [f._arms[1][1].position, f._head.position] == off0)
 	# Retreat: sideways, out behind the port frame (as seen from the spot).
-	var port_c: Vector3 = Vector3(-4.3, 1.55, 2.5)
+	var ebc: Vector3 = load("res://scripts/exterior/exterior_builder.gd").TUNNEL_PORT_CENTRE
 	f.state = "retreat"
-	f.step_pose(0.2)
+	f.step_pose(f.RETREAT_S * 0.35)
 	var z_early: float = f.position.z
 	f.state = "retreat"
-	f.step_pose(0.6)
+	f.step_pose(f.RETREAT_S * 0.7)
 	var z_mid: float = f.position.z
 	f.state = "retreat"
-	f.step_pose(0.85)
+	f.step_pose(f.RETREAT_S * 0.97)
 	var hp: Vector3 = f.head_point()
 	_check("7: abrupt sideways retreat, accelerating (%.2f -> %.2f -> %.2f)" % [z_early, z_mid, f.position.z], (f.position.z - z_mid) > (z_mid - z_early) and f.position.z - we.FIGURE_POS.z > 0.6)
 	var dirv: Vector3 = hp - cam.global_position
-	var kk: float = (port_c.x - cam.global_position.x) / dirv.x
+	var kk: float = (ebc.x - cam.global_position.x) / dirv.x
 	var hit: Vector3 = cam.global_position + dirv * kk
-	_check("8: it ends up behind the frame (sight line misses the port opening)", absf(hit.z - port_c.z) > 0.39)
+	_check("8: it ends up behind the frame (sight line misses the port opening)", absf(hit.z - ebc.z) > eb.x * 0.5)
 	f.reset()
 	# Focus (squint) while staring at it; never with reduced effects.
 	we.stage = "showing"

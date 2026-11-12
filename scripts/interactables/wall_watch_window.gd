@@ -5,14 +5,16 @@ extends StaticBody3D
 ## the wall, glass recessed behind it; no interact(); one fixed viewpoint;
 ## the set_feed_override() seam kept for future divergence.
 ##
-## Round 38: the glass shows the REAL exterior as DIRECT observation -- a
-## portal render from the player's own eye position (off-axis frustum
-## through the glass, near plane beyond the wall and hull plating), so it
-## has true parallax as you move. It looks into the EVA courtyard at
-## antenna mast A1 -- the region exterior cameras EXT-03 / EXT-04 also
-## cover. As a DIRECT view it never renders CAMERA_ONLY objects (see
-## observation_discrepancy.gd). It renders only while the player is in the
-## Control Room.
+## Round 47: a REAL TWO-WAY OPENING. Rounds 38-46 drew the exterior on an
+## opaque quad from an off-axis portal camera; the wall and the hull plate
+## behind it stayed solid, so from the airlock-tunnel port or on EVA the
+## Control Room "window" was a dark emissive disc (the player-reported
+## solid-colour window). Now a cylinder is cut through the west wall (CSG)
+## and the hull plate (exterior_builder), two transparent panes sit in the
+## bore (cabin pane here + outer pressure pane on the hull), and a collision pane keeps the
+## hull sealed. Inside you see the exterior directly; outside you see the
+## lit Control Room. The player's eyes never render CAMERA_ONLY, so the
+## direct-view rule is unchanged -- and one SubViewport fewer renders.
 
 @export var camera_path: NodePath      # kept: the original fixed feed (fallback / seam)
 const RADIUS := 0.34
@@ -24,10 +26,10 @@ const CAMERA_ONLY := 1 << 18
 
 var _camera: Node = null
 var _feed_override: Texture2D = null
-var _vp: SubViewport
-var _cam: Camera3D
-var _glass: MeshInstance3D
+var _glass: MeshInstance3D            # cabin pane (transparent)
+var _override_disc: MeshInstance3D    # only while a feed override is set
 var _glass_mat: ShaderMaterial
+var bore_cut: CSGCylinder3D
 
 
 func _ready() -> void:
@@ -37,16 +39,7 @@ func _ready() -> void:
 		old_back.visible = false
 	screen_mesh.visible = false
 	_build_port()
-	_vp = SubViewport.new()
-	_vp.name = "PortalView"
-	_vp.size = Vector2i(512, 512)
-	_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
-	add_child(_vp)
-	_cam = Camera3D.new()
-	_cam.cull_mask = _cam.cull_mask & ~CAMERA_ONLY
-	_cam.keep_aspect = Camera3D.KEEP_HEIGHT
-	_vp.add_child(_cam)
-	_cam.current = true
+	_cut_bore()
 	_update_screen()
 
 
@@ -80,32 +73,79 @@ func _build_port() -> void:
 		bolt.position = Vector3(0.06, cos(a) * (RADIUS + 0.07), sin(a) * (RADIUS + 0.07))
 		bolt.material = dark
 		add_child(bolt)
-	# The glass: a quad facing into the room, shown as a circle.
-	_glass = MeshInstance3D.new()
-	_glass.name = "Glass"
+	# The panes: real transparent glass (both faces), cabin and outer.
+	# Round 47: one cabin pane here; the outer pressure pane is the exterior
+	# builder's glass on the hull face. Faint tints only -- four stacked,
+	# sun-lit panes (with the tunnel port's) hazed the far view.
+	_glass = _pane("Glass", GLASS_X, Color(0.62, 0.72, 0.8, 0.035))
+	# Collision: the opening is sealed by the panes (hull leak sweep and
+	# player capsule), sized to the whole bore.
+	var col: CollisionShape3D = get_node_or_null("Collision")
+	if col != null:
+		var bs := BoxShape3D.new()
+		bs.size = Vector3(0.06, RADIUS * 2.0 + 0.04, RADIUS * 2.0 + 0.04)
+		col.shape = bs
+		col.position = Vector3(-0.02, 0, 0)
+	# The feed-override seam: an opaque disc shown only while a texture is set.
+	_override_disc = MeshInstance3D.new()
+	_override_disc.name = "OverrideDisc"
 	var q := QuadMesh.new()
 	q.size = Vector2(RADIUS * 2.0, RADIUS * 2.0)
-	_glass.mesh = q
-	_glass.rotation_degrees.y = 90.0      # quad +Z -> local +X (into the room)
-	_glass.position.x = GLASS_X
+	_override_disc.mesh = q
+	_override_disc.rotation_degrees.y = 90.0
+	_override_disc.position.x = GLASS_X + 0.002
 	var sh := Shader.new()
 	sh.code = """shader_type spatial;
 render_mode unshaded, cull_disabled;
 uniform sampler2D view : source_color, filter_linear;
-uniform float tint = 0.06;
 void fragment() {
-	vec2 d = UV - vec2(0.5);
-	float r = length(d) * 2.0;
-	if (r > 1.0) { discard; }
-	vec3 c = texture(view, UV).rgb;
-	// a faint glass sheen toward the rim
-	c = mix(c, vec3(0.55, 0.65, 0.75), tint * smoothstep(0.55, 1.0, r));
-	ALBEDO = c;
+	if (length(UV - vec2(0.5)) > 0.5) { discard; }
+	ALBEDO = texture(view, UV).rgb;
 }"""
 	_glass_mat = ShaderMaterial.new()
 	_glass_mat.shader = sh
-	_glass.material_override = _glass_mat
-	add_child(_glass)
+	_override_disc.material_override = _glass_mat
+	_override_disc.visible = false
+	add_child(_override_disc)
+
+
+func _pane(nm: String, x: float, tint: Color) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.name = nm
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = RADIUS + 0.004
+	cyl.bottom_radius = RADIUS + 0.004
+	cyl.height = 0.012
+	cyl.radial_segments = 40
+	cyl.rings = 1
+	mi.mesh = cyl
+	mi.rotation_degrees.z = 90.0
+	mi.position.x = x
+	mi.material_override = preload("res://scripts/exterior/port_glass.gd").material(Color(tint.r, tint.g, tint.b))
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.layers = 1                      # cabin side: lit by the cabin, never by the sun
+	add_child(mi)
+	return mi
+
+
+## The real opening through the Control Room west wall (CSG subtraction).
+func _cut_bore() -> void:
+	var wall: CSGBox3D = get_node_or_null("../../Geometry/ControlRoomWestWall") as CSGBox3D
+	if wall == null:
+		return
+	bore_cut = CSGCylinder3D.new()
+	bore_cut.name = "ObservationPortBore"
+	bore_cut.operation = CSGShape3D.OPERATION_SUBTRACTION
+	bore_cut.radius = RADIUS
+	bore_cut.height = wall.size.x + 0.1
+	bore_cut.sides = 40
+	wall.add_child(bore_cut)
+	bore_cut.global_transform = Transform3D(Basis(Vector3(0, 0, 1), deg_to_rad(90.0)), global_position + global_transform.basis.x * (-wall.size.x * 0.5))
+
+
+## True when the port is a real see-through opening (no portal render).
+func is_real_opening() -> bool:
+	return bore_cut != null and bore_cut.is_inside_tree() and _override_disc != null and not _override_disc.visible
 
 
 func set_feed_override(tex: Texture2D) -> void:
@@ -113,39 +153,8 @@ func set_feed_override(tex: Texture2D) -> void:
 	_update_screen()
 
 
-func portal_camera() -> Camera3D:
-	return _cam
-
-
-func portal_viewport() -> SubViewport:
-	return _vp
-
-
 func _update_screen() -> void:
 	if _glass_mat == null:
 		return
-	var tex: Texture2D = _feed_override if _feed_override != null else (_vp.get_texture() if _vp != null else null)
-	_glass_mat.set_shader_parameter("view", tex)
-
-
-## Off-axis portal camera from the viewer's eye through the glass.
-func _process(_d: float) -> void:
-	var eye_cam: Camera3D = get_viewport().get_camera_3d() if get_viewport() != null else null
-	if eye_cam == null or _cam == null:
-		return
-	var eye: Vector3 = eye_cam.global_position
-	var gx: Transform3D = global_transform
-	var c: Vector3 = gx * Vector3(GLASS_X, 0, 0)
-	var n: Vector3 = gx.basis.x.normalized()          # into the room
-	var up: Vector3 = gx.basis.y.normalized()
-	var right: Vector3 = up.cross(n).normalized()     # viewer's right looking out
-	var d: float = (eye - c).dot(n)
-	var in_room: bool = absf(eye.x) < 1.6 and eye.z > -1.4 and eye.z < 2.4 and d > 0.05
-	_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS if (in_room and _feed_override == null) else SubViewport.UPDATE_DISABLED
-	if not in_room:
-		return
-	_cam.global_transform = Transform3D(Basis(right, up, n), eye)
-	var near: float = d + WALL_DEPTH
-	var k: float = near / d
-	var rel: Vector3 = c - eye
-	_cam.set_frustum(RADIUS * 2.0 * k, Vector2(rel.dot(right), rel.dot(up)) * k, near, 900.0)
+	_glass_mat.set_shader_parameter("view", _feed_override)
+	_override_disc.visible = _feed_override != null

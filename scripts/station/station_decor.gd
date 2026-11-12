@@ -28,6 +28,8 @@ const CORRIDORS := ["CorridorFloor", "JunctionAFloor", "CommsTunnelAFloor", "Com
 
 var strips: Array = []            # [{mat, zone, color}]
 var rib_count: int = 0
+var ls_deck_finished: bool = false   # Round 47: Life Support deck plating
+const TUNNEL_PORT := Vector3(-4.4, 1.5, 2.5)
 var decor_count: int = 0
 var _avoid: Array = []            # world points of mounted equipment
 var _t: float = 0.0
@@ -117,7 +119,7 @@ func _build() -> void:
 				if c is Node3D:
 					_avoid.append((c as Node3D).global_position)
 	_avoid.append_array([Vector3(-5.3, 1.0, 1.05), Vector3(-4.41, 1.35, -1.2), Vector3(-4.42, 1.25, -1.88)])
-	_avoid.append(Vector3(-4.4, 1.55, 2.5))     # Round 45: airlock-tunnel port
+	_avoid.append(TUNNEL_PORT)                  # Round 45: airlock-tunnel port
 	var geo: Node = root.get_node_or_null("Geometry")
 	if geo == null:
 		return
@@ -324,6 +326,16 @@ func _dress_room(f: CSGBox3D, c: CSGBox3D, spec: Array) -> void:
 			_box(Vector3(sx - 0.5, 0.28, 0.4), Vector3(ctr.x, top - 0.16, ctr.z + sz * 0.5 - 0.5), _m(Color(0.6, 0.62, 0.6), 0.5))
 			for k in 2:
 				_cyl(0.04, sx - 0.4, Vector3(ctr.x, top - 0.1, ctr.z - sz * 0.5 + 0.35 + k * 0.12), true, _m(Color(0.25, 0.55, 0.45), 0.5))
+			# Round 47: the deck continues the walkway's plating (same
+			# corridor material, same seam language) instead of reading as an
+			# unfinished dark slab; a painted L-3 service stripe marks it.
+			var seam := _m(Color(0.12, 0.13, 0.14), 0.3)
+			var nx: int = int(sx / 0.8)
+			for k in range(1, nx + 1):
+				_box(Vector3(0.015, 0.006, sz - 0.1), Vector3(ctr.x - sx * 0.5 + sx * float(k) / float(nx + 1), 0.004, ctr.z), seam)
+			_box(Vector3(sx - 0.1, 0.006, 0.015), Vector3(ctr.x, 0.004, ctr.z), seam)
+			_box(Vector3(sx - 0.6, 0.005, 0.05), Vector3(ctr.x, 0.005, ctr.z - sz * 0.5 + 0.32), _m(Color(0.3, 0.85, 0.6), 0.1))
+			ls_deck_finished = true
 		"control":
 			_strip(Vector3(1.6, 0.05, 0.02), Vector3(ctr.x, top - 0.45, ctr.z - sz * 0.5 + 0.12), Color(0.25, 0.85, 0.95), zone)
 		"quarters":
@@ -465,6 +477,9 @@ func _corridor_details(ctr: Vector3, along_x: bool, length: float, width: float,
 				var sp: float = lo + L * float(k) / float(ns + 1)
 				var sv := Vector3(sp, 1.15, ctr.z) if along_x else Vector3(ctr.x, 1.15, sp)
 				sv += side * sgn * (width * 0.5 - 0.006)
+				# Round 47: never across the (enlarged) airlock-tunnel port.
+				if Vector2(sv.x - TUNNEL_PORT.x, sv.z - TUNNEL_PORT.z).length() < 0.55:
+					continue
 				_box(Vector3(0.012, 1.7, 0.012), sv, seam)
 			# A labelled access panel on longer runs.
 			if L > 1.3:

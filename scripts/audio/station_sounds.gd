@@ -27,6 +27,18 @@ const OPS := [
 	{"id": "relay", "pos": Vector3(-5.6, 1.5, 3.75), "kind": &"relay", "log": ["environment", "Engineering relay self-test OK"]},
 	{"id": "rx_cal", "pos": Vector3(2.0, 1.7, 8.1), "kind": &"power_up", "log": ["camera", "RX-A auto-calibration (comms rack)"]},
 ]
+## Round 47: the ACOUSTIC PATH. A sound reaches the technician through the
+## station, not through one open room: inverse-distance falloff from
+## UNIT_SIZE, and every wall / bulkhead between the listener and the source
+## (physics ray on the world layer) costs WALL_DB and lowers the low-pass
+## cutoff -- a knock at the airlock heard from the Control Room is distant
+## and muffled; next to the hatch it is close and sharp. Per-kind base
+## levels keep quiet sounds quiet.
+const UNIT_SIZE := 1.6
+const WALL_DB := -7.0
+const MAX_WALLS := 4
+const OPEN_CUTOFF := 9000.0
+const KIND_DB := {&"hatch_knock": -2.0, &"glass_knock": -4.0, &"creak": -3.0, &"fan": -4.0}
 const MIN_GAP_S := 120.0
 const MAX_OPS_PER_DAY := 4
 const AIRLOCK_POS := Vector3(-4.8, 1.6, -2.0)
@@ -49,9 +61,10 @@ func _ready() -> void:
 	for i in 6:
 		var p := AudioStreamPlayer3D.new()
 		p.bus = "SFX" if AudioServer.get_bus_index("SFX") != -1 else "Master"
-		p.unit_size = 4.0
-		p.max_distance = 28.0
+		p.unit_size = UNIT_SIZE
+		p.max_distance = 30.0
 		p.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
+		p.attenuation_filter_db = -18.0
 		add_child(p)
 		_pool.append(p)
 
@@ -77,6 +90,27 @@ func _stream(kind: StringName) -> AudioStream:
 				# Round 46: a calibration instrument's own two-tone confirm
 				# (learned in ordinary play; a false announcement lacks it).
 				s = mech._tone(0.42, func(t, _i): return sin(t * 0.42 * TAU * (880.0 if t < 0.5 else 1320.0)) * 0.22 * (1.0 if fmod(t, 0.5) < 0.38 else 0.0))
+			# Round 47: ORDINARY LIFE SOUNDS -- each tied to a real action at
+			# its real place (quarters_life.gd), so the player learns what
+			# normal sounds like.
+			&"dispense":            # water filling a cup at the dispenser
+				s = mech._tone(0.9, func(t, i): return (fmod(sin(float(i) * 12.9898) * 43758.5453, 1.0) - 0.5) * 0.3 * minf(t * 12.0, 1.0) * (1.0 - smoothstep(0.8, 1.0, t)) * (0.7 + 0.3 * sin(t * TAU * (30.0 + 40.0 * t))))
+			&"sip":                 # a short sip / swallow, at the mouth
+				s = mech._tone(0.42, func(t, i): return ((fmod(sin(float(i) * 3.77) * 9301.0, 1.0) - 0.5) * 0.22 * exp(-pow((t - 0.25) * 9.0, 2.0)) + sin(t * 0.42 * TAU * (160.0 + 120.0 * t)) * 0.18 * exp(-pow((t - 0.7) * 10.0, 2.0))))
+			&"chew":                # three soft muffled chews
+				s = mech._tone(0.8, func(t, i): return (fmod(sin(float(i) * 5.13) * 7919.0, 1.0) - 0.5) * 0.25 * pow(maxf(sin(t * PI * 3.0), 0.0), 3.0) + sin(t * 0.8 * TAU * 85.0) * 0.12 * pow(maxf(sin(t * PI * 3.0), 0.0), 4.0))
+			&"wrapper":             # a foil meal pouch torn and crinkled
+				s = mech._tone(0.5, func(t, i): return (fmod(sin(float(i) * 17.31) * 31337.0, 1.0) - 0.5) * 0.4 * (1.0 if fmod(float(i) * 0.37, 7.0) < 1.4 else 0.15) * (1.0 - t))
+			&"tray":                # a dinner tray set down, cutlery clink
+				s = mech._tone(0.35, func(t, _i): return sin(t * 0.35 * TAU * 2300.0) * 0.12 * exp(-t * 18.0) + sin(t * 0.35 * TAU * 140.0) * 0.3 * exp(-t * 14.0))
+			&"brush":               # toothbrush strokes, ~5 a second
+				s = mech._tone(1.6, func(t, i): return (fmod(sin(float(i) * 9.71) * 4513.0, 1.0) - 0.5) * 0.26 * pow(absf(sin(t * 1.6 * PI * 5.0)), 2.0) * minf(t * 6.0, 1.0) * minf((1.0 - t) * 6.0, 1.0))
+			&"kettle":              # the hot-water unit heating: rumble rising to a hiss
+				s = mech._tone(2.9, func(t, i): return (sin(t * 2.9 * TAU * 70.0) * 0.12 * (1.0 - t) + (fmod(sin(float(i) * 2.71) * 1777.0, 1.0) - 0.5) * 0.3 * t * t) * minf(t * 10.0, 1.0) * minf((1.0 - t) * 12.0, 1.0))
+			&"kettle_done":         # its thermostat switching off
+				s = mech._tone(0.12, func(t, _i): return sin(t * 0.12 * TAU * 1700.0) * 0.4 * exp(-t * 30.0) + sin(t * 0.12 * TAU * 220.0) * 0.3 * exp(-t * 20.0))
+			&"trickle":             # a little water poured on soil
+				s = mech._tone(1.1, func(t, i): return (fmod(sin(float(i) * 6.31) * 2203.0, 1.0) - 0.5) * 0.18 * minf(t * 8.0, 1.0) * (1.0 - t) * (0.6 + 0.4 * sin(t * TAU * 23.0)))
 			&"creak":
 				s = mech._tone(0.7, func(t, i): return sin(t * TAU * (140.0 - 60.0 * t)) * 0.3 * pow(1.0 - t, 2.0) + (fmod(sin(float(i) * 7.7) * 311.0, 1.0) - 0.5) * 0.08 * (1.0 - t))
 			_:
@@ -88,7 +122,10 @@ func _stream(kind: StringName) -> AudioStream:
 ## A positional sound from `pos`. real = caused by actual equipment.
 func play_at(kind: StringName, pos: Vector3, real: bool = true) -> void:
 	var dp: Node = _dp()
-	heard.append({"kind": String(kind), "pos": pos, "real": real, "day": int(dp.day_number) if dp != null else 1, "t_ms": Time.get_ticks_msec()})
+	var path: Dictionary = acoustic_path(pos)
+	var db: float = float(KIND_DB.get(kind, 0.0)) + float(path["wall_db"])
+	heard.append({"kind": String(kind), "pos": pos, "real": real, "day": int(dp.day_number) if dp != null else 1, "t_ms": Time.get_ticks_msec(),
+		"walls": int(path["walls"]), "dist": float(path["dist"]), "db": db + float(path["dist_db"]), "cutoff": float(path["cutoff"])})
 	if heard.size() > 60:
 		heard.pop_front()
 	var s: AudioStream = _stream(kind)
@@ -99,9 +136,61 @@ func play_at(kind: StringName, pos: Vector3, real: bool = true) -> void:
 		if not ap.playing:
 			ap.global_position = pos
 			ap.stream = s
+			ap.volume_db = db
+			ap.attenuation_filter_cutoff_hz = float(path["cutoff"])
 			ap.pitch_scale = randf_range(0.97, 1.03)
 			ap.play()
 			return
+
+
+func _listener() -> Node3D:
+	var vp: Viewport = get_viewport()
+	return vp.get_camera_3d() if vp != null else null
+
+
+## Distance and occlusion from the technician's ears to `pos`:
+## {dist, dist_db (inverse-distance, as the 3D player applies it), walls,
+## wall_db, cutoff}.
+func acoustic_path(pos: Vector3) -> Dictionary:
+	var out := {"dist": 0.0, "dist_db": 0.0, "walls": 0, "wall_db": 0.0, "cutoff": OPEN_CUTOFF}
+	var cam: Node3D = _listener()
+	if cam == null or not cam.is_inside_tree():
+		return out
+	var ear: Vector3 = cam.global_position
+	var d: float = ear.distance_to(pos)
+	out["dist"] = d
+	out["dist_db"] = 20.0 * log(UNIT_SIZE / maxf(d, UNIT_SIZE)) / log(10.0)
+	var w: int = count_walls(ear, pos)
+	out["walls"] = w
+	out["wall_db"] = WALL_DB * w
+	out["cutoff"] = OPEN_CUTOFF / pow(3.2, w)
+	return out
+
+
+## Solid world surfaces (layer 1) crossed on the straight line a -> b.
+func count_walls(a: Vector3, b: Vector3) -> int:
+	var w3d: World3D = _main().get_viewport().world_3d if _main() != null and _main().get_viewport() != null else null
+	if w3d == null:
+		return 0
+	var space: PhysicsDirectSpaceState3D = w3d.direct_space_state
+	var ex: Array = []
+	var fb: Node = _main().get_node_or_null("FreeMoveBody")
+	if fb is CollisionObject3D:
+		ex.append((fb as CollisionObject3D).get_rid())
+	var n := 0
+	var from: Vector3 = a
+	while n < MAX_WALLS:
+		var q := PhysicsRayQueryParameters3D.create(from, b)
+		q.collision_mask = 1
+		q.exclude = ex
+		q.hit_back_faces = false
+		var hit: Dictionary = space.intersect_ray(q)
+		if hit.is_empty():
+			break
+		n += 1
+		ex.append(hit["rid"])
+		from = (hit["position"] as Vector3) + (b - a).normalized() * 0.01
+	return n
 
 
 func _log() -> Node:

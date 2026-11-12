@@ -203,10 +203,12 @@ func _holdout() -> void:
 	var sd: Dictionary = hold.state_dict()
 	hold.load_state({})
 	hold.load_state(JSON.parse_string(JSON.stringify(sd)))
-	_check("save/load keeps credits %d, ranks, best %d; never an active run" % [hold.credits, hold.best], hold.credits == int(sd["credits"]) and hold.rank("rate") == 1 and hold.best == int(sd["best"]) and hold.mode == "title")
+	# Round 47 (requirement change): only PERMANENT progress persists --
+	# records + the weapon catalog; credits / ranks belong to one run.
+	_check("save/load keeps best %d + catalog; run credits / ranks not saved; never an active run" % hold.best, hold.best == int(sd["best"]) and not sd.has("credits") and not sd.has("ranks") and hold.credits == 0 and hold.rank("rate") == 0 and hold.mode == "title")
 	var sg: Node = main.get_node("SaveGame")
 	var data: Dictionary = sg.collect_state()
-	_check("the laptop save carries Holdout's wallet / ranks / best", data.has("laptop") and data["laptop"].has("holdout") and int(data["laptop"]["holdout"]["credits"]) == hold.credits)
+	_check("the laptop save carries Holdout's records + catalog", data.has("laptop") and data["laptop"].has("holdout") and int(data["laptop"]["holdout"]["best"]) == hold.best and data["laptop"]["holdout"].has("catalog"))
 	scr.open_app(&"home")
 
 

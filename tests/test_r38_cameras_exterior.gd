@@ -49,20 +49,28 @@ func _init() -> void:
 	_check("intentional blind spot: EXT-02 cannot see straight below its mount", not net.sees("EXT-02", Vector3(-3.45, 0.2, -3.95)))
 	# The observation port: a direct view of the same exterior.
 	var port: Node = main.get_node("Interactables/WallWatchWindow")
-	_check("observation port renders the exterior from the player's eye (portal)", port.has_method("portal_camera") and port.portal_camera() != null)
-	_check("the port is a DIRECT view (never shows CAMERA_ONLY)", (port.portal_camera().cull_mask & (1 << 18)) == 0)
+	# Round 47 (requirement change): the port is a REAL two-way opening (the
+	# portal render made the window an opaque disc from outside). The same
+	# guarantees, checked physically: a direct view, and the antenna seen
+	# through the opening.
+	_check("observation port is a real opening onto the exterior (no portal)", port.has_method("is_real_opening") and port.is_real_opening())
 	_check("cameras never show DIRECT_ONLY", ids.all(func(i): return (net.camera(i).cull_mask & (1 << 19)) == 0))
 	var pc: Camera3D = main.get_node("Player/LookPivot/PitchPivot/Camera3D")
-	_check("the player's eyes never see CAMERA_ONLY", (pc.cull_mask & (1 << 18)) == 0)
-	# Standing in front of the port, its frustum covers the antenna.
+	_check("the port is a DIRECT view: the player's eyes never see CAMERA_ONLY", (pc.cull_mask & (1 << 18)) == 0)
+	# Standing in front of the port, the antenna is in sight through it.
 	main.get_node("FreeMoveBody").sync_to_eye_position(Vector3(-0.3, 1.6, 1.4))
 	main.get_node("Player").global_position = Vector3(-0.3, 1.6, 1.4)
 	for i in 6: await process_frame
-	var cam: Camera3D = port.portal_camera()
-	var sp: Vector2 = cam.unproject_position(mast)
-	var vs: Vector2 = Vector2(port.portal_viewport().size)
-	_check("through the port the antenna is in view (%s in %s)" % [str(sp.round()), str(vs)], not cam.is_position_behind(mast) and sp.x > 0 and sp.x < vs.x and sp.y > 0 and sp.y < vs.y)
-	_check("port renders while the player is in the Control Room", port.portal_viewport().render_target_update_mode == SubViewport.UPDATE_ALWAYS)
+	await physics_frame
+	var eye: Vector3 = pc.global_position
+	var to_mast: Vector3 = mast - eye
+	var kk: float = (-1.2 - eye.x) / to_mast.x
+	var at_port: Vector3 = eye + to_mast * kk
+	var q := PhysicsRayQueryParameters3D.create(eye, mast)
+	q.collision_mask = 1
+	q.exclude = [(port as CollisionObject3D).get_rid(), (main.get_node("FreeMoveBody") as CollisionObject3D).get_rid()]
+	var blocked: bool = not (main as Node3D).get_world_3d().direct_space_state.intersect_ray(q).is_empty()
+	_check("through the port the antenna is in sight (crosses the glass %.2f m from its centre, unobstructed)" % Vector2(at_port.y - 1.5, at_port.z - 1.4).length(), Vector2(at_port.y - 1.5, at_port.z - 1.4).length() < 0.34 and not blocked)
 	# Discrepancy foundation.
 	var disc: Node = main.get_node("Exterior/ObservationDiscrepancy")
 	_check("no discrepancy is active in normal play", not disc.is_active())

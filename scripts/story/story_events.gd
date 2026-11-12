@@ -75,6 +75,18 @@ const EVENTS := {
 	&"window_figure": {"name": "Figure behind the tunnel port (Chapter One climax)", "phase": 2, "late": false, "chance": 0.0, "cooldown_days": 999, "max_plays": 1, "enabled": true, "implemented": true,
 		"needs": "READY after one anomaly seen (or 2 quiet phase-2 days), not day 1. Shown ONLY when visible from the Control Room port; reacts to a direct gaze; guided once a day if ignored. See window_encounter.gd.",
 		"variants": ["normal"]},
+	&"mismatch_shadow": {"name": "Window / camera: a shadow nobody casts", "phase": 2, "late": false, "chance": 0.35, "cooldown_days": 6, "max_plays": 1, "enabled": true, "implemented": true,
+		"needs": "EXT-03 watched on the workstation 3 s (and on an earlier day). On EXT-03 a tall human shadow lies on the airlock tunnel's hull beside the maintenance case; through the Control Room port the wall is bare. Comparing both = noticed.",
+		"variants": ["normal"]},
+	&"mismatch_daynight": {"name": "Window / camera: daylight outside, eclipse on the feed", "phase": 2, "late": true, "chance": 0.35, "cooldown_days": 6, "max_plays": 1, "enabled": true, "implemented": true,
+		"needs": "Real daylight. EXT-03 watched 3 s (and on an earlier day): the feed shows the same courtyard in eclipse (hull lamps burning) while the port shows full sun. Camera presentation only -- orbit, sun and power untouched.",
+		"variants": ["normal"]},
+	&"mismatch_eva": {"name": "Window / camera: someone working outside", "phase": 2, "late": true, "chance": 0.35, "cooldown_days": 7, "max_plays": 1, "enabled": true, "implemented": true,
+		"needs": "Looking out of the Control Room port 2.5 s (EXT-03 watched on an earlier day): a suited technician works the antenna feed box at worksite A1. EXT-03 shows the worksite empty; the airlock record shows no EVA. No real EVA / airlock / crew state is touched.",
+		"variants": ["normal"]},
+	&"window_hand": {"name": "Knocking at the observation port; a hand at the glass", "phase": 2, "late": false, "chance": 0.4, "cooldown_days": 5, "max_plays": 2, "enabled": true, "implemented": true,
+		"needs": "In the Control Room, NOT looking at the port, within 4.5 m of it; the port was looked through on an earlier day; never on the day of the window-figure encounter. Three soft structure-borne taps from the port; a hand on the outside of the glass until looked at, then it draws back below the rim. Eyes only. Going close to the glass = a physical check; EXT cameras / airlock record = no one outside. See window_hand.gd.",
+		"variants": ["normal"]},
 	&"peripheral_figure": {"name": "Figure at the edge of vision (fast head turn)", "phase": 2, "late": false, "chance": 0.0, "cooldown_days": 1, "max_plays": 99, "enabled": true, "implemented": true,
 		"needs": "Free walking, story phase >= 2, not day 1, at most once a day. After a FAST head turn a figure stands for a moment near the view's edge (the side turned away from), at a real floor spot with a clear line of sight; looking back -> gone. Eyes only. See peripheral_watch.gd.",
 		"variants": ["normal"]},
@@ -113,6 +125,7 @@ const READING_MAX_S := 360.0          # Round 46: lasts until checked (or ~6 min
 const READING_AWAY_S := 4.0
 const HATCH_MAX_S := 75.0
 const HATCH_SEEN_S := 1.5
+const HATCH_KNOCK_POS := Vector3(-4.8, 1.0, -2.55)   # the outer hatch's inner face
 ## Round 42: INT-02 now looks from the Life Support bend down the Junction
 ## and the corridor to the Control Room. The presence stands on that
 ## approach, BEHIND the seated technician: first far down the Junction,
@@ -157,7 +170,6 @@ var _presence: Node3D
 var _poll: float = 0.0
 var _hatch_clones: Array = []
 var _hatch_saved_layers: Array = []
-var _hatch_sound: AudioStreamPlayer3D
 var _hatch_seen_since: float = -1.0
 var _pending_investigation: Dictionary = {}   # id -> seconds left to go and check
 ## Round 43 Priority 21: the INVESTIGATION framework. Evidence the
@@ -171,11 +183,16 @@ const RECORD_LINKS := {
 	"note_archive": {"events": ["note_extra_item"], "text": "The note archive shows one revision, no edits -- the extra line was never issued."},
 	"environment_log": {"events": ["wrong_reading"], "text": "The maintenance record shows the calibration completed today -- verified by the stability self-test.",
 		"by_variant": {"abnormal": "The maintenance record shows no calibration today."}},
-	"airlock_log": {"events": ["phantom_cycle"], "text": "The airlock activity log records no cycle at that time."},
+	"airlock_log": {"events": ["phantom_cycle", "window_hand", "mismatch_eva"], "text": "The airlock activity log records no cycle at that time.",
+		"by_event": {"window_hand": "No EVA today. The outer hatch has not been opened, and no suit is checked out.",
+			"mismatch_eva": "No EVA today. The outer hatch has not been opened, and no suit is checked out."}},
 	"access_log": {"events": ["access_ghost", "window_figure", "corridor_presence"], "text": "The access log records no one in the airlock tunnel but the technician.",
 		"by_event": {"corridor_presence": "Neither the Communications nor the Engineering door logged anyone at that time."}},
-	"camera_log": {"events": ["window_figure", "corridor_presence"], "text": "The cameras logged nothing unusual in the airlock section.",
-		"by_event": {"corridor_presence": "INT-02 logged motion in the Junction -- 4 s, no tag. Nothing on any other camera."}},
+	"camera_log": {"events": ["window_figure", "corridor_presence", "window_hand", "mismatch_shadow", "mismatch_daynight"], "text": "The cameras logged nothing unusual in the airlock section.",
+		"by_event": {"corridor_presence": "INT-02 logged motion in the Junction -- 4 s, no tag. Nothing on any other camera.",
+			"window_hand": "EXT-03 covers the Control Room's port side: no motion on the hull all shift.",
+			"mismatch_shadow": "EXT-03: no motion, no obstruction logged on the airlock tunnel's hull.",
+			"mismatch_daynight": "EXT-03: exposure normal, no fault. The orbit log shows daylight at that time."}},
 	"sent_mail": {"events": ["family_misremember"], "text": "The sent letter does not contain the detail the answer quotes."},
 }
 const NOTE_LINES := {"normal": "Check the corridor feed before bed.", "abnormal": "Leave the corridor feed on tonight. It helps."}
@@ -211,6 +228,8 @@ const THOUGHTS := {
 	"cal_check_false": ["It isn't. Nobody calibrated this.", "根本没有。没人校准过它。"],
 	"cal_denied": ["I just did that.", "我刚做完的。"],
 	"presence_check": ["Nobody. Just the doorways.", "没人。只有那几个门洞。"],
+	"hand_check": ["Nothing on the glass. Not even a mark.", "玻璃上什么都没有。连个印子都没有。"],
+	"eva_nobody": ["There's nobody out there.", "外面一个人也没有。"],
 }
 
 
@@ -414,7 +433,8 @@ func on_record_checked(record_id: String) -> void:
 			if first:
 				if journal != null:
 					journal.on_contradiction(String(ev), record_id)
-				_thought("window_record" if String(ev) == "window_figure" else ("presence_record" if String(ev) == "corridor_presence" else record_id))
+				if String(ev) != "window_hand":     # Round 47: some records just sit there, unremarked
+					_thought("window_record" if String(ev) == "window_figure" else ("presence_record" if String(ev) == "corridor_presence" else record_id))
 			_check_milestones()
 
 
@@ -475,6 +495,14 @@ func eligibility(id: StringName) -> String:
 		return "played %d/%d" % [int(st["plays"]), int(e["max_plays"])]
 	if day() - int(st["last_day"]) < int(e["cooldown_days"]):
 		return "cooldown until day %d" % (int(st["last_day"]) + int(e["cooldown_days"]))
+	# Round 47 pacing: the window / camera contradictions are a FAMILY --
+	# never two of them within MISMATCH_GAP_DAYS, whatever their own cooldown.
+	if MISMATCH_FAMILY.has(String(id)):
+		for other in MISMATCH_FAMILY:
+			if other != String(id):
+				var ost: Dictionary = state.get(StringName(other), {})
+				if int(ost.get("plays", 0)) > 0 and day() - int(ost.get("last_day", -99)) < MISMATCH_GAP_DAYS:
+					return "pacing: another window/camera contradiction on day %d" % int(ost.get("last_day", -99))
 	# Round 46 pacing: an ordinary day between MEDIUM events, and nothing
 	# medium on the day of the major (window) encounter.
 	if tier(id) == "medium":
@@ -485,10 +513,25 @@ func eligibility(id: StringName) -> String:
 	return ""
 
 
+## Round 47: the window / camera contradiction family and its modes.
+const MISMATCH_FAMILY := ["window_mismatch", "mismatch_shadow", "mismatch_daynight", "mismatch_eva"]
+const MISMATCH_GAP_DAYS := 2
+const MISMATCH_MODES := {&"mismatch_shadow": "shadow", &"mismatch_daynight": "daynight", &"mismatch_eva": "eva_window"}
+const MISMATCH_MAX_S := 180.0
+var _mm_feed_s: float = 0.0
+var _mm_win_s: float = 0.0
+var _mm_done_t: float = 0.0
+
+
+func _daylight() -> bool:
+	var oc: Node = _root().get_node_or_null("Equipment/OrbitalCycle")
+	return oc != null and oc.has_method("sun_factor") and float(oc.sun_factor()) >= 0.9
+
+
 ## Round 46 horror HIERARCHY (pacing): subtle / medium / major.
 const TIERS := {
-	"subtle": ["note_extra_item", "window_mismatch", "wrong_reading", "peripheral_figure", "access_ghost", "family_misremember", "basil_return"],
-	"medium": ["phantom_cycle", "corridor_presence", "hatch_handle"],
+	"subtle": ["note_extra_item", "window_mismatch", "wrong_reading", "peripheral_figure", "access_ghost", "family_misremember", "basil_return", "mismatch_shadow", "mismatch_daynight"],
+	"medium": ["phantom_cycle", "corridor_presence", "hatch_handle", "window_hand", "mismatch_eva"],
 	"major": ["window_figure"],
 }
 
@@ -680,10 +723,9 @@ func _hook_basil() -> void:
 func _on_routine_consumed(kind: String) -> void:
 	if inner == null:
 		return
+	# Round 47: meals / tea / water already THINK their own reaction
+	# (quarters_life._remark) -- no second, everyday thought on top.
 	match kind:
-		"meal": inner.everyday("breakfast")
-		"dinner": inner.everyday("dinner")
-		"tea": inner.everyday("tea")
 		"pour": inner.everyday("basil")
 
 
@@ -919,8 +961,14 @@ func _process(delta: float) -> void:
 			_pending_investigation.erase(k)
 			_investigated(k)
 			_thought("presence_check")
+		elif k == "window_hand" and _close_at_port(delta):
+			_pending_investigation.erase(k)
+			_investigated(k)
+			_thought("hand_check")
 		elif float(_pending_investigation.get(k, 0.0)) <= 0.0:
 			_pending_investigation.erase(k)
+	_note_port_look(delta)
+	_tick_feed_checks(delta)
 	if active != &"":
 		_update_active(delta)
 		return
@@ -970,6 +1018,169 @@ func _process(delta: float) -> void:
 		&"family_misremember":
 			if day() > 1 and _family_target() != "":
 				_start(armed, variant)
+		&"window_hand":
+			if _hand_ready():
+				_start(armed, variant)
+		&"mismatch_shadow", &"mismatch_daynight":
+			if _watching("EXT-03") and _watch_s >= 3.0 and watched_before_today("EXT-03") and (armed != &"mismatch_daynight" or _daylight()):
+				_start(armed, variant)
+		&"mismatch_eva":
+			if _gazing_at_window():
+				_gaze_s += dt
+				if _gaze_s >= WINDOW_GAZE_S and watched_before_today("EXT-03"):
+					_start(armed, variant)
+			else:
+				_gaze_s = 0.0
+
+
+# ------------------------------------------------ Round 47: hand at the glass
+const PORT_LOOK_S := 2.0
+const HAND_RANGE := 4.5
+var _port_look_s: float = 0.0
+var _port_close_s: float = 0.0
+var _hand: Node3D
+
+
+## Looking through the Control Room port for a while marks the day (the
+## technician knows the window; the hand event needs an earlier day).
+func _note_port_look(delta: float) -> void:
+	if _gazing_at_window():
+		_port_look_s += delta
+		if _port_look_s >= PORT_LOOK_S:
+			var days: Array = feed_days.get("PORT", [])
+			if not days.has(day()):
+				days.append(day())
+				feed_days["PORT"] = days
+	else:
+		_port_look_s = 0.0
+
+
+func _hand_ready() -> bool:
+	var cam: Camera3D = _player_cam()
+	if cam == null or window == null or not window.in_control_room() or _eva_busy():
+		return false
+	if window.stage in ["cued", "showing", "reacting"] or int(window.witnessed_day) == day():
+		return false
+	if not watched_before_today("PORT") or float(_dp.shift_elapsed_s) < 60.0:
+		return false
+	var port: Vector3 = Vector3(-1.2, 1.5, 1.4)
+	if cam.global_position.distance_to(port) > HAND_RANGE:
+		return false
+	# NOT looking at the port: the knock is what makes them turn.
+	return (-cam.global_basis.z).dot((port - cam.global_position).normalized()) < 0.5
+
+
+## The physical check: right up at the glass, looking at it for a moment.
+func _close_at_port(delta: float) -> bool:
+	var cam: Camera3D = _player_cam()
+	if cam != null and cam.global_position.distance_to(Vector3(-1.2, 1.5, 1.4)) < 1.0 and _looking_at(Vector3(-1.2, 1.45, 1.42), 1.0, 0.8):
+		_port_close_s += delta
+	else:
+		_port_close_s = 0.0
+	return _port_close_s >= 1.0
+
+
+func hand_node() -> Node3D:
+	return _hand if is_instance_valid(_hand) else null
+
+
+func _hand_begin() -> bool:
+	if is_instance_valid(_hand):
+		_hand.queue_free()
+	_hand = load("res://scripts/story/window_hand.gd").new()
+	_root().add_child(_hand)
+	_hand.begin()
+	return true
+
+
+func _hand_end() -> void:
+	if is_instance_valid(_hand):
+		_hand.visible = false
+		_hand.queue_free()
+	_hand = null
+
+
+## Developer: make the hand event available now (the port counts as known
+## from an earlier day, today's arming points at it). Live conditions
+## still apply -- stand in the Control Room facing away from the port.
+func dev_prepare_hand() -> void:
+	_dev_touch()
+	var days: Array = feed_days.get("PORT", [])
+	if not days.has(day() - 1):
+		days.append(day() - 1)
+		feed_days["PORT"] = days
+	if phase() < 2:
+		dev_set_phase_override(2)
+	debug_arm(&"window_hand")
+
+
+# ------------------------------------- Round 47: window / camera variants
+## The camera-side contradictions (shadow, day/night) are SEEN on EXT-03;
+## looking out of the port during them is the comparison (a check). The EVA
+## worker is SEEN through the port; EXT-03 showing nobody is the
+## contradiction (during it, or within a few minutes after).
+var _pending_feed_check: Dictionary = {}     # event -> seconds left
+
+
+func _update_mismatch(delta: float) -> void:
+	var od: Node = get_tree().get_first_node_in_group(&"observation_discrepancy")
+	if od == null or not od.is_active():
+		stop(_mismatch_seen())
+		return
+	if _feed_on_screen("EXT-03"):
+		_mm_feed_s += delta
+	if _gazing_at_window():
+		_mm_win_s += delta
+	var id: StringName = active
+	if id == &"mismatch_eva":
+		if _mm_feed_s >= 1.5 and _mm_win_s >= 2.0:
+			_mismatch_feed_contradiction("mismatch_eva")
+	if id == &"mismatch_daynight" and not _daylight():
+		stop(_mismatch_seen())              # a real eclipse: the camera is simply right now
+		return
+	if _mismatch_compared():
+		_mm_done_t += delta
+		if _mm_done_t >= 8.0:
+			stop(true)
+			return
+	if _active_t >= MISMATCH_MAX_S:
+		stop(_mismatch_seen())
+
+
+func _mismatch_seen() -> bool:
+	if active == &"mismatch_eva":
+		return _mm_win_s >= 2.0
+	return _mm_feed_s >= 2.0
+
+
+func _mismatch_compared() -> bool:
+	return _mm_feed_s >= 2.0 and _mm_win_s >= 1.5 if active != &"mismatch_eva" else _mm_win_s >= 2.0 and _mm_feed_s >= 1.5
+
+
+## EXT-03 shows the A1 worksite empty while the worker was seen.
+func _mismatch_feed_contradiction(ev: String) -> void:
+	if investigation_state(ev) == "contradicted":
+		return
+	if investigation_state(ev) == "none":
+		observe(ev, EVENTS[StringName(ev)]["name"])
+	_add_evidence(ev, "contradiction", "EXT-03: the A1 worksite is empty. No one is outside.", "feed:EXT-03")
+	if not investigations.has(ev):
+		investigations.append(ev)
+		history.append({"id": ev, "day": day(), "event": "investigated"})
+	if journal != null:
+		journal.on_contradiction(ev, "feed")
+	_thought("eva_nobody")
+	_check_milestones()
+
+
+func _tick_feed_checks(delta: float) -> void:
+	for k in _pending_feed_check.keys():
+		_pending_feed_check[k] = float(_pending_feed_check[k]) - delta
+		if k == "mismatch_eva" and _feed_on_screen("EXT-03"):
+			_pending_feed_check.erase(k)
+			_mismatch_feed_contradiction(k)
+		elif float(_pending_feed_check.get(k, 0.0)) <= 0.0:
+			_pending_feed_check.erase(k)
 
 
 func _presence_ready() -> bool:
@@ -1046,6 +1257,16 @@ func _start(id: StringName, variant: String = "normal", dev: bool = false) -> bo
 		&"window_figure":
 			# Developer start only (normal play runs window_encounter.gd).
 			window.dev_spawn()
+		&"window_hand":
+			_hand_begin()
+		&"mismatch_shadow", &"mismatch_daynight", &"mismatch_eva":
+			_mm_feed_s = 0.0
+			_mm_win_s = 0.0
+			_mm_done_t = 0.0
+			var od2: Node = get_tree().get_first_node_in_group(&"observation_discrepancy")
+			if od2 == null or not od2.trigger(String(MISMATCH_MODES[id]), MISMATCH_MAX_S + 5.0, "event" if not dev else "debug"):
+				_abort_start()
+				return false
 		&"basil_return":
 			# Developer PREVIEW only (normal play: _on_day_started, Phase 3):
 			# dead plant presented alive, never counted or saved.
@@ -1114,6 +1335,16 @@ func _update_active(delta: float) -> void:
 		&"window_figure":
 			if window.stage in ["done", "locked"] or _active_t > 60.0:
 				stop(window.stage == "done")
+		&"mismatch_shadow", &"mismatch_daynight", &"mismatch_eva":
+			_update_mismatch(delta)
+		&"window_hand":
+			var h: Node3D = hand_node()
+			if h == null:
+				stop(false)
+			else:
+				h.tick(delta, h.is_seen_by(_player_cam()))
+				if h.state == "gone" or _active_t > 30.0:
+					stop(bool(h.seen))
 		&"hatch_handle":
 			_hatch_animate()
 			if _feed_on_screen("EXT-02") or _feed_on_screen("INT-07"):
@@ -1167,6 +1398,16 @@ func stop(seen: bool = false) -> void:
 		&"window_figure":
 			if window.stage != "done":
 				window.dev_reset()
+		&"window_hand":
+			_hand_end()
+			if seen and not dev:
+				_pending_investigation["window_hand"] = 300.0
+		&"mismatch_shadow", &"mismatch_daynight", &"mismatch_eva":
+			var od3: Node = get_tree().get_first_node_in_group(&"observation_discrepancy")
+			if od3 != null and od3.is_active():
+				od3.clear()
+			if seen and not dev and id == &"mismatch_eva" and investigation_state("mismatch_eva") != "contradicted":
+				_pending_feed_check["mismatch_eva"] = 300.0
 	if seen and not dev and id != &"window_figure":
 		observe(String(id), EVENTS[id]["name"])
 	if not dev:
@@ -1220,18 +1461,14 @@ func _hatch_begin() -> bool:
 			j += 1
 			(v as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		_hatch_clones.append(c)
-	# A dull mechanical knock at the hatch (heard faintly from the station).
-	if _hatch_sound == null:
-		_hatch_sound = AudioStreamPlayer3D.new()
-		_hatch_sound.name = "HatchKnock"
-		_hatch_sound.bus = "SFX"
-		_hatch_sound.unit_size = 6.0
-		_hatch_sound.max_distance = 18.0
-		_hatch_sound.stream = _knock_stream()
-		add_child(_hatch_sound)
-	_hatch_sound.global_position = Vector3(-4.8, 1.0, -2.4)
-	if is_inside_tree() and DisplayServer.get_name() != "headless":
-		_hatch_sound.play()
+	# A dull mechanical knock AT THE OUTER HATCH. Round 47: through the
+	# station's acoustic path (station_sounds.play_at): distance falloff and
+	# a muffling per bulkhead -- it used to be its own player at unit size
+	# 6 m, i.e. full volume anywhere in the Control Room ("someone knocking
+	# right beside me").
+	var snd: Node = get_tree().get_first_node_in_group(&"station_sounds")
+	if snd != null:
+		snd.play_at(&"hatch_knock", HATCH_KNOCK_POS, false)
 	return true
 
 

@@ -841,6 +841,10 @@ func begin_editing() -> void:
 func end_editing() -> void:
 	if _state != State.EDITING:
 		return
+	# Round 47: never leave a laptop drag held when focused use ends.
+	var scr: Node = _laptop_view.get("_log_screen")
+	if scr != null and scr.has_method("pointer_held") and scr.pointer_held():
+		scr.pointer_button(Vector2(0.5, 0.5), false)
 	_laptop_view.end_editing()
 	_look_controller.escape_enabled = true
 	_look_controller.input_enabled = true
@@ -1086,7 +1090,61 @@ func _update_prompt() -> void:
 ## are handled directly, and every other key (E/F/T included) is
 ## forwarded into the laptop screen's own SubViewport as ordinary typing
 ## instead of being interpreted as a shortcut.
+## Round 47: the cursor's position on the open screen (EDITING), clamped to
+## the screen while a button is held (a drag keeps its edge).
+func _cursor_uv(mp: Vector2, clamp_to_screen: bool) -> Vector2:
+	var cam: Camera3D = _interaction_controller as Camera3D
+	var lap: Node = _laptop_node()
+	if cam == null or lap == null or not lap.has_method("ray_uv"):
+		return Vector2(-1, -1)
+	return lap.ray_uv(cam.project_ray_origin(mp), cam.project_ray_normal(mp), cam.global_transform.basis.x, clamp_to_screen)
+
+
+const LAPTOP_WHEEL_GAIN := 3.0
+
+
+## Round 47: real pointer events into the laptop while it is in focused use
+## (scrollbar drag, wheel, press / release). Returns true if consumed.
+func _laptop_pointer(event: InputEvent) -> bool:
+	if _state != State.EDITING or _laptop_view == null or _laptop_view.get("_log_screen") == null:
+		return false
+	var scr: Node = _laptop_view._log_screen
+	if not scr.has_method("pointer_button"):
+		return false
+	if event is InputEventMouseButton:
+		var mb: InputEventMouseButton = event
+		if mb.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+			var wuv: Vector2 = _cursor_uv(mb.position, false)
+			if mb.pressed and wuv.x >= 0.0:
+				# A wheel notch moves ~3 lines on the small laptop screen
+				# (Godot's default page/8 was ~17 px a notch).
+				scr.pointer_wheel(wuv, mb.button_index == MOUSE_BUTTON_WHEEL_UP, (mb.factor if mb.factor > 0.0 else 1.0) * LAPTOP_WHEEL_GAIN)
+			return wuv.x >= 0.0
+		if mb.button_index != MOUSE_BUTTON_LEFT:
+			return false
+		if mb.pressed:
+			var puv: Vector2 = _cursor_uv(mb.position, false)
+			if puv.x < 0.0:
+				return false
+			scr.pointer_button(puv, true)
+			return true
+		if scr.pointer_held():
+			scr.pointer_button(_cursor_uv(mb.position, true), false)    # always released
+			return true
+		return false
+	if event is InputEventMouseMotion:
+		var held: bool = scr.pointer_held()
+		var muv: Vector2 = _cursor_uv((event as InputEventMouseMotion).position, held)
+		if muv.x >= 0.0:
+			scr.pointer_motion(muv)
+		return held
+	return false
+
+
 func _unhandled_input(event: InputEvent) -> void:
+	if _laptop_pointer(event):
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		if _state in [State.SITTING, State.LAPTOP, State.EDITING] and handle_click(false, event.position):
 			get_viewport().set_input_as_handled()

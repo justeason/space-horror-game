@@ -321,7 +321,8 @@ func _holdout() -> void:
 	_check("sci-fi weapon names, same ids", h.WEAPONS["pistol"]["name"] == "SIDEARM" and h.WEAPONS["rifle"]["name"] == "PULSE RIFLE" and h.WEAPONS["arc"]["name"] == "ARC PROJECTOR")
 	h.load_state({"best": 77, "credits": 5, "unlocked": ["pistol", "rifle"], "weapon": "rifle"})
 	# Round 46: a pre-rebalance Easy record is kept as the Classic Easy record.
-	_check("an older save loads (weapon ids unchanged)", h.weapon == "rifle" and h.unlocked.has("rifle") and int(h.legacy_best.get("classic_easy", {}).get("score", 0)) == 77)
+	# Round 47: old purchases become catalog entries (a new run starts with the sidearm).
+	_check("an older save loads (weapon ids unchanged)", h.catalog.has("rifle") and h.weapon == "pistol" and int(h.legacy_best.get("classic_easy", {}).get("score", 0)) == 77)
 	h.start_seeded(1)
 	_check("gameplay intact: same buildings / doors / enemies", h.buildings.size() == 3 and h.KINDS.size() == 10)
 

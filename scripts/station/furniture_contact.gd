@@ -32,9 +32,7 @@ const FURNITURE_LAYER: int = 4
 	^"Geometry/LockerDoorPanelLeft", ^"Geometry/LockerDoorPanelRight", ^"Geometry/LockerTopTrim",
 	^"Geometry/LockerBaseKick", ^"Geometry/StoolSeatCap",
 	^"Geometry/PersonalContainer", ^"Geometry/PersonalContainerStrap", ^"Geometry/ReadingLightBase",
-	^"Geometry/WashCounterTop", ^"Geometry/WashBasinFloor", ^"Geometry/WashBasinWallEast",
-	^"Geometry/WashBasinWallNorth", ^"Geometry/WashBasinWallSouth", ^"Geometry/WashBasinWallWest",
-	^"Geometry/WashFaucetSpout", ^"Geometry/WashMirrorCabinet", ^"Geometry/WashUnderStoragePanel",
+	^"Geometry/WashMirrorCabinet",     # Round 47: the sink in front of the mirror was removed
 	^"Geometry/WallShelf", ^"Geometry/ShelfBook",
 	^"Interactables/TrashDisposal/Housing", ^"Interactables/TrashDisposal/HazardFrameBottom",
 	^"Interactables/TrashDisposal/RecessLiner",
