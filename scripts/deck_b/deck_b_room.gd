@@ -362,6 +362,32 @@ func rack(rack_name: String, pos: Vector3, n: int, spacing: float, accepts: Arra
 	return r
 
 
+## Round 50: keep a wall panel's click volumes FLUSH with its face (panel-
+## local +z <= max_z) so they stay out of the walking corridor the navigation
+## capsule sweep checks. Visual meshes are untouched; rays still hit the
+## (now shallower) pickable boxes. Only axis-aligned boxes are adjusted.
+func flush_clicks(panel: Node3D, max_z: float) -> void:
+	var inv: Transform3D = panel.global_transform.affine_inverse()
+	for b in panel.find_children("Click_*", "StaticBody3D", true, false):
+		for cs in b.get_children():
+			if not (cs is CollisionShape3D) or not ((cs as CollisionShape3D).shape is BoxShape3D):
+				continue
+			var t: Transform3D = inv * (cs as Node3D).global_transform
+			if absf(t.basis.z.normalized().z) < 0.99:
+				continue
+			var bs: BoxShape3D = (cs as CollisionShape3D).shape.duplicate()
+			var c: float = t.origin.z
+			var h: float = bs.size.z * 0.5
+			if c + h <= max_z:
+				continue
+			var back: float = minf(c - h, max_z - 0.01)
+			bs.size.z = max_z - back
+			(cs as CollisionShape3D).shape = bs
+			# Move the shape along the panel's z by the centre shift.
+			var shift: float = (max_z + back) * 0.5 - c
+			(cs as Node3D).global_position += panel.global_transform.basis.z.normalized() * shift
+
+
 ## New physical part (unique, deterministic name from the Deck B counter).
 func spawn_part(kind: StringName, into: Rack, pl: Dictionary = {}) -> Node3D:
 	var s: Node = sys()
@@ -372,7 +398,8 @@ func spawn_part(kind: StringName, into: Rack, pl: Dictionary = {}) -> Node3D:
 		into.slots[i].add_child(p)
 		into.place(p, i)
 	else:
-		var inter: Node = get_tree().current_scene.get_node_or_null("Interactables")
+		var cs: Node = get_tree().current_scene
+		var inter: Node = cs.get_node_or_null("Interactables") if cs != null else null
 		(inter if inter != null else self).add_child(p)
 	return p
 

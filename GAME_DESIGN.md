@@ -2858,7 +2858,7 @@ full layout, room/task matrix and coverage audit.
 - B-10 (sealed attitude-control electronics) and B-11 (service stub) are
   reserved expansion interfaces.
 
-**DEFERRED**: E12, L09, L10, M06, A01, A06 as full tasks; an EVA radiator
+**DEFERRED**: (Round 50 completed E12, M06, L10, L09, A01 and A06 -- see MILESTONE1_DESIGN.md "Round 50"); an EVA radiator
 panel job; a full M07 transmission investigation (architecture exists,
 story-inactive). The unknown contact's identity and any explanation of the
 anomalies remain undecided.

@@ -79,22 +79,38 @@ func _init() -> void:
 
 
 ## Fastest bone speed seen over ~`ticks` physics ticks, reported as metres
-## per 1/60 s so the thresholds read as a per-60Hz-tick move. Sampled every
-## RENDER frame and divided by that frame's own engine delta (the time the
-## animation actually advanced): headless runs fit a varying number of
-## render frames into a physics tick, so a raw per-tick distance (or a
-## wall-clock rate) was flaky for the same motion.
-## Round 35 ROOT CAUSE of the intermittent failure (one in several loaded
-## full-suite runs, e.g. "idle -> walking 0.141 m/tick"): under load Godot
-## runs CATCH-UP physics ticks -- two 60 Hz ticks inside one render frame
-## whose delta is < 2/60 s. The body moved two ticks while the old probe
-## only guaranteed ONE tick of time (max(dt, 1/60)), reading the motion up
-## to ~1.7x too fast. The probe now COUNTS the ticks in the frame.
+## per 1/60 s so the thresholds read as a per-60Hz-tick move.
+## Round 35: under load Godot runs CATCH-UP physics ticks (two 60 Hz ticks in
+## one render frame), so the probe COUNTS the ticks in each frame.
+## Round 50 ROOT CAUSE of the remaining intermittent failure (one loaded
+## full-suite run: "idle -> walking 0.162 m/tick", normally 0.075): the
+## test sampled the bones right after `await process_frame` -- a signal
+## SceneTree emits BEFORE the nodes' _process(). So each sample held the
+## PREVIOUS frame's pose composition (player_body.gd composes in _process)
+## plus THIS frame's physics ticks, while the divisor was the previous
+## frame's delta. After a stalled frame the two windows differ and the
+## motion of ~two frames was divided by one frame's time (~2x too fast).
+## The probe now SAMPLES ITSELF at the very end of each frame
+## (process_priority last, after every pose / follow update) and divides by
+## THAT SAME frame's own delta (or its physics ticks, whichever is longer):
+## every sample covers exactly one frame of motion over that frame's time.
 class DeltaProbe extends Node:
-	var d: float = 0.0
 	var ticks: int = 0
+	var sampler: Callable
+	var samples: Array = []       # [{dt, bones}]
+	var active: bool = false
+	func _init() -> void:
+		process_priority = 1000000
+		process_physics_priority = -1000000
 	func _process(delta: float) -> void:
-		d = delta
+		if not active:
+			ticks = 0
+			return
+		var dt: float = maxf(delta, 1.0 / 1000.0)
+		if ticks > 0:
+			dt = maxf(dt, ticks / 60.0)
+		ticks = 0
+		samples.append({"dt": dt, "bones": sampler.call()})
 	func _physics_process(_delta: float) -> void:
 		ticks += 1
 
@@ -104,25 +120,28 @@ var _probe: DeltaProbe
 func _max_jump(ticks: int, _scale: float = 0.1) -> float:
 	if _probe == null:
 		_probe = DeltaProbe.new()
+		_probe.sampler = _bones
 		get_root().add_child(_probe)
-	var prev: Dictionary = _bones()
-	var m := 0.0
+	_probe.samples = [{"dt": 0.0, "bones": _bones()}]
+	_probe.ticks = 0
+	_probe.active = true
 	var t_end: float = ticks / 60.0
 	var t := 0.0
 	while t < t_end:
 		await process_frame
-		var dt: float = maxf(_probe.d, 1.0 / 1000.0)
-		# Whole-body translation is physics-driven (one 60 Hz tick at a
-		# time): a tick landing in a very short render frame must not read
-		# as a 27 m/s snap.
-		if _probe.ticks > 0:
-			dt = maxf(dt, _probe.ticks / 60.0)
-			_probe.ticks = 0
-		t += dt
-		var now: Dictionary = _bones()
-		for k in now:
-			m = maxf(m, (now[k] as Vector3).distance_to(prev[k]) / dt / 60.0)
-		prev = now
+		t = 0.0
+		for sm in _probe.samples:
+			t += float(sm["dt"])
+	await process_frame
+	_probe.active = false
+	var m := 0.0
+	var smp: Array = _probe.samples
+	for i in range(1, smp.size()):
+		var a: Dictionary = smp[i - 1]["bones"]
+		var b: Dictionary = smp[i]["bones"]
+		var dt: float = float(smp[i]["dt"])
+		for k in b:
+			m = maxf(m, (b[k] as Vector3).distance_to(a[k]) / dt / 60.0)
 	return m
 
 

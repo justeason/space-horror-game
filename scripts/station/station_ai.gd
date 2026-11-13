@@ -132,6 +132,17 @@ const LINES := {
 	&"comms_link_intro": [Prio.INSTRUCT, "Comms link panel. Test the link here before and after the antenna repair.", "通信链路面板。在天线维修前后都在这里测试链路。"],
 	&"tools_intro": [Prio.INSTRUCT, "Instrument rack: airflow meter for Life Support test ports, leak detector for pressure seals.", "仪器架：气流计用于生命维持测试口，检漏仪用于压力密封。"],
 	&"port_intro": [Prio.INFO, "Observation port. Exterior cameras on the workstation cover the same area.", "观察窗。工作站上的外部摄像头覆盖同一区域。"],
+	# Round 50: short status from the REAL emergency models (never a claim
+	# the equipment does not support).
+	&"press_caution": [Prio.SAFETY, "Pressure falling. Check the lower deck pressure panel.", "压力正在下降。请检查下层甲板压力面板。"],
+	&"press_warning": [Prio.SAFETY, "Pressure warning. Find the leak, or isolate the compartment.", "压力警告。找到泄漏点，或隔离该舱段。"],
+	&"press_critical": [Prio.SAFETY, "Pressure critical. Leave the compartment and close the hatch.", "压力危急。离开该舱段并关闭舱门。"],
+	&"press_isolated": [Prio.INFO, "Compartment isolated. Station pressure stable.", "舱段已隔离。空间站压力稳定。"],
+	&"co2_high": [Prio.SAFETY, "CO2 elevated on the lower deck. Check the scrubber.", "下层甲板二氧化碳偏高。请检查净化器。"],
+	&"bus_b_fault": [Prio.SAFETY, "Bus B ground fault. Circuit tripped. Isolate before you touch it.", "B 母线接地故障，电路已跳闸。接触前先隔离。"],
+	&"suit_nogo": [Prio.SAFETY, "Suit check failed. Do not go outside until it passes.", "宇航服检查未通过。通过之前不要出舱。"],
+	&"suit_go": [Prio.INFO, "Suit inspection complete. Suit is go.", "宇航服检查完成，可以出舱。"],
+	&"hull_alert": [Prio.INFO, "Hull impact sensor event. Check the hull monitor at the airlock.", "船体撞击传感器有记录。请到气闸查看船体监测器。"],
 }
 ## Speech-only spellings (captions keep the written designations).
 const SPOKEN := {"EPS-2": "E P S 2", "B-03": "B 3", "DM-7": "D M 7", "TP-3": "T P 3", "TB-A": "T B A"}
@@ -146,7 +157,8 @@ static func spoken_form(text: String) -> String:
 
 ## Lines that are not lessons (may play again: alarms, acknowledgements of
 ## a later day's events, dynamic lines) -- never added to `taught`.
-const REPEATABLE := [&"coupler_live", &"underfed", &"work_complete", &"bed_reminder", &"eva_interlock", &"breaker_cause", &"overload_warn", &"overload_trip", &"emerg_overload", &"emerg_30", &"emerg_clear", &"interlock_cargo", &"interlock_seal", &"filter_missing", &"env_pressure", &"env_o2", &"shift_end", &"repeat_none", &"outage", &"shift_day", &"repeat_task"]
+const REPEATABLE := [&"coupler_live", &"underfed", &"work_complete", &"bed_reminder", &"eva_interlock", &"breaker_cause", &"overload_warn", &"overload_trip", &"emerg_overload", &"emerg_30", &"emerg_clear", &"interlock_cargo", &"interlock_seal", &"filter_missing", &"env_pressure", &"env_o2", &"shift_end", &"repeat_none", &"outage", &"shift_day", &"repeat_task",
+	&"press_caution", &"press_warning", &"press_critical", &"press_isolated", &"co2_high", &"bus_b_fault", &"suit_nogo", &"suit_go", &"hull_alert"]
 const SAFETY_COOLDOWN_S := 75.0
 
 ## Equipment topics: anchor node (relative to the station root), first-

@@ -27,6 +27,15 @@ const KINDS := {
 	&"cable_guide": {"name": "Fabricated cable guide", "shape": "box", "size": Vector3(0.12, 0.02, 0.03), "col": Color(0.85, 0.85, 0.8), "accent": Color(0.85, 0.85, 0.8)},
 	&"med_pack": {"name": "Medical supply pack", "shape": "box", "size": Vector3(0.12, 0.05, 0.08), "col": Color(0.92, 0.92, 0.9), "accent": Color(0.85, 0.15, 0.15)},
 	&"lamp_module": {"name": "Emergency lamp module", "shape": "box", "size": Vector3(0.1, 0.025, 0.03), "col": Color(0.85, 0.86, 0.8), "accent": Color(0.3, 0.9, 0.4)},
+	# Round 50: emergency repair stock.
+	&"leak_patch": {"name": "Temporary leak patch LP-2 (clamp plate)", "shape": "box", "size": Vector3(0.16, 0.03, 0.16), "col": Color(0.85, 0.5, 0.12), "accent": Color(0.15, 0.15, 0.15)},
+	&"gland_packing": {"name": "Feedthrough gland packing set", "shape": "box", "size": Vector3(0.1, 0.04, 0.1), "col": Color(0.25, 0.27, 0.3), "accent": Color(0.3, 0.7, 0.95)},
+	&"berth_seal_kit": {"name": "Berthing seal kit BP-1", "shape": "box", "size": Vector3(0.18, 0.04, 0.14), "col": Color(0.12, 0.12, 0.13), "accent": Color(0.95, 0.75, 0.2)},
+	&"hull_patch_kit": {"name": "EVA hull patch kit HP-4", "shape": "box", "size": Vector3(0.2, 0.05, 0.16), "col": Color(0.82, 0.82, 0.8), "accent": Color(0.95, 0.4, 0.1)},
+	&"seam_seal_kit": {"name": "EVA seam sealant kit SS-1", "shape": "cyl", "size": Vector3(0.05, 0.2, 0.05), "col": Color(0.85, 0.85, 0.82), "accent": Color(0.2, 0.55, 0.95)},
+	&"hull_panel": {"name": "MMOD cover panel MP-3", "shape": "box", "size": Vector3(0.36, 0.02, 0.28), "col": Color(0.88, 0.88, 0.86), "accent": Color(0.6, 0.62, 0.65), "bulky": true},
+	&"hull_panel_damaged": {"name": "MMOD cover panel (impact damaged)", "shape": "box", "size": Vector3(0.36, 0.02, 0.28), "col": Color(0.55, 0.52, 0.48), "accent": Color(0.25, 0.22, 0.2), "bulky": true},
+	&"suit_seal_kit": {"name": "Suit seal kit (neck / wrist O-rings)", "shape": "box", "size": Vector3(0.1, 0.03, 0.08), "col": Color(0.15, 0.16, 0.18), "accent": Color(0.9, 0.2, 0.2)},
 }
 
 @export var item_id: StringName = &"mf_bed"

@@ -98,6 +98,13 @@ func run(menu: Node) -> void:
 	var rooms_n: int = deckb.get_node("Rooms").get_child_count() if deckb != null and deckb.has_node("Rooms") else 0
 	var why: String = shaft.refusal(true) if shaft != null else "no shaft"
 	_say("lower deck built (%d rooms), shaft sealed on day 1" % rooms_n, rooms_n >= 9 and why != "" and main.get_node("DayPlan/Clearance").deck_b_tier() == 0, why)
+	# Round 50: the emergency systems are present and quiet on day 1 (no
+	# leak, no suit fault, no hull damage; a healthy network).
+	var net: Node = main.get_node_or_null("DeckB/DeckBSystems")
+	var su: Node = main.get_node_or_null("DeckB/DeckALinks/SuitService")
+	var hr: Node = main.get_node_or_null("DeckB/DeckALinks/HullRepair")
+	var calm: bool = net != null and su != null and hr != null and net.active_leaks().is_empty() and int(net.press["alarm"]) == 0 and su.status_word() == "GO" and hr._first_damaged() == ""
+	_say("emergency systems present and quiet on day 1 (pressure %s, suit %s)" % [net.press_status() if net != null else "?", su.status_word() if su != null else "?"], calm)
 	# Save + read back + apply.
 	var sg: Node = main.get_node("SaveGame")
 	var r: Dictionary = sg.save_game()

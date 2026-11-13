@@ -400,6 +400,17 @@ func on_part(id: StringName) -> void:
 				preload("res://scripts/ui/hud_message.gd").show(ml, get_instance_id(), clr.refusal("eva"), 2.5)
 				_sfx(&"fail")
 				return
+			# Round 50 (A01): the suit's own readiness -- a flagged fault or a
+			# due inspection needs the full check; otherwise the short pre-EVA
+			# status (O2 / battery) is all that stands between you and EVA.
+			var ss: Node = suit_service()
+			if not suited and ss != null:
+				var why: String = ss.don_blocker()
+				if why != "":
+					var ml2: Label = get_node_or_null(^"../Player/HUD/TaskMessageLabel") as Label
+					preload("res://scripts/ui/hud_message.gd").show(ml2, get_instance_id(), why, 3.5)
+					_sfx(&"fail")
+					return
 			if suited and not _in_station_air():
 				return
 			set_suited(not suited)
@@ -447,6 +458,10 @@ func part_prompt(id: StringName) -> String:
 			return ""
 		return "Click: let go" if work_site == s.substr(5) else "Click: grab handhold (stabilise)"
 	return ""
+
+
+func suit_service() -> Node:
+	return get_tree().get_first_node_in_group(&"suit_service") if is_inside_tree() else null
 
 
 func set_suited(on: bool) -> void:
@@ -1412,7 +1427,9 @@ func tether_word(k: int) -> String:
 
 func _update_visor(delta: float = 0.0) -> void:
 	var a: Node = _airlock()
-	var o2: float = 1.0 - minf(_t / 30.0, 40.0) / 100.0
+	# Round 50: the suit's REAL reserve (suit_service.gd), not a timer.
+	var ss: Node = suit_service()
+	var o2: float = float(ss.suit["o2"]) if ss != null else 1.0 - minf(_t / 30.0, 40.0) / 100.0
 	_zone_chip.text = zone_word()
 	_chip_color(_zone_chip, Color(1.0, 0.55, 0.3) if zone == "outside" else (Color(0.95, 0.8, 0.3) if zone == "chamber" else Color(0.5, 0.95, 0.85)))
 	for k in 2:
@@ -1439,6 +1456,8 @@ func _update_visor(delta: float = 0.0) -> void:
 	_o2_bar.value = o2
 	_psi_label.text = "%.1f psi" % AirlockChamber.SUIT_PSI
 	var amb: String = ("%.1f psi" % a.psi) if a != null and not outside else "VACUUM"
+	if ss != null:
+		_psi_label.text = "%.1f psi · BATT %d%%" % [ss.suit_psi(), roundi(float(ss.suit["batt"]) * 100.0)]
 	_visor_label.text = "SUIT %.1f psi O2   ·   O2 %d %%   ·   TETHERS %s / %s  %s  %.1f/%.1f m   ·   SPEED %.2f m/s   ·   AMB %s   ·   %s" % [AirlockChamber.SUIT_PSI, roundi(o2 * 100.0), tether_word(0), tether_word(1), tether_state(), tether_length, TETHER_LEN, v.length(), amb, zone_word()]
 	if _hint_t > 0.0:
 		_hint_t -= delta
@@ -1463,6 +1482,14 @@ func _refresh() -> void:
 			_locker_lamp.albedo_color = c
 			_locker_lamp.emission = c
 			_locker_status.text = "SUIT IN USE" if suited else "SUIT READY"
+			# Round 50: the locker header shows the suit's REAL readiness.
+			var ss: Node = suit_service()
+			if ss != null and not suited:
+				var st: String = ss.status_word()
+				var c2: Color = {"GO": Color(0.3, 0.95, 0.45), "CHECK DUE": Color(1.0, 0.8, 0.2)}.get(st, Color(1.0, 0.25, 0.15))
+				_locker_lamp.albedo_color = c2
+				_locker_lamp.emission = c2
+				_locker_status.text = "SUIT READY" if st == "GO" else "SUIT " + st
 
 
 func _exit_tree() -> void:

@@ -55,7 +55,9 @@ const _USED_SCENE := preload("res://scenes/interactables/used_filter_cartridge.t
 const KNOWN_TYPES := [&"filter_cartridge", &"wire_control_16ga", &"wire_signal_22ga", &"used_filter_cartridge", &"cargo_carrier", &"data_module", &"thermal_probe", &"airflow_meter", &"leak_detector",
 	# Round 49: Deck B components (scripts/deck_b/deck_b_part.gd KINDS).
 	&"mf_bed", &"ix_bed", &"mf_bed_spent", &"pump_seal_kit", &"coolant_sensor", &"valve_actuator", &"relay_module", &"bearing_cartridge",
-	&"pump_cartridge", &"data_cartridge", &"grow_light_module", &"sample_carrier", &"dosimeter_badge", &"bracket", &"cable_guide", &"med_pack", &"lamp_module"]
+	&"pump_cartridge", &"data_cartridge", &"grow_light_module", &"sample_carrier", &"dosimeter_badge", &"bracket", &"cable_guide", &"med_pack", &"lamp_module",
+	# Round 50: emergency repair stock (deck_b_part.gd KINDS).
+	&"leak_patch", &"gland_packing", &"berth_seal_kit", &"hull_patch_kit", &"seam_seal_kit", &"hull_panel", &"hull_panel_damaged", &"suit_seal_kit"]
 ## Round 49: "rack" = a Deck B parts rack slot; "hoist" = the service hoist tray.
 const OWNER_KINDS := ["cabinet", "reserve", "port", "installed", "seated", "loose", "held", "carrier", "docked", "dataport", "rack", "hoist"]
 const DeckBPart = preload("res://scripts/deck_b/deck_b_part.gd")
@@ -406,7 +408,7 @@ func collect_state() -> Dictionary:
 		if rm.get("exercising") == true:
 			feet = Vector3(-9.75, -3.9, 12.55)
 	d["player"] = {"pos": _enc(feet), "yaw": player.rotation.y + lp.rotation.y, "pitch": lp.get_node("PitchPivot").rotation.x}
-	d["deck_b"] = {"version": 1}
+	d["deck_b"] = {"version": 2}     # 2 = Round 50 (emergency kits / suit / hull)
 	var lv: Node = player.get_node_or_null("LaptopView")
 	d["laptop"] = {"entry": lv._saved_entry if lv != null else "", "read": lv._log_screen.read_messages.keys() if lv != null and "read_messages" in lv._log_screen else [], "game_best": lv._log_screen.game_best if lv != null and "game_best" in lv._log_screen else 0,
 		"cargo_drop": _enc(lv._log_screen._game.state_dict()) if lv != null and lv._log_screen.get("_game") != null else {},
@@ -479,8 +481,11 @@ func apply_state(data: Dictionary) -> Dictionary:
 	# Round 49: a save from before the Lower Service Deck existed has no
 	# Deck B parts at all -- they are NOT "consumed": keep the fresh ones.
 	var pre_deck_b: bool = not data.has("deck_b")
+	# Round 50: the same for the parts Round 50 introduced (leak kit, EVA
+	# repair stock, suit spares) in a Round 49 save (deck_b version 1).
+	var pre_r50: bool = pre_deck_b or int(data.get("deck_b", {}).get("version", 1)) < 2
 	for n in by_name.keys():
-		if pre_deck_b and by_name[n].is_in_group(&"deck_b_part"):
+		if (pre_deck_b and by_name[n].is_in_group(&"deck_b_part")) or (pre_r50 and by_name[n].is_in_group(&"r50_stock")):
 			by_name.erase(n)       # untouched: stays in its fresh rack slot
 			continue
 		if not wanted.has(n) and by_name[n].item_id != &"cargo_carrier":

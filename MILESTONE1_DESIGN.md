@@ -11499,22 +11499,23 @@ IMPLEMENTED = complete procedure; PARTIAL = some logic exists; NOT = none.
 | E09 | IMPLEMENTED (R49) | FEED-1 intermittent, dropout counter, NOT REPRODUCED outcome |
 | E10 | IMPLEMENTED (R49) | Bus B transfer of B2 on the real bus |
 | E11 | IMPLEMENTED (R49) | e11_battery |
-| E12 | NOT | deferred |
+| E12 | DONE (Round 50) | `e12_short`: real Bus B ground fault, LDP-B + TB-B lockout procedure |
 | L01-L04, L07 | IMPLEMENTED (earlier) | |
 | L05 | PARTIAL | hatch seal + leak detector |
 | L06 | IMPLEMENTED (R49) | l06_condensation |
 | L08 | IMPLEMENTED (R49) | b02_pump (the old "l08" id is the valve-routing prototype, unchanged) |
-| L09 / L10 | NOT | deferred (emergency tier / CO2 model) |
+| L09 / L10 | DONE (Round 50) | `l09_pressure`: pressure network, hatches, PCP-B, leak kit, hold test; `l10_co2`: CO2 model, CS-B / CDRA-B / VF-B2 |
 | M01-M03 | IMPLEMENTED (earlier) | |
 | M04 / M05 | PARTIAL | patch bay / backup receiver |
-| M06 | NOT | deferred |
+| M06 | DONE (Round 50) | `m06_interference`: RPT-B monitor, channel / pattern comparison |
 | M07 | PARTIAL (R49 architecture, story-inactive) | unknown_signal_fragment |
 | S01 | IMPLEMENTED (earlier) | |
 | S02 / S03 | IMPLEMENTED (R49, Deck B logistics) | b08_transfer / b08_discrepancy |
 | S04 | PARTIAL | discrepancy MISSING outcome + cargo_missing_item beat |
 | A03 A04 A05 | IMPLEMENTED (earlier) | solar / lens / antenna / coupler / hinge |
-| A01 / A02 / A07 | PARTIAL | suit locker, airlock pressure, solar condition duty |
-| A06 | NOT | deferred |
+| A01 | DONE (Round 50) | `a01_suit`: suit state, inspection targets on the stowed suit, suit service panel, donning gate |
+| A02 / A07 | PARTIAL | airlock pressure, solar condition duty |
+| A06 | DONE (Round 50) | `a06_hull`: hull monitor, three exterior sites (D1 / A2 / A3), caddy parts, cross-torque, shared L09 leak |
 
 Reusable primitives (deck_b_room.gd): TaskAdapter (several orders per
 room), Procedure, handwheel, readout, button/lamp, Rack (real slots,
@@ -11600,7 +11601,7 @@ darkest room).
   rendered frame sequences and tests only.
 * Audio is synthesised and verified by analysis / play logs, not listened.
 * Several rooms' equipment is boxes + labels at prototype fidelity.
-* E12, L09, L10, M06, A01, A06 remain unimplemented; M07 is architecture only.
+* (Round 49 note; Round 50 implemented E12, L09, L10, M06, A01, A06.) M07 is architecture only.
 * Windows build not run on Windows.
 
 ## L. Validation (automated / rendered — not playtesting)
@@ -11649,3 +11650,293 @@ Automated tests and rendered frames are not playtesting. Please check:
 11. Frame rate in the lower rooms on your machine (measured here: 6.5–9.7
     ms uncapped, 1280×720, macOS).
 12. Windows: the .exe was built only — run it on a Windows machine.
+
+# Round 50 — emergency maintenance, EVA safety and hull repair
+
+Completes the six design-bible tasks deferred by Round 49. Three (E12, M06,
+L10) were built in an unnumbered session after Round 49 and are AUDITED and
+refined here; three (L09, A01, A06) are new. No new rooms; no new movement
+model; the airlock, EVA, tethers, the 600 s shift and Chapter One are
+unchanged. Every emergency is a REAL state of an authoritative model --
+an order is raised because the model has the fault, never the reverse.
+
+## A. The six tasks (status)
+
+| ID | Order type | Where | Status |
+|---|---|---|---|
+| E12 | `e12_short` (fault) | B-01 LDP-B + TB-B | DONE (post-R49), audited: live-dead-live meter proof, AI "Bus B fault" |
+| M06 | `m06_interference` (occasional) | B-01 RPT-B + VF-B2 + grow lights | DONE (post-R49), audited: third source, waveform check, no "switch it off" fixes |
+| L10 | `l10_co2` (fault) | B-01 CS-B, spine CDRA-B, VF-B2 | DONE (post-R49), audited: no re-raise while recovering, CO2 symptoms |
+| L09 | `l09_pressure` (fault) | pressure network, B-03 / B-04 / B-08 hatches, PCP-B | NEW |
+| A01 | `a01_suit` (occasional) | airlock tunnel: suit A-1, suit service panel | NEW |
+| A06 | `a06_hull` (fault) | hull monitor + three exterior sites (rings D1 / A2 / A3) | NEW |
+
+M07 stays PARTIAL (architecture only, story-inactive). Round 50 adds its
+baseline: M06's ordinary signatures (`lower_junction.gd KNOWN_RF`) that a
+later M07 transmission is defined by violating.
+
+## B. Root causes corrected in the existing three
+
+* E12: a 0 V reading counted even if the meter had never been proven on a
+  live circuit -> LIVE-DEAD-LIVE (`sc_proved`): the dead reading only counts
+  after a reading on an energised circuit; next-step guidance says so.
+* M06: only two real sources existed (capacitor, PWM); "the vent fan" was
+  the capacitor. Added the third, physically distinct source: the fan
+  housing's loose BONDING STRAP (commutation noise chopped at the 24 Hz
+  blade rate, CH A only, fixed at the strap with the fan off). The
+  capacitor signature is now an unstable crackle over the 96 Hz buzz. The
+  PWM case can no longer be "fixed" by switching the grow lights OFF.
+* L10: after a correct fix the CO2 is still above caution for a while; the
+  live check immediately raised a FRESH L10 order. The air model now has a
+  `recovering` state (set on close, cleared below caution or by a new
+  fault).
+
+## C. The pressure network (deck_b_systems.gd `press`)
+
+* Volumes: A (Deck A, 190 m³), BC (Deck B core: junction, spine,
+  corridors, Water, Lab, Botany, Medical, Archive -- 217 m³ from the
+  layout), B03 (38 m³), B04 (36 m³), B08 + B-11 (41 m³).
+* Links (flow = G·ΔP): A↔BC = inter-deck duct (IV-AB on PCP-B, 6 m³/s) +
+  the shaft lid while open (20); BC↔X = the hatch (25) or its EQ valve (4).
+* Leaks to vacuum: flow = c·p (choked, c in m³/s by defect and severity).
+  A temporary patch leaves 4 % of the flow.
+* PCS make-up gas into Deck A, up to 1.4 kPa·m³/s from a finite 26,000
+  kPa·m³ reserve (the suit's O2 fill also draws from it): a small leak is
+  HELD (no alarm, but the make-up flow and the reserve show it), a large
+  one is not.
+* Alarm levels from the model: CAUTION (< 99.5 kPa or trend < -0.25
+  kPa/min), WARNING (< 97), CRITICAL (< 90) on any connected volume. A
+  hatch cannot be opened above ΔP 3.5 kPa (equalise first).
+* EnvironmentModel: Deck A's cabin target subtracts the network's Deck A
+  deficit; symptoms use the pressure of the compartment the technician is
+  IN (an isolated, falling room is felt inside it) and sustained Deck B
+  CO2 (mild > 5,000 ppm for 60 s, significant > 9,000). Never fatal.
+* Fixed 0.25 s ticks; a live pressure alarm is a CRITICAL timer (never
+  held by laptop focus; focus / games are refused during one). Overnight
+  the PCS isolates a still-leaking sealable compartment automatically.
+
+## D. L09 Rapid Pressure Loss (pressure_hatches.gd = Rooms/PressureControl)
+
+* Hardware: three POCKET PRESSURE HATCHES (B-03, B-04, B-08: a leaf with
+  viewport, handles and hazard edge slides out of the wall; collision when
+  shut); a local panel on BOTH sides of each (this-side / far-side
+  pressure, ΔP, trend, hatch lever, EQ handwheel, hold-test button); PCP-B
+  (all volumes, trends, make-up flow / reserve, alarm lamp, duct valve,
+  LOG STATUS); the LEAK KIT cabinet (2 clamp patches, gland packing,
+  berthing-seal kit); Deck A's existing ultrasonic LEAK DETECTOR (Life
+  Support instrument rack) is the locating tool.
+* Defects (`LEAK_SITES`): A seal failure -- berthing seal BP-1 (B-08); B
+  pipe / service connection -- coolant-line hull feedthrough FT-3 packing
+  gland (B-03); C hull penetration -- B-04 south wall (shared with A06).
+  Each hisses at its own position, scaled by the REAL flow (silent when
+  sealed or when the pressure behind it is gone).
+* Procedure: read PCP-B -> find the compartment (close hatches one at a
+  time: the side that keeps falling with its hatch shut has the leak --
+  or follow the hiss with the detector) -> STABILISE (isolate, or clamp a
+  temporary patch on the located defect) -> REPAIR (repack FT-3 / replace
+  BP-1 seal; a hull hole cannot be repaired from inside) -> repressurise
+  (EQ) -> HOLD TEST (hatch + EQ shut, 20 s; a patch FAILS it) -> reopen.
+* Outcomes: repaired (defect gone + hold test passed + volume rejoined),
+  stabilized (temporary patch; LOG STATUS), deferred (left isolated, the
+  station holding; LOG STATUS). A non-hull defect left patched / isolated
+  re-raises "permanent repair due" the next day; a hull one raises A06.
+* Scheduling: raised only by a real alarm (or "permanent repair due");
+  the daily roll can create a pipe / seal defect only after the Deck B
+  routine has run 3 days (seal only with Cargo access).
+
+## E. A01 EVA Suit Inspection (suit_service.gd = DeckALinks/SuitService)
+
+* Suit state: O2 and battery reserves (used up outside in real time;
+  refilled ONLY through the locker umbilical: a slow trickle while stowed or
+  FILL / CHARGE at the panel -- reading the panel never resets anything),
+  seal (neck O-ring nick | left / right wrist disconnect), comms (comm-cap
+  connector), tether hooks A / B, O2 supply valve, charger breaker.
+* Physical targets on the STOWED suit (built from the rig's own bones):
+  helmet + comm cap, neck ring, both gloves (wrist lock bands green / red),
+  boots, both tether hooks (orange service tag when faulty), the chest
+  diagnostic connector. SUIT SERVICE PANEL: P-TEST (6 s; fails on any real
+  seal fault), O2 FILL, CHARGE, COMMS (fails on a real comm fault), the O2
+  SUPPLY valve, the charger breaker, SIGN OFF.
+* Faults and distinct fixes: low O2 (supply valve closed: open it, FILL);
+  low battery (charger tripped: reset, CHARGE); seal (replace the O-ring
+  with a suit seal kit / push the wrist disconnect home); comms (reseat the
+  comm cap); hook (clean and cycle the gate).
+* Gating (`eva_system` locker -> `don_blocker()`): any fault flags FULL
+  INSPECTION DUE (the suit's telemetry) -- a faulty suit is never worn by
+  accident; otherwise only the short pre-EVA status (O2 >= 60 %, battery
+  >= 50 %). The full check is also due every 7 days / 5 EVAs after the
+  first sign-off. The locker header shows SUIT GO / CHECK DUE / LOW / NO-GO;
+  the visor shows the real O2 and battery.
+
+## F. A06 Hull Damage (hull_repair.gd = DeckALinks/HullRepair)
+
+* Sites (all on the measured outer plating, within tether reach, clear of
+  moving machinery and the solar wings): LOWER -- B-04 south wall of the
+  lower service module, new ring D1 (lower hull, 2.8 m from A3), a SMALL
+  PUNCTURE that IS the network leak `hull_b04`; SEAM -- airlock tunnel east
+  wall (ring A2), a damaged panel seam leaking slowly into Deck A (held by
+  make-up gas: visible as make-up flow); IMPACT -- Engineering's south wall
+  (ring A3), MMOD cover panel: severity 1 no breach, 2-3 cracked panel.
+* Inside: HULL MONITOR (airlock tunnel): LOCATE, VERIFY, DEFER. EVA REPAIR
+  STOCK shelf + SUIT CADDY (a part only goes outside in the caddy; it is
+  consumed there; a removed damaged panel comes back IN the caddy).
+* Outside (existing EVA, dual tethers, worksite handholds): probe ->
+  prepare (cut back MLI / scrape the seam) -> fit (patch plate / sealant
+  bead / replacement panel from the caddy) -> slide the patch into line ->
+  seat -> torque 4 fasteners in a CROSS pattern (any other order rocks the
+  plate and resets them) -> seal probe (no differential if the room is
+  depressurised: verify from inside). The exterior visual changes damaged
+  -> patch offset -> bolted -> sealed bead; the impact panel shows its bare
+  frame while off.
+* Outcomes: inspected_no_breach, stabilized, repaired, deferred_part,
+  deferred_eva, deferred. Raised by a real hull event (impact sensor /
+  make-up flow / L09 handing over a hull defect); never before Deck B tier 1.
+
+## G. Integrated chains
+
+* A: E12 short on B3 -> breaker trips -> CDRA-B and grow lights lose power
+  -> lockout, live-dead-live, terminal repair -> restore -> meter under load.
+* B: CO2 rises -> CS-B caution -> CS-B vs inlet comparison -> bed / airflow
+  / sensor / power fix -> CO2 falls (recovering) -> verified.
+* C: hull strike -> network leak -> alarm -> isolate / patch inside (L09
+  stabilized) -> A06: locate, caddy, suit status, EVA, exterior patch
+  (repairs the SAME leak) -> repressurise -> VERIFY / hold test.
+  One defect, one consumption per repair, no double reward.
+
+## H. Station AI (short, from the real models)
+
+press_caution / press_warning / press_critical / press_isolated, co2_high,
+bus_b_fault, suit_go / suit_nogo, hull_alert. Never announces a repair the
+model has not recorded.
+
+## I. Story hooks (FOUNDATIONS ONLY -- inactive in normal play)
+
+`deck_b_systems.pressure_anomaly()` (a transient pressure drop in the
+RECORDS only; the model is never written), `suit_service.record_anomaly()`
+(an inspection record at 03:12 while the technician slept),
+`hull_repair.repaired_by_unknown()` (a repair record naming nobody),
+`lower_junction.rf_anomaly()` (a pulse train no equipment runs at). Only a
+registered story beat may call them with preview = false; F8 previews
+return the record and store nothing. The unknown contact is not revealed.
+
+## J. Developer tools (F8, Deck B page)
+
+Per task: real fault injection (feedthrough / seal / B-04 puncture; suit
+o2 / batt / seal / comms / hook; hull seam / impact S1 / S3), restore
+buttons (pressure network, suit, hull -- never touching inventory or
+progression), the Deck B order picker (raise / cancel any of the six),
+diagnostics lines (every volume, trend, isolation, EQ, duct, make-up
+flow and reserve, each defect's state and flow; the suit's full state and
+due logic; every hull site with its leak link and fastener progress), and
+the four story-hook previews (labelled PREVIEW, nothing written).
+
+## K. Save / load
+
+* `deck_b` version 2. Saved: the network (pressures, trends, hatches, EQ,
+  duct, defects with state / found, make-up reserve), the L09 order's
+  progress (identification, hold tests -- a running test never resumes),
+  the suit state and inspection progress, the hull damage per site
+  (state, severity, found, every exterior step, fasteners), M06 bond strap,
+  E12 live-proof flag, the anomaly logs.
+* A Round 49 save: a healthy hull (no leaks, every hatch open), a healthy
+  suit, intact hull sites, and the NEW stock items (leak kit, EVA repair
+  stock, suit seal kit -- group `r50_stock`) are kept instead of being
+  treated as consumed. No emergency is injected into an old save.
+
+## L. Visual pass on the existing lower deck (deck_b_detail.gd)
+
+Attached in each equipment node's own frame, visual only: water tank
+domes / saddles / feet / flanged pipes / drain valve, filter clamp band +
+gauge, pump fins + coupling guard; thermal pump cooling fins, terminal
+boxes, flanged discharge with round gauges; workshop drawer pulls, bench
+vise, parts bins, tool silhouettes (wrench, screwdriver, pliers, hammer);
+glovebox window frame, glove-port rings, sleeves, work light, vial rack;
+botany manifold, drip lines, emitters, reservoir float gauge; medical
+headrest, side rails, restraint straps + buckles, cabinet handles; cargo
+corner fittings, ratchet straps, floor rings; archive cable bundles,
+ties, top grilles, kick-plates. Also: TB-B unchanged in function; FT-3
+coolant lines now bend down to the floor manifold. This is a focused
+detail pass, not final production art.
+
+## M. Test reliability (root causes, not tolerances)
+
+* test_editor_camera_no_reversal ("pitch drifted 0.454 rad" once under
+  load, while the aim IMPROVED 0.94 -> 0.99): the fixed 0.5 s wait assumed
+  the zoom tween had started when T was sent; a stalled frame between
+  parse_input_event and the frame that handles it consumed the timer, so
+  the "settled" baseline was read mid-zoom. Now the test waits for the
+  real settled state (zoom tween finished + pitch still for 5 frames).
+* test_animation_transitions ("0.162 m/tick" once, normally 0.075): the
+  bones were sampled right after `await process_frame`, which SceneTree
+  emits BEFORE the nodes' _process -- each sample held the previous
+  frame's pose plus this frame's physics ticks, divided by the previous
+  frame's delta. The probe now samples itself at the end of every frame
+  (last process priority) and divides by that same frame's delta / ticks.
+* Stress: both tests 5x under 6 busy CPU cores -- see N.
+* test_r46_horror (guidance route from (-0.8, -0.7)) failed in the full
+  suite after this round's hardware landed: that start point is INSIDE the
+  console desk, and the test relied on the solver's deep-overlap recovery
+  to move the body somewhere legal. With more bodies in the scene, under
+  CPU load the recovery resolved sideways (-x) through the west wall
+  instead of out of the desk (+z) -- HEAD 6/6 pass, tree 5/5 fail under
+  load. The start is now (-0.8, -0.29), the exact spot HEAD's recovery
+  settled at (still touching the desk, so the "leaving" rule is still
+  exercised); the assertion is unchanged. 3/3 pass under load.
+* Navigation sweep: the new wall panels' pick boxes (layer 16, never
+  physical) reached a few cm into the swept walking band of the airlock
+  tunnel and the B-08 corridor. DeckBRoom.flush_clicks() now keeps a
+  panel's pick volumes flush with its face; the stowed suit's targets
+  that reach into the band sit just behind the suit's surface (rays pass
+  through its meshes). A ray check confirms all of them are still hit.
+
+## P. Maintenance procedure reference (developer-facing)
+
+| ID | Location | Fault types | Equipment | Procedure (short) | Outcomes | Save fields | F8 | Status |
+|---|---|---|---|---|---|---|---|---|
+| E12 | B-01 LDP-B, TB-B | ground fault on B3 / B4 (scorched lug, condensate tracking) | LDP-B meter, lockout hasps, TB-B | identify, (reset re-trips), off, lock out, prove meter live, 0 V, open TB-B, inspect, repair x2, close, unlock, reset, read under load | repaired | `power.short/lockout/fault_trips`, LowerJunction `sc_*` | B3 ground fault; Clear all faults | DONE |
+| M06 | B-01 RPT-B, VF-B2, B-06 lights | capacitor (crackle, A/B), bonding strap (24 Hz chop, A), dimmer PWM (comb, B/C), none | RPT-B headset / tune / set, fan cap, bond strap, light dimming | listen, compare after switching equipment, fix at the source (fan back ON, lights lit) or retune | repaired, deferred, not_reproduced | LowerJunction `rf_*` | raise via order picker | DONE |
+| L10 | B-01 CS-B, spine CDRA-B, VF-B2 | bed stuck, fan cutout, sensor drift, no power, transient | CS-B, CDRA-B inlet + swap valve, CAL, cutout reset | read CS-B, compare inlet, fix the cause, CO2 falling | repaired, sensor_fault, verified_normal | `air.*` (+ `recovering`), LowerJunction `co2_*` | CO2: bed / fan / sensor | DONE |
+| L09 | B-03 / B-04 / B-08 hatches, PCP-B, LEAK KIT | pipe (FT-3), seal (BP-1), hull (B-04) | hatches, EQ valves, hold test, leak detector, clamp patch, packing, seal kit | PCP-B, find (isolation test / detector), stabilise (isolate / patch), repair, EQ, hold test, reopen | repaired, stabilized, deferred | `press.*`, PressureControl `ident/hold/logged` | L09 leaks; Pressure: restore all | DONE |
+| A01 | airlock tunnel: suit A-1, suit service panel | low O2, low battery, seal, comms, hook | targets on the stowed suit, P-TEST, FILL, CHARGE, COMMS, supply valve, charger CB, suit seal kit | inspect helmet/neck, gloves, boots, hooks, diag, P-test, O2, battery, comms, sign off | repaired, verified_normal | SuitService `suit/insp/seen` | Suit: o2/batt/seal/comms/hook/restore | DONE |
+| A06 | hull: B-04/S (D1), seam (A2), Eng panel (A3); hull monitor | puncture (= L09 hull leak), seam leak, impact S1-S3 | hull monitor, EVA stock, suit caddy, patch kit / sealant / MMOD panel, probe | locate, load caddy, suit status, EVA, handhold, probe, prep, fit, align, seat, cross-torque, seal probe, return, verify | repaired, inspected_no_breach, stabilized, deferred_part, deferred_eva, deferred | HullRepair `dmg/active_site/verified/deferred` | A06 seam / impact S1 / S3; Hull: restore | DONE |
+| M07 | RPT-B / archive | (story) | -- | baseline only (`KNOWN_RF`) | -- | `rf_anomalies` | Preview: off-pattern RF | PARTIAL (architecture) |
+
+## N. Validation (automated / rendered -- not playtesting)
+
+* Full suite 181 tests (3 new: test_r50_lower_gaps, test_r50_pressure,
+  test_r50_suit_hull) run twice after the last change: 181/181 and
+  181/181, 0 SCRIPT ERRORs. Earlier pairs found and fixed: locker header
+  must stay "SUIT READY" when the suit is GO (R42 contract); EVA REPAIR
+  STOCK needed a 5th slot (the spare MMOD panel overflowed off-rack);
+  pick boxes in the swept corridors; the r46 route start (see M). One
+  test_r46_holdout_balance reading of 12.49 ms (limit 4.5) in one run was
+  a machine spike -- Holdout code untouched, 2.81-2.92 ms in every other
+  run and 2.83 ms in 3 standalone reruns.
+* Stress (6 busy CPU cores): test_animation_transitions and
+  test_editor_camera_no_reversal 5/5 runs pass; test_r46_horror 3/3.
+* Headless startup clean; .uid files generated for the 4 new scripts and
+  3 new tests.
+* Rendered frames (macOS, 1280x720): hatches B-03/B-04/B-08 + panels,
+  PCP-B, LEAK KIT, FT-3 / BP-1 / B-04 defect sites, suit locker targets,
+  suit service panel, EVA stock and caddy, hull monitor, the three hull
+  sites in their damaged / patch / repaired states, the equipment detail
+  pass. Automated screenshots -- not human playtesting.
+* Frame time uncapped (1280x720): Deck A 7.3-8.4 ms (R49 7.8-9.0);
+  Deck B 5.8-9.1 ms (R49 6.5-9.7); airlock tunnel with the suit service
+  hardware 7.5 ms; B-08 hatch 8.2 ms; a live B-08 seal leak with the
+  pressure network stepping every frame 7.6 ms avg / 8.5 ms p95.
+* macOS release export rebuilt; exported smoke test ALL PASSED (new step:
+  "emergency systems present and quiet on day 1" -- pressure NORMAL,
+  A 101.3 / B 101.3 kPa, makeup 0.00, suit GO). Demo user folder backed
+  up and restored byte-identical. Windows .exe built (not run: no
+  Windows machine).
+* Player saves / settings: SHA-1 identical before and after the round.
+
+## O. Known limitations
+
+* Audio checked technically (spectral / envelope / peak checks on the
+  generated M06 clips; positional hiss scaled by the real flow) -- not
+  listened to by a human.
+* The lower-deck detail pass is a meaningful improvement, not final art.
+* Windows export not runtime-tested (no Windows machine).
+* A06's patch alignment is a two-nudge slide, not free-hand placement.

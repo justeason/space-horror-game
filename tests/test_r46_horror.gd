@@ -387,7 +387,13 @@ func _window_figure() -> void:
 # ------------------------------------------------------------ guidance
 func _guidance() -> void:
 	var we: Node = se.window
-	var starts := [Vector3(0.6, 1.6, -0.4), Vector3(0.9, 1.6, 0.9), Vector3(-0.8, 1.6, -0.7), Vector3(0.2, 1.6, 1.7)]
+	# Round 50: the third start used to be (-0.8, -0.7) -- INSIDE the console
+	# desk -- and relied on the physics solver's deep-overlap recovery to put
+	# the body somewhere legal; with more bodies in the scene that recovery
+	# can resolve sideways through the wall. It now starts where a technician
+	# can actually stand: against the desk edge (still touching furniture,
+	# so the "leaving" rule is exercised).
+	var starts := [Vector3(0.6, 1.6, -0.4), Vector3(0.9, 1.6, 0.9), Vector3(-0.8, 1.6, -0.29), Vector3(0.2, 1.6, 1.7)]
 	for s in starts:
 		await _aim(s, Vector3(-1.2, 1.5, 1.2))
 		var route: Array = we.route_to(fb.current_eye_position(), we.OBS_SPOT)

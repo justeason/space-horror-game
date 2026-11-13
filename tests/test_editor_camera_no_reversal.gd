@@ -55,7 +55,19 @@ func _init() -> void:
 	_send_key(KEY_F)
 	await create_timer(0.6).timeout
 	_send_key(KEY_T)
-	await create_timer(0.5).timeout # editor_zoom_duration (0.45) has settled
+	await create_timer(0.5).timeout # editor_zoom_duration (0.45)
+	# Round 50 ROOT CAUSE of the intermittent "pitch drifted 0.454 rad"
+	# failure (one loaded full-suite run; the same run's aim IMPROVED
+	# 0.94 -> 0.99 -- the camera was still zooming IN, not reversing): the
+	# fixed 0.5 s wall-clock wait assumed the zoom tween had started the
+	# moment T was sent. A stalled frame (first draw of the editor UI)
+	# between parse_input_event and the frame that handles it consumes the
+	# timer while the tween has not advanced, so the "settled" baseline was
+	# read mid-zoom. Wait for the REAL settled state instead: the zoom tween
+	# finished (its final callback has locked the look targets) and the
+	# pitch no longer moves between frames (bounded, reported).
+	var settle_ms: int = await _wait_zoom_settled(sleep_state, camera, 5.0)
+	print("   (zoom settled %d ms after the fixed wait)" % settle_ms)
 
 	_check("1. EDITING: focus_assist_enabled is OFF while editing (no competing idle authority)", not look_controller.focus_assist_enabled)
 
@@ -152,6 +164,22 @@ func _send_ctrl_s() -> void:
 	up.physical_keycode = KEY_S
 	up.pressed = false
 	Input.parse_input_event(up)
+
+
+func _wait_zoom_settled(sleep_state: Node, camera: Node3D, max_s: float) -> int:
+	var t0: int = Time.get_ticks_msec()
+	var still: int = 0
+	var last: float = camera.get_parent().rotation.x
+	while Time.get_ticks_msec() - t0 < int(max_s * 1000.0):
+		await process_frame
+		var tw: Tween = sleep_state.get("_zoom_tween")
+		var running: bool = tw != null and tw.is_valid() and tw.is_running()
+		var p: float = camera.get_parent().rotation.x
+		still = still + 1 if (not running and absf(p - last) < 0.00005) else 0
+		last = p
+		if still >= 5:
+			break
+	return Time.get_ticks_msec() - t0
 
 
 func _check(label: String, cond: bool) -> void:

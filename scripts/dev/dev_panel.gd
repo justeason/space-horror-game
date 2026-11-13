@@ -664,6 +664,35 @@ func _build_deck_b_controls(box: VBoxContainer) -> void:
 	_button(hf2, "Battery hot (V1 shut)", func(): _sys_b().thermal["v1"] = 0.0; last_action = "fault: V1 closed")
 	_button(hf2, "Trip B3 breaker", func(): _sys_b().power["on"][2] = false; last_action = "fault: B3 tripped")
 	_button(hf2, "Clear all faults", func(): clear_deck_b_faults())
+	# Round 50: E12 / L10 model faults.
+	var hf3 := _row(box)
+	_button(hf3, "B3 ground fault", func(): _sys_b().inject_short(2, "terminal"); _sys_b().step(0.01); last_action = "fault: B3 ground fault")
+	_button(hf3, "CO2: bed stuck", func(): _sys_b().inject_air_fault("bed"); last_action = "fault: CDRA-B swap valve")
+	_button(hf3, "CO2: fan cutout", func(): _sys_b().inject_air_fault("airflow"); last_action = "fault: VF-B2 cutout")
+	_button(hf3, "CO2: sensor drift", func(): _sys_b().inject_air_fault("sensor"); last_action = "fault: CS-B drift")
+	# Round 50: L09 pressure / A01 suit / A06 hull (REAL model faults; the
+	# procedures are then played normally) + safe resets + story-hook
+	# previews that never write state.
+	var hp := _row(box)
+	_button(hp, "L09 feedthrough leak", func(): _sys_b().inject_leak("b03_feed", 2); last_action = "fault: FT-3 feedthrough leak")
+	_button(hp, "L09 berth seal leak", func(): _sys_b().inject_leak("b08_seal", 2); last_action = "fault: BP-1 seal leak")
+	_button(hp, "L09/A06 B-04 puncture", func(): _hull().strike("lower", 2); last_action = "fault: hull puncture B-04 (shared leak)")
+	_button(hp, "Pressure: restore all", func(): reset_pressure())
+	var hsu := _row(box)
+	for k in ["o2", "batt", "seal", "comms", "hook"]:
+		var kk: String = k
+		_button(hsu, "Suit: " + kk, func(): _suit().inject_fault(kk); last_action = "suit fault: " + kk)
+	_button(hsu, "Suit: restore", func(): _suit().clear_faults(); last_action = "suit restored")
+	var hh := _row(box)
+	_button(hh, "A06 seam (A2)", func(): _hull().strike("seam", 2); last_action = "hull: seam damage")
+	_button(hh, "A06 impact S1", func(): _hull().strike("impact", 1); last_action = "hull: impact (no breach)")
+	_button(hh, "A06 impact S3", func(): _hull().strike("impact", 3); last_action = "hull: impact (cracked panel)")
+	_button(hh, "Hull: restore", func(): _hull().clear_damage(); last_action = "hull restored")
+	var ha := _row(box)
+	_button(ha, "Preview: phantom P-alarm", func(): last_action = "PREVIEW (story-inactive, nothing written): %s" % str(_sys_b().pressure_anomaly(true)))
+	_button(ha, "Preview: suit record 03:12", func(): last_action = "PREVIEW (story-inactive, nothing written): %s" % str(_suit().record_anomaly(true)))
+	_button(ha, "Preview: unknown repair", func(): last_action = "PREVIEW (story-inactive, nothing written): %s" % str(_hull().repaired_by_unknown("seam", true)))
+	_button(ha, "Preview: off-pattern RF", func(): last_action = "PREVIEW (story-inactive, nothing written): %s" % str(_deck_b().room_node(&"b01").rf_anomaly(true)))
 	var l4 := Label.new()
 	l4.text = "Work orders (Deck B registry):"
 	box.add_child(l4)
@@ -715,6 +744,24 @@ func deck_b_text() -> String:
 	if s != null:
 		lines.append("Water: %s raw %.1f L potable %.1f L cond %.0f bed %d %% pump %s %s" % [s.water_status(), float(s.water["raw_l"]), float(s.water["potable_l"]), float(s.water["pot_cond"]), int(float(s.water["filter_life"]) * 100.0), "RUN" if s.water["processing"] else "IDLE", s.water["pump_fault"]])
 		lines.append("Coolant: %s supply %.1f ENG %.1f BATT %.1f LAB %.1f fault '%s' standby %s" % [s.thermal_status(), float(s.thermal["supply"]), float(s.thermal["eng_T"]), float(s.thermal["batt_T"]), float(s.thermal["lab_T"]), s.thermal["fault"], s.thermal["standby"]])
+		lines.append("Air: CO2 %.0f ppm (CS-B %.0f) beds %d/%d %% active %s fault '%s'" % [float(s.air["co2"]), s.co2_reading(), int(float(s.air["beds"][0]) * 100.0), int(float(s.air["beds"][1]) * 100.0), "AB"[int(s.air["active"])], s.air_fault()])
+		var pr: Array = []
+		for c in ["A", "BC", "B03", "B04", "B08"]:
+			pr.append("%s %.1f(%+.2f)%s" % [c, s.pressure(c), s.trend(c), "" if c in ["A", "BC"] or s.hatch_open(c) else (" ISO" + (" EQ" if s.press["eq"][c] else ""))])
+		lines.append("Pressure %s: %s · duct %s · makeup %.2f (res %d%%) · leaks %s" % [s.alarm_word(int(s.press["alarm"])), " ".join(pr), "open" if s.press["duct"] else "SHUT", float(s.press["makeup_flow"]), int(100.0 * float(s.press["makeup"]) / 26000.0),
+			", ".join(s.press["leaks"].map(func(x): return "%s %s c%.3f %.2f kPa·m³/s%s" % [x["id"], x["state"], float(x["c"]), s.leak_c(x) * s.pressure(String(x["comp"])), " found" if x.get("found", false) else ""]))])
+	var su: Node = _suit()
+	if su != null:
+		lines.append("Suit A-1: %s · O2 %d%% batt %d%% · psi %.1f · seal '%s' comms '%s' hooks %s · supply %s charger %s · due %s (last %d, EVAs %d) · checks %s" % [su.status_word(), roundi(float(su.suit["o2"]) * 100.0), roundi(float(su.suit["batt"]) * 100.0), su.suit_psi(), su.suit["seal"], su.suit["comms"], str(su.suit["hooks"]),
+			su.suit["supply"], su.suit["charger"], su.full_inspection_due(), int(su.suit["last_full_day"]), int(su.suit["evas_since"]), str(su.insp.keys())])
+	var hr: Node = _hull()
+	if hr != null:
+		var hl: Array = []
+		for site in hr.dmg:
+			var d: Dictionary = hr.dmg[site]
+			if d["state"] != "none":
+				hl.append("%s %s S%d%s bolts %d%s" % [site, d["state"], int(d["sev"]), " found" if d["found"] else "", (d["bolts"] as Array).size(), " leak:" + String(hr.SITES[site][5]) if hr.SITES[site][5] != "" else ""])
+		lines.append("Hull: %s · A06 site '%s' verified %s deferred '%s'" % [", ".join(hl) if not hl.is_empty() else "intact", hr.active_site, hr.verified, hr.deferred])
 		lines.append("Bus B: B1 %s B2 %s B3 %s B4 %s · feed1 '%s' · B2 on %s · FEED-2 %.2f kW" % ["ON" if s.powered(0) else "off", "ON" if s.powered(1) else "off", "ON" if s.powered(2) else "off", "ON" if s.powered(3) else "off", s.power["feed1_fault"], s.power["b2_source"], s.feed2_load()])
 		lines.append("Visited lower rooms: %s · Deck B days %d · services logged %d" % [", ".join(s.rooms_visited_total()), s.deck_b_days(), s.service_log.size()])
 	var dp: Node = main.get_node_or_null("DayPlan")
@@ -771,6 +818,29 @@ func ladder_test(down: bool) -> void:
 	last_action = "ladder test %s (W / click to continue)" % ("down" if down else "up")
 
 
+func _suit() -> Node:
+	return main.get_tree().get_first_node_in_group(&"suit_service")
+
+
+func _hull() -> Node:
+	return main.get_tree().get_first_node_in_group(&"hull_repair")
+
+
+## Round 50: every volume back at station pressure, every hatch / valve
+## normal, no defect -- inventory and progression untouched.
+func reset_pressure() -> void:
+	var s: Node = _sys_b()
+	if s != null:
+		s.clear_pressure()
+	var h: Node = _hull()
+	if h != null:
+		for site in ["lower", "seam"]:
+			if h.dmg[site]["state"] == "damaged":
+				h.dmg[site] = h._fresh(site)
+		h._refresh()
+	last_action = "pressure network restored"
+
+
 func clear_deck_b_faults() -> void:
 	var s: Node = _sys_b()
 	if s == null:
@@ -781,6 +851,12 @@ func clear_deck_b_faults() -> void:
 	s.thermal["rad"] = [1.0, 1.0]
 	s.power["feed1_fault"] = ""
 	s.power["on"] = [true, true, true, true]
+	s.clear_short()
+	s.power["lockout"] = [false, false, false, false]
+	s.air["swap_stuck"] = false
+	s.air["fan_cutout"] = false
+	s.air["sensor_bias"] = 0.0
+	s.air["beds"] = [0.9, 1.0]
 	last_action = "Deck B faults cleared"
 
 

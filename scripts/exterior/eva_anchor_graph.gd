@@ -40,12 +40,16 @@ const ANCHORS := [
 	[Vector3(9.4, RAIL_Y, RAIL_Z), "R3", "wing_mid"],
 	[Vector3(12.9, RAIL_Y, RAIL_Z), "R4", "wing"],
 	[Vector3(16.4, RAIL_Y, RAIL_Z), "R5", "wing_outer"],
+	# Round 50 (A06): a hull ring on the LOWER service module's south wall
+	# (B-04), below the antenna pad -- the route to the lower hull.
+	[Vector3(-4.15, -1.55, 2.78), "D1", "lower_hull"],
 ]
 
 ## Undirected links (by id): the routes a technician follows.
 const LINKS := [
 	["A1", "A2"], ["A2", "A3"], ["A1", "H1"], ["A1", "T0"], ["H1", "T0"],
 	["T0", "L1"], ["L1", "L2"], ["L2", "L3"], ["L3", "L4"], ["L4", "L5"],
+	["A3", "D1"],
 	["T0", "R0"], ["R0", "R1"], ["R1", "R2"], ["R2", "R3"], ["R3", "R4"], ["R4", "R5"],
 ]
 

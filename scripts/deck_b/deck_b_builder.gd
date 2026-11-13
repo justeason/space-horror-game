@@ -810,6 +810,17 @@ func _build_rooms() -> void:
 		n.set_script(load(ROOM_SCRIPTS[room]))
 		n.set("room_id", room)
 		rooms.add_child(n)
+	# Round 50: the pressure hatches, PCP-B and the leak sites (L09) span
+	# several rooms -- one owner on the shared pressure network.
+	var ph := Node3D.new()
+	ph.name = "PressureControl"
+	ph.set_script(load("res://scripts/deck_b/pressure_hatches.gd"))
+	rooms.add_child(ph)
+	# Round 50: the production-art detail pass on the existing equipment.
+	var dt := Node3D.new()
+	dt.name = "EquipmentDetail"
+	dt.set_script(load("res://scripts/deck_b/deck_b_detail.gd"))
+	rooms.add_child(dt)
 
 
 ## Deck A equipment of the shared systems (Engineering): not on Deck B's
@@ -822,6 +833,13 @@ func _build_links() -> void:
 	n.name = "EngineeringBusLink"
 	n.set_script(load("res://scripts/deck_b/engineering_link.gd"))
 	links.add_child(n)
+	# Round 50: the EVA suit service (A01) and the hull monitor / exterior
+	# damage sites (A06) -- Deck A airlock equipment on the shared models.
+	for spec in [["SuitService", "res://scripts/exterior/suit_service.gd"], ["HullRepair", "res://scripts/exterior/hull_repair.gd"]]:
+		var m := Node3D.new()
+		m.name = spec[0]
+		m.set_script(load(spec[1]))
+		links.add_child(m)
 
 
 func room_node(room: StringName) -> Node:

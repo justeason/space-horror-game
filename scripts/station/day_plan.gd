@@ -197,6 +197,11 @@ func entertainment_allowed() -> Dictionary:
 	var env: Node = get_node_or_null(^"../EnvironmentModel")
 	if env != null and int(env.get("severity")) > 0:
 		return {"ok": false, "reason": "AIR QUALITY ALARM. Deal with it first."}
+	# Round 50: a REAL pressure alarm anywhere on the network (even while
+	# Deck A's make-up gas still holds the cabin itself).
+	var net: Node = get_tree().get_first_node_in_group(&"deck_b_systems") if is_inside_tree() else null
+	if net != null and net.get("press") != null and int(net.press.get("alarm", 0)) > 0:
+		return {"ok": false, "reason": "PRESSURE ALARM. Deal with it first."}
 	return {"ok": true, "reason": ""}
 
 

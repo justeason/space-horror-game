@@ -69,7 +69,39 @@ func airflow() -> float:
 func pressure_target() -> float:
 	var s: Node = get_node_or_null(seal_path)
 	var leak: float = s.leak_kpa() if s != null and s.has_method("leak_kpa") else 0.0
-	return NOMINAL_PRESSURE - leak
+	# Round 50: Deck A is one volume of the station's pressure network
+	# (deck_b_systems.gd): gas lost anywhere connected shows here too.
+	var net: Node = _net()
+	var deficit: float = net.deck_a_deficit() if net != null else 0.0
+	return NOMINAL_PRESSURE - leak - deficit
+
+
+func _net() -> Node:
+	return get_tree().get_first_node_in_group(&"deck_b_systems") if is_inside_tree() else null
+
+
+## Round 50: what the technician actually breathes -- the compartment
+## they are in (pressure network) and Deck B's CO2 while down there.
+var local_kpa: float = NOMINAL_PRESSURE
+var local_co2: float = 600.0
+var _co2_high_s: float = 0.0
+var cause: String = ""          # "" | air | pressure | co2 (the warning shown)
+
+
+func _update_local(dt: float) -> void:
+	var net: Node = _net()
+	var cam: Node3D = get_node_or_null(camera_path) as Node3D
+	if net == null or cam == null or not net.has_method("local_air"):
+		local_kpa = pressure_kpa
+		local_co2 = 600.0
+		return
+	var la: Dictionary = net.local_air(cam.global_position)
+	local_kpa = pressure_kpa if String(la["comp"]) == "A" else float(la["kpa"])
+	local_co2 = float(la["co2"])
+	# CO2 symptoms only once it has been HIGH for a while (a passing
+	# reading is not a symptom): mild above 5000 ppm sustained 60 s,
+	# significant above 9000 ppm sustained 60 s.
+	_co2_high_s = _co2_high_s + dt if local_co2 > 5000.0 else maxf(_co2_high_s - dt * 2.0, 0.0)
 
 
 func o2_target() -> float:
@@ -79,12 +111,31 @@ func o2_target() -> float:
 func step(dt: float) -> void:
 	pressure_kpa += (pressure_target() - pressure_kpa) * clampf(dt / PRESSURE_TAU, 0.0, 1.0)
 	o2_kpa += (o2_target() - o2_kpa) * clampf(dt / O2_TAU, 0.0, 1.0)
+	_update_local(dt)
 	var sev := 0
-	if o2_kpa < 18.8 or pressure_kpa < 98.0:
+	var why := ""
+	if o2_kpa < 18.8:
 		sev = 2
-	elif o2_kpa < 20.2 or pressure_kpa < 100.3:
+		why = "air"
+	elif o2_kpa < 20.2:
 		sev = 1
+		why = "air"
+	# Pressure: the cabin model's own bands, applied to where the
+	# technician IS (an isolated, depressurising room is felt inside it).
+	var kp: float = minf(pressure_kpa, local_kpa)
+	if kp < 98.0 and sev < 2:
+		sev = 2
+		why = "pressure"
+	elif kp < 100.3 and sev < 1:
+		sev = 1
+		why = "pressure"
+	if _co2_high_s > 60.0 and sev < 2:
+		var cs: int = 2 if local_co2 > 9000.0 else 1
+		if cs > sev:
+			sev = cs
+			why = "co2"
 	severity = sev
+	cause = why if sev > 0 else ""
 
 
 func _process(delta: float) -> void:
@@ -119,6 +170,10 @@ func _apply_effects() -> void:
 	if severity > _last_warned:
 		var ml: Label = get_node_or_null(^"../Player/HUD/TaskMessageLabel") as Label
 		var msg: String = "Air quality falling — check ventilation and filters." if severity == 1 else "Low oxygen — restore airflow (vent, filter, fans)."
+		if cause == "pressure":
+			msg = "Cabin pressure low (%.1f kPa) — find the leak or isolate the compartment." % minf(pressure_kpa, local_kpa) if severity == 2 else "Cabin pressure below normal — check the pressure panel."
+		elif cause == "co2":
+			msg = "CO2 high — headache, short breath. Check the scrubber and airflow." if severity == 2 else "CO2 elevated — you feel a little sluggish. Check the scrubber."
 		preload("res://scripts/ui/hud_message.gd").show(ml, get_instance_id(), msg, 4.0)
 	_last_warned = severity
 

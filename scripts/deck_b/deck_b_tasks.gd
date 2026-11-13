@@ -18,6 +18,15 @@ const TYPES := {
 	&"b01_lights": {"tag": "EM LIGHT B", "title": "Lower deck emergency lighting test", "room": &"b01", "tier": 1, "family": "electrical", "category": "B", "weight": 2, "priority": 1, "freq": "routine", "cooldown": 6},
 	&"b01_utility": {"tag": "BUS B", "title": "Utility distribution verification (Bus B)", "room": &"b01", "tier": 1, "family": "electrical", "category": "B", "weight": 2, "priority": 2, "freq": "routine", "cooldown": 4},
 	&"b01_repeater": {"tag": "REPEATER", "title": "Lower deck comms repeater inspection", "room": &"b01", "tier": 1, "family": "communications", "category": "A", "weight": 1, "priority": 1, "freq": "occasional", "cooldown": 8},
+	# Round 50: design-bible gaps on the lower junction.
+	&"e12_short": {"tag": "SHORT", "title": "Electrical short: Bus B circuit", "room": &"b01", "tier": 1, "family": "electrical", "category": "C", "weight": 3, "priority": 3, "freq": "fault", "cooldown": 5, "design": "E12"},
+	&"m06_interference": {"tag": "RF NOISE", "title": "Interference investigation (RPT-B link)", "room": &"b01", "tier": 1, "family": "communications", "category": "C", "weight": 3, "priority": 1, "freq": "occasional", "cooldown": 9, "design": "M06"},
+	&"l09_pressure": {"tag": "PRESSURE", "title": "Pressure loss: find, isolate and repair", "room": &"b01", "tier": 1, "family": "life_support", "category": "D", "weight": 3, "priority": 3, "freq": "fault", "cooldown": 5, "design": "L09"},
+	&"l10_co2": {"tag": "CO2", "title": "CO2 rise investigation (lower deck air)", "room": &"b01", "tier": 1, "family": "life_support", "category": "C", "weight": 3, "priority": 3, "freq": "fault", "cooldown": 4, "design": "L10"},
+	# Round 50: the airlock / hull design-bible gaps (Deck A equipment,
+	# gated like every lower-deck job: Deck B tier 1 = Chapter Two).
+	&"a01_suit": {"tag": "SUIT CHECK", "title": "EVA suit inspection (A-1)", "room": &"airlock", "tier": 1, "family": "mechanical", "category": "B", "weight": 2, "priority": 2, "freq": "occasional", "cooldown": 7, "design": "A01"},
+	&"a06_hull": {"tag": "HULL", "title": "Hull damage: assess and repair", "room": &"airlock", "tier": 1, "family": "mechanical", "category": "D", "weight": 3, "priority": 2, "freq": "fault", "cooldown": 3, "design": "A06"},
 	# B-02 Water Recovery
 	&"b02_filter": {"tag": "WATER FLT", "title": "Water recovery: filter bed service", "room": &"b02", "tier": 1, "family": "life_support", "category": "C", "weight": 3, "priority": 2, "freq": "fault", "cooldown": 3},
 	&"b02_sample": {"tag": "WATER QA", "title": "Water quality sample", "room": &"b02", "tier": 1, "family": "life_support", "category": "B", "weight": 2, "priority": 1, "freq": "routine", "cooldown": 3},

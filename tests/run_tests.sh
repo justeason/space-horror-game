@@ -205,6 +205,9 @@ TESTS=(
   test_r49_tasks
   test_r49_story
   test_r49_save
+  test_r50_lower_gaps
+  test_r50_pressure
+  test_r50_suit_hull
 )
 
 if [ "$#" -gt 0 ]; then

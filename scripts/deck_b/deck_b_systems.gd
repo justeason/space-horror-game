@@ -43,11 +43,30 @@ var water := {"raw_l": 22.0, "potable_l": 128.0, "pot_cond": 14.0, "turb": 0.3, 
 	"bleed": false, "level_bias": 0.0, "starts": [], "drawn_l": 0.0}
 var thermal := {"speed": 1.0, "fault": "", "standby": false, "v1": 0.75, "v2": 0.5, "v3": 0.25, "rad": [1.0, 1.0], "rad_fault": "",
 	"supply": 7.0, "ret_eng": 11.0, "ret_lab": 10.5, "eng_T": 24.0, "batt_T": 23.0, "lab_T": 21.0, "arch_T": 22.0, "accum": 205.0, "charge_limit": 1.0}
-var power := {"on": [true, true, true, true], "trip_s": [0.0, 0.0, 0.0, 0.0], "feed1_fault": "", "b2_source": "F1", "dropout": false, "last_trip": ""}
+var power := {"on": [true, true, true, true], "trip_s": [0.0, 0.0, 0.0, 0.0], "feed1_fault": "", "b2_source": "F1", "dropout": false, "last_trip": "",
+	"short": -1, "short_cause": "", "lockout": [false, false, false, false], "fault_trips": 0}
 var hydro := {"trays": [{"moist": 0.62, "health": 0.86, "growth": 0.45, "clean": 0.9}, {"moist": 0.6, "health": 0.84, "growth": 0.4, "clean": 0.85}, {"moist": 0.64, "health": 0.88, "growth": 0.5, "clean": 0.9}],
 	"ec": 1.6, "ph": 6.0, "light": [1.0, 1.0, 1.0], "light_ok": [true, true, true], "line": ["", "", ""], "sensor_bias": [0.0, 0.0, 0.0], "pump_ok": true, "log": []}
 var lab := {"incubator_set": 37.0, "incubator_T": 37.0, "heater_ok": true, "pdu": [true, true, true], "fuse": [true, true, true]}
 var med := {"badge_usv": 0.0, "total_msv": 11.8, "reader_gain": 1.0, "exercise_days": [], "checks": []}
+## Round 50 (L10): the lower deck's air. CO2 comes from the technician
+## (more while exercising), the lit grow trays take some up, the CDRA-B
+## scrubber (two amine beds, one adsorbing while the other regenerates; on
+## B3 HABITAT) removes it -- only as well as the spine vent VF-B2 moves air
+## through it. The CS-B cabin sensor can drift (a SENSOR fault).
+var air := {"co2": 2900.0, "beds": [0.82, 0.95], "active": 0, "regen": -1.0, "swap_stuck": false,
+	"vent_switch": true, "fan_cutout": false, "sensor_bias": 0.0, "recovering": false}
+## Round 50 (L09 / A06): the station's PRESSURE NETWORK -- a handful of
+## gas volumes joined by real openings (see the pressure section below).
+## p: kPa per compartment; hatch: compartment hatch OPEN; eq: its
+## equalisation valve OPEN; duct: the inter-deck ventilation isolation
+## valve IV-AB OPEN; leaks: the physical defects [{id, comp, kind, c
+## (m³/s at the defect), state active|temp|repaired, sev, day, found}];
+## makeup: the pressure control system's gas reserve (kPa·m³).
+var press := {"p": {"A": 101.3, "BC": 101.3, "B03": 101.3, "B04": 101.3, "B08": 101.3},
+	"trend": {"A": 0.0, "BC": 0.0, "B03": 0.0, "B04": 0.0, "B08": 0.0},
+	"hatch": {"B03": true, "B04": true, "B08": true}, "eq": {"B03": false, "B04": false, "B08": false},
+	"duct": true, "leaks": [], "makeup": 26000.0, "makeup_flow": 0.0, "alarm": 0, "roll_day": -1}
 var service_log: Array = []          # [{day, t, room, equipment, fault, action, verify, outcome, type}]
 var visits: Dictionary = {}          # day -> [rooms]
 var part_seq: int = 0
@@ -108,6 +127,10 @@ var _acc: float = 0.0
 
 func _process(delta: float) -> void:
 	var gd: float = _dp.gameplay_delta(delta) if _dp != null and _dp.has_method("gameplay_delta") else delta
+	# Round 50: a live pressure emergency is a CRITICAL timer -- it is never
+	# held by focused laptop use (and focus is refused / ended during one).
+	if int(press.get("alarm", 0)) > 0:
+		gd = delta
 	_acc += gd
 	while _acc >= TICK_S:
 		_acc -= TICK_S
@@ -129,6 +152,8 @@ func step(dt: float) -> void:
 	_step_thermal(dt)
 	_step_hydro(hours)
 	_step_lab(dt)
+	_step_air(dt)
+	_step_press(dt)
 
 
 ## The night: ~9 station hours of processing, growth and drift at once.
@@ -143,6 +168,12 @@ func catch_up_night(hours: float = 9.0) -> void:
 		left -= d
 	for k in ["eng_T", "batt_T", "lab_T", "arch_T"]:
 		thermal[k] = _equip_target(k)
+	# Overnight the technician sleeps on Deck A: the lower deck settles.
+	air["co2"] = co2_equilibrium(CO2_BASE * 0.4)
+	_night_pressure(real_s)
+	air["regen"] = -1.0
+	var other: int = 1 - int(air["active"])
+	air["beds"][other] = 1.0
 
 
 # ----------------------------------------------------------------- power
@@ -216,6 +247,17 @@ func _step_power(dt: float) -> void:
 	for i in 4:
 		if not power["on"][i]:
 			power["trip_s"][i] = 0.0
+			continue
+		# Round 50 (E12): a ground fault trips its breaker at once.
+		if int(power["short"]) == i:
+			power["on"][i] = false
+			power["trip_s"][i] = 0.0
+			power["last_trip"] = CIRCUITS[i][0]
+			power["fault_trips"] = int(power["fault_trips"]) + 1
+			_log("Bus B breaker %s (%s) TRIPPED — ground fault" % [CIRCUITS[i][0], CIRCUITS[i][1]])
+			if is_inside_tree():
+				for a in get_tree().get_nodes_in_group(&"station_ai"):
+					a.event(&"bus_b_fault")
 			continue
 		var over: bool = load_kw(i) > float(CIRCUITS[i][2])
 		if i == 1 and power["b2_source"] == "F2" and feed2_load() > FEED2_RATING:
@@ -483,6 +525,383 @@ func light_output(i: int) -> float:
 	return float(hydro["light"][i]) * (1.0 if hydro["light_ok"][i] else 0.35)
 
 
+# ---------------------------------------------------------- air (L10)
+const CO2_OUTSIDE := 400.0             # what the inter-deck exchange tends to
+const CO2_BASE := 10.0                 # ppm/s from one technician at work
+const CO2_EXERCISE := 7.0              # extra ppm/s on the ergometer
+const CO2_CAUTION := 5000.0            # CS-B caution (order raised)
+const K_SCRUB := 0.004                 # per s, a fresh bed with full airflow
+const K_LEAK := 0.0004                 # per s, exchange with Deck A
+const REGEN_S := 45.0
+
+
+func vent_flow() -> bool:
+	return bool(air["vent_switch"]) and not bool(air["fan_cutout"])
+
+
+func scrubber_powered() -> bool:
+	return powered(2)
+
+
+## 0..1: how much of K_SCRUB the scrubber achieves right now.
+func scrub_eff() -> float:
+	if not scrubber_powered():
+		return 0.0
+	var bed: float = float(air["beds"][int(air["active"])])
+	return clampf(bed * 1.25, 0.0, 1.0) * (1.0 if vent_flow() else 0.15)
+
+
+func co2_production() -> float:
+	var p: float = CO2_BASE
+	var med: Node = get_parent().get_node_or_null("Rooms/MedicalBay") if get_parent() != null else null
+	if med != null and med.get("exercising") == true:
+		p += CO2_EXERCISE
+	for k in 3:
+		p -= light_output(k) * 1.5
+	return maxf(p, 0.0)
+
+
+func co2_equilibrium(prod: float) -> float:
+	return CO2_OUTSIDE + prod / (K_SCRUB * scrub_eff() + K_LEAK)
+
+
+## What the CS-B cabin sensor shows (true value + its drift).
+func co2_reading() -> float:
+	return float(air["co2"]) + float(air["sensor_bias"])
+
+
+func _step_air(dt: float) -> void:
+	var k: float = K_SCRUB * scrub_eff() + K_LEAK
+	air["co2"] = maxf(float(air["co2"]) + (co2_production() - k * (float(air["co2"]) - CO2_OUTSIDE)) * dt, CO2_OUTSIDE)
+	if not scrubber_powered():
+		return
+	var a: int = int(air["active"])
+	# The adsorbing bed loads slowly; the auto-cycle swaps beds at 30 %
+	# (unless the swap valve sticks) and regenerates the loaded one.
+	air["beds"][a] = maxf(float(air["beds"][a]) - 0.00004 * dt * (float(air["co2"]) / 3000.0), 0.0)
+	if float(air["regen"]) >= 0.0:
+		air["regen"] = float(air["regen"]) + dt
+		if float(air["regen"]) >= REGEN_S:
+			air["regen"] = -1.0
+			air["beds"][1 - a] = 1.0
+			_log("CDRA-B: bed %s regenerated" % ["A", "B"][1 - a])
+	elif float(air["beds"][a]) < 0.3 and not air["swap_stuck"] and float(air["beds"][1 - a]) > 0.9:
+		swap_beds("auto-cycle")
+
+
+func swap_beds(why: String) -> void:
+	air["active"] = 1 - int(air["active"])
+	air["regen"] = 0.0
+	_log("CDRA-B: bed %s adsorbing, bed %s regenerating (%s)" % [["A", "B"][int(air["active"])], ["A", "B"][1 - int(air["active"])], why])
+
+
+func air_status() -> String:
+	var r: float = co2_reading()
+	return "CAUTION" if r > CO2_CAUTION else ("ELEVATED" if r > 4200.0 else "NORMAL")
+
+
+# ----------------------------------------------------- pressure (L09)
+## Round 50: the PRESSURE NETWORK. One authoritative abstraction of the
+## station's atmosphere as five connected gas volumes (no fluid dynamics):
+##   A    Deck A (the whole upper habitat, ~190 m³)
+##   BC   Deck B core: the junction, spine, corridors and every lower room
+##        without its own sealing hatch
+##   B03 / B04 / B08  Thermal Control, the Workshop and Cargo (+ the B-11
+##        stub) -- each behind a real pressure hatch with an equalisation
+##        valve (pressure_hatches.gd)
+## Links (conductance G, m³/s; flow = G x ΔP, kPa·m³/s):
+##   A <-> BC   the inter-deck ventilation duct (isolation valve IV-AB on
+##              the PCP-B panel) + the shaft lid while it is open
+##   BC <-> X   the compartment's hatch (open) or its EQ valve
+## Leaks to vacuum: flow = c x p (choked through a small defect), c in m³/s.
+## The pressure control system (PCS) feeds make-up gas into Deck A from a
+## finite reserve, up to MAKEUP_MAX: a small leak is held, a big one is not.
+## Deck A's cabin pressure (EnvironmentModel) follows A's deficit.
+const P_NOM := 101.3
+const P_CAUTION := 99.5           # kPa: below the normal control band
+const P_WARNING := 97.0           # kPa: makeup cannot hold the station
+const P_CRITICAL := 90.0          # kPa: leave / isolate now (still survivable)
+const TREND_CAUTION := -0.25      # kPa/min sustained
+const MAKEUP_MAX := 1.4           # kPa·m³/s
+const MAKEUP_K := 3.0             # kPa·m³/s per kPa below the setpoint
+const G_DUCT := 6.0
+const G_SHAFT := 20.0
+const G_HATCH := 25.0
+const G_EQ := 4.0
+const HATCH_DP_MAX := 3.5         # kPa: a hatch cannot be pulled open above this
+const TEMP_FACTOR := 0.04         # a temporary patch / clamp leaves 4 % of the flow
+const COMP_ROOM := {"A": &"", "BC": &"b01", "B03": &"b03", "B04": &"b04", "B08": &"b08"}
+const COMP_NAME := {"A": "DECK A", "BC": "DECK B CORE", "B03": "B-03 THERMAL", "B04": "B-04 WORKSHOP", "B08": "B-08 CARGO"}
+## The defect catalogue: id -> [compartment, kind, c by severity 1..3, where].
+const LEAK_SITES := {
+	"b03_feed": ["B03", "pipe", [0.02, 0.035, 0.05], "coolant-line hull feedthrough FT-3 (packing gland)"],
+	"b08_seal": ["B08", "seal", [0.035, 0.06, 0.09], "berthing port seal BP-1"],
+	"hull_b04": ["B04", "hull", [0.04, 0.075, 0.12], "hull penetration, B-04 south wall"],
+	"hull_seam": ["A", "hull", [0.004, 0.006, 0.009], "panel seam beside the airlock (exterior)"],
+}
+const A_VOLUME := 190.0
+var _vol: Dictionary = {}
+
+
+func comp_volume(c: String) -> float:
+	if _vol.is_empty():
+		_vol = {"A": A_VOLUME, "BC": 0.0, "B03": 0.0, "B04": 0.0, "B08": 0.0}
+		for sp in L.SPACES:
+			if sp[1] == "sealed":
+				continue
+			var k: String = comp_of_space(String(sp[0]))
+			_vol[k] = float(_vol[k]) + (float(sp[3]) - float(sp[2])) * (float(sp[5]) - float(sp[4])) * (float(sp[6]) - L.FLOOR_Y)
+	return float(_vol.get(c, 1.0))
+
+
+static func comp_of_space(sp: String) -> String:
+	match sp:
+		"B03": return "B03"
+		"B04": return "B04"
+		"B08", "B11": return "B08"
+	return "BC"
+
+
+## The compartment a world point is in ("" outside every volume).
+func comp_at(p: Vector3) -> String:
+	if not L.is_lower(p):
+		return "A"
+	var sp: String = L.space_at(p.x, p.z)
+	return comp_of_space(sp) if sp != "" else "BC"
+
+
+func pressure(c: String) -> float:
+	return float(press["p"].get(c, P_NOM))
+
+
+func trend(c: String) -> float:
+	return float(press["trend"].get(c, 0.0))
+
+
+func hatch_open(c: String) -> bool:
+	return bool(press["hatch"].get(c, true))
+
+
+func hatch_dp(c: String) -> float:
+	return pressure("BC") - pressure(c)
+
+
+func _shaft_open() -> bool:
+	var sh: Node = get_parent().get_node_or_null("VerticalShaft") if get_parent() != null else null
+	return sh != null and sh.get("lid_open") == true
+
+
+func link_g(c: String) -> float:
+	if c == "BC":
+		return (G_DUCT if bool(press["duct"]) else 0.0) + (G_SHAFT if _shaft_open() else 0.0)
+	if hatch_open(c):
+		return G_HATCH
+	return G_EQ if bool(press["eq"].get(c, false)) else 0.0
+
+
+func leak_c(lk: Dictionary) -> float:
+	match String(lk.get("state", "active")):
+		"repaired":
+			return 0.0
+		"temp":
+			return float(lk["c"]) * TEMP_FACTOR
+	return float(lk["c"])
+
+
+func leak(id: String) -> Dictionary:
+	for lk in press["leaks"]:
+		if String(lk["id"]) == id:
+			return lk
+	return {}
+
+
+## Gas lost through every defect right now (kPa·m³/s).
+func leak_flow(comp: String = "") -> float:
+	var q := 0.0
+	for lk in press["leaks"]:
+		if comp == "" or String(lk["comp"]) == comp:
+			q += leak_c(lk) * pressure(String(lk["comp"]))
+	return q
+
+
+func _step_press(dt: float) -> void:
+	var p: Dictionary = press["p"]
+	var f := {"A": 0.0, "BC": 0.0, "B03": 0.0, "B04": 0.0, "B08": 0.0}
+	for lk in press["leaks"]:
+		var c: String = String(lk["comp"])
+		f[c] -= leak_c(lk) * float(p[c])
+	for c in ["BC", "B03", "B04", "B08"]:
+		var up: String = "A" if c == "BC" else "BC"
+		var q: float = link_g(c) * (float(p[up]) - float(p[c]))
+		f[up] -= q
+		f[c] += q
+	var m := 0.0
+	if float(press["makeup"]) > 0.0 and float(p["A"]) < P_NOM:
+		m = minf(MAKEUP_MAX, MAKEUP_K * (P_NOM - float(p["A"])))
+		f["A"] += m
+		press["makeup"] = maxf(float(press["makeup"]) - m * dt, 0.0)
+	press["makeup_flow"] = m
+	for c in f:
+		var old: float = float(p[c])
+		p[c] = clampf(old + float(f[c]) / comp_volume(c) * dt, 0.0, P_NOM + 0.5)
+		var rate: float = (float(p[c]) - old) / dt * 60.0
+		press["trend"][c] = lerpf(float(press["trend"][c]), rate, 1.0 - exp(-dt / 12.0))
+	press["alarm"] = press_alarm()
+
+
+## Station alarm level from the real network: 0 none, 1 CAUTION,
+## 2 WARNING, 3 CRITICAL -- over every compartment someone could be in.
+func press_alarm() -> int:
+	var lvl := 0
+	for c in press["p"]:
+		var pc: float = float(press["p"][c])
+		if c != "A" and c != "BC" and not hatch_open(c):
+			continue      # an isolated compartment alarms on its own panel
+		if pc < P_CRITICAL:
+			lvl = maxi(lvl, 3)
+		elif pc < P_WARNING:
+			lvl = maxi(lvl, 2)
+		elif pc < P_CAUTION or float(press["trend"][c]) < TREND_CAUTION:
+			lvl = maxi(lvl, 1)
+	return lvl
+
+
+static func alarm_word(lvl: int) -> String:
+	return ["NORMAL", "CAUTION", "WARNING", "CRITICAL"][clampi(lvl, 0, 3)]
+
+
+## Open / close a compartment hatch. Refused (with the reason) above the
+## safe differential: the physical seal of a real pressure door.
+func set_hatch(c: String, open: bool) -> String:
+	if open and absf(hatch_dp(c)) > HATCH_DP_MAX:
+		return "ΔP %.1f kPa — equalise first (EQ valve)" % absf(hatch_dp(c))
+	press["hatch"][c] = open
+	_log("Hatch %s %s (%.1f / %.1f kPa)" % [COMP_NAME[c], "OPENED" if open else "CLOSED", pressure("BC"), pressure(c)])
+	return ""
+
+
+func set_eq(c: String, open: bool) -> void:
+	press["eq"][c] = open
+	_log("Hatch %s EQ valve %s" % [COMP_NAME[c], "OPEN" if open else "CLOSED"])
+
+
+func set_duct(open: bool) -> void:
+	press["duct"] = open
+	_log("Inter-deck duct IV-AB %s" % ("OPEN" if open else "CLOSED"))
+
+
+## A real defect appears (daily roll, an order rearm, a hull strike, the
+## developer). Never twice: an existing one only escalates.
+func inject_leak(id: String, sev: int = 2) -> Dictionary:
+	if not LEAK_SITES.has(id):
+		return {}
+	var e: Array = LEAK_SITES[id]
+	var lk: Dictionary = leak(id)
+	if lk.is_empty() or String(lk["state"]) == "repaired":
+		press["leaks"] = press["leaks"].filter(func(x): return String(x["id"]) != id)
+		lk = {"id": id, "comp": e[0], "kind": e[1], "c": float(e[2][clampi(sev, 1, 3) - 1]), "state": "active", "sev": clampi(sev, 1, 3), "day": day(), "found": false}
+		press["leaks"].append(lk)
+		_log("PRESSURE: %s — %s" % [COMP_NAME[e[0]], e[3]])
+	return lk
+
+
+func set_leak_state(id: String, state: String) -> void:
+	var lk: Dictionary = leak(id)
+	if lk.is_empty():
+		return
+	lk["state"] = state
+	_log("PRESSURE: %s %s" % [LEAK_SITES[id][3], {"temp": "temporarily sealed", "repaired": "repaired", "active": "leaking"}.get(state, state)])
+
+
+## Developer / tests: every defect gone, every hatch and valve normal,
+## every volume back at nominal. Never touches inventory or progression.
+func clear_pressure() -> void:
+	press["leaks"] = []
+	for c in press["p"]:
+		press["p"][c] = P_NOM
+		press["trend"][c] = 0.0
+	for c in press["hatch"]:
+		press["hatch"][c] = true
+		press["eq"][c] = false
+	press["duct"] = true
+	press["alarm"] = 0
+
+
+## The open defects (not repaired) in a compartment / of a kind.
+func active_leaks(kind: String = "") -> Array:
+	return press["leaks"].filter(func(x): return String(x["state"]) != "repaired" and (kind == "" or String(x["kind"]) == kind))
+
+
+## Where pressure is being lost right now, for the L09 order.
+func leaking_comp() -> String:
+	var best := ""
+	var q := 0.0
+	for lk in press["leaks"]:
+		var lq: float = leak_c(lk) * pressure(String(lk["comp"]))
+		if lq > q:
+			q = lq
+			best = String(lk["comp"])
+	return best
+
+
+func press_status() -> String:
+	return "%s · A %.1f · B %.1f kPa · makeup %.2f" % [alarm_word(int(press["alarm"])), pressure("A"), pressure("BC"), float(press["makeup_flow"])]
+
+
+## Story-gated anomaly hook (Round 50 FOUNDATION, never active in normal
+## play): a transient pressure drop that exists only in the RECORDS -- the
+## workstation trend / archive line shows it, the physical compartment and
+## this model do not (the authoritative pressure is never written). Only a
+## registered story beat may call it with preview = false; the developer
+## preview returns the record and stores nothing.
+var press_ghosts: Array = []
+
+
+func pressure_anomaly(preview: bool) -> Dictionary:
+	var rec := {"day": day(), "comp": "B04", "shown_kpa": snappedf(pressure("B04") - 4.7, 0.1), "actual_kpa": snappedf(pressure("B04"), 0.1), "preview": preview,
+		"text": "TRANSIENT ΔP B-04: -4.7 kPa in 0.8 s (no hatch / leak event)"}
+	if not preview:
+		press_ghosts.append(rec)
+	return rec
+
+
+## Deck A's cabin pressure deficit from the network (EnvironmentModel).
+func deck_a_deficit() -> float:
+	return maxf(P_NOM - pressure("A"), 0.0)
+
+
+## The technician's local air (EnvironmentModel's symptoms): pressure of
+## the compartment they are in, and CO2 when on Deck B.
+func local_air(p: Vector3) -> Dictionary:
+	var c: String = comp_at(p)
+	return {"comp": c, "kpa": pressure(c), "co2": float(air["co2"]) if L.is_lower(p) else 600.0}
+
+
+## Overnight: the pressure control system's AUTOMATIC isolation closes any
+## sealable compartment still losing gas (logged -- the technician is
+## asleep on Deck A), the isolated volume decays on its own, and make-up
+## gas covers whatever small loss is left (from the finite reserve).
+func _night_pressure(real_s: float) -> void:
+	for lk in active_leaks():
+		var c: String = String(lk["comp"])
+		if press["hatch"].has(c) and hatch_open(c) and leak_c(lk) > 0.003:
+			press["hatch"][c] = false
+			press["eq"][c] = false
+			_log("PCS: %s isolated automatically overnight (pressure loss)" % COMP_NAME[c])
+	for c in ["B03", "B04", "B08"]:
+		if not hatch_open(c):
+			var k: float = leak_flow(c) / maxf(pressure(c), 0.01) / comp_volume(c)
+			press["p"][c] = pressure(c) * exp(-k * real_s) if not bool(press["eq"][c]) else pressure("BC")
+		else:
+			press["p"][c] = P_NOM
+	var q: float = leak_flow("A") + leak_flow("BC")
+	press["makeup"] = maxf(float(press["makeup"]) - q * real_s, 0.0)
+	press["p"]["A"] = P_NOM if float(press["makeup"]) > 0.0 else press["p"]["A"]
+	press["p"]["BC"] = pressure("A")
+	for c in press["trend"]:
+		press["trend"][c] = 0.0
+
+
 # ------------------------------------------------------------------- lab
 func payload_powered() -> bool:
 	return powered(1)
@@ -523,6 +942,12 @@ func vitals() -> Dictionary:
 		flags.append("SpO2 LOW")
 	if glucose < 4.0:
 		flags.append("GLUCOSE LOW")
+	# Round 50: sustained high CO2 on the lower deck raises the breathing /
+	# heart rate a little (never a collapse).
+	var co2: float = float(air["co2"])
+	if co2 > 5000.0:
+		hr += minf((co2 - 5000.0) / 1000.0 * 2.0, 10.0)
+		flags.append("CO2 HIGH")
 	if not drank:
 		flags.append("HYDRATION")
 	return {"hr": hr, "spo2": spo2, "temp": temp, "glucose": glucose, "flags": flags, "rest": 1.0 - tired}
@@ -605,6 +1030,27 @@ func _check_faults() -> void:
 		_raise(&"b03_overheat", "coolant pump speed low")
 	if tier >= 3 and power["feed1_fault"] == "chatter":
 		_raise(&"b05_power", "payload power interruptions")
+	if int(power["short"]) >= 0 and int(power["fault_trips"]) > 0:
+		_raise(&"e12_short", "breaker %s tripped — ground fault" % CIRCUITS[int(power["short"])][0])
+	if bool(air.get("recovering", false)) and (air_fault() != "" or co2_reading() < CO2_CAUTION - 300.0):
+		air["recovering"] = false
+	if co2_reading() > CO2_CAUTION and not bool(air.get("recovering", false)):
+		if not _dp.has_open_order(&"l10_co2"):
+			for a in get_tree().get_nodes_in_group(&"station_ai"):
+				a.event(&"co2_high")
+		_raise(&"l10_co2", "CS-B CO2 %.0f ppm" % co2_reading())
+	# L09: a REAL pressure loss the network measures (caution or worse on a
+	# connected volume), or a compartment left isolated / patched with its
+	# defect still there (a permanent repair is due -- never for a hull
+	# defect, whose permanent repair is the A06 EVA job).
+	var lc: String = leaking_comp()
+	if lc != "" and press_alarm() >= 1:
+		_raise(&"l09_pressure", "%s pressure falling (%.1f kPa/min)" % [COMP_NAME[lc], trend(lc)])
+	for lk in active_leaks():
+		if String(lk["kind"]) != "hull" and day() > int(lk["day"]) and (String(lk["state"]) == "temp" or not hatch_open(String(lk["comp"]))):
+			if int(press.get("repair_raised", -1)) != day():
+				press["repair_raised"] = day()
+				_raise(&"l09_pressure", "%s: permanent repair due" % LEAK_SITES[String(lk["id"])][3])
 
 
 func _raise(t: StringName, why: String) -> void:
@@ -650,17 +1096,75 @@ func _roll_day_faults() -> void:
 	elif roll >= 6 and roll < 10 and tier >= 3 and power["feed1_fault"] == "":
 		power["feed1_fault"] = "chatter"
 		_log("Bus B FEED-1 contactor: intermittent")
+	elif roll >= 10 and roll < 13 and int(power["short"]) < 0:
+		inject_short(2 + (absi(hash([d, "short"])) % 2), "moisture" if (absi(hash([d, "cause"])) % 3) == 0 else "terminal")
+	elif roll >= 13 and roll < 17:
+		inject_air_fault(["bed", "airflow", "sensor"][absi(hash([d, "air"])) % 3])
+	elif roll >= 17 and roll < 20 and active_leaks().is_empty():
+		# L09: a pressure defect inside the hull (never on the first Deck B
+		# days; the cargo seal only once Cargo is open to the technician).
+		var sev: int = 1 + absi(hash([d, "psev"])) % 2
+		inject_leak("b08_seal" if tier >= 2 and (absi(hash([d, "pwhere"])) % 2) == 0 else "b03_feed", sev)
+	elif roll >= 20 and roll < 22:
+		# A06: a debris strike on the hull (hull_repair.gd places it).
+		var hr: Node = get_tree().get_first_node_in_group(&"hull_repair") if is_inside_tree() else null
+		if hr != null and hr.has_method("strike_from_roll"):
+			hr.strike_from_roll(d, tier)
+
+
+## Real model faults (daily roll, order rearm, developer panel).
+func inject_short(circuit: int, cause: String) -> void:
+	power["short"] = circuit
+	power["short_cause"] = cause
+	power["fault_trips"] = 0
+	_log("Bus B %s: insulation resistance low" % CIRCUITS[circuit][0])
+
+
+func clear_short() -> void:
+	power["short"] = -1
+	power["short_cause"] = ""
+	power["fault_trips"] = 0
+
+
+func inject_air_fault(kind: String) -> void:
+	match kind:
+		"bed":
+			air["beds"][int(air["active"])] = 0.12
+			air["swap_stuck"] = true
+			air["regen"] = -1.0
+			_log("CDRA-B: auto-cycle swap valve not responding")
+		"airflow":
+			air["fan_cutout"] = true
+			_log("VF-B2: motor thermal cutout")
+		"sensor":
+			air["sensor_bias"] = 3400.0
+
+
+## The current CO2 cause the model really has ("" = none).
+func air_fault() -> String:
+	if float(air["sensor_bias"]) > 500.0:
+		return "sensor"
+	if not vent_flow():
+		return "airflow"
+	if air["swap_stuck"] or float(air["beds"][int(air["active"])]) < 0.25:
+		return "bed"
+	if not scrubber_powered():
+		return "power"
+	return ""
 
 
 # -------------------------------------------------------------- persist
 func state_dict() -> Dictionary:
-	return {"water": water.duplicate(true), "thermal": thermal.duplicate(true), "power": power.duplicate(true), "hydro": hydro.duplicate(true),
+	return {"water": water.duplicate(true), "thermal": thermal.duplicate(true), "power": power.duplicate(true), "hydro": hydro.duplicate(true), "air": air.duplicate(true), "press": press.duplicate(true),
 		"lab": lab.duplicate(true), "med": med.duplicate(true), "service_log": service_log.duplicate(true), "visits": visits.duplicate(true),
-		"part_seq": part_seq, "faults_rolled_day": faults_rolled_day, "tier1_day": tier1_day, "night_day": maxi(night_day, day()), "player_stows": player_stows.duplicate(true)}
+		"part_seq": part_seq, "faults_rolled_day": faults_rolled_day, "tier1_day": tier1_day, "night_day": maxi(night_day, day()), "player_stows": player_stows.duplicate(true), "press_ghosts": press_ghosts.duplicate(true)}
 
 
 func load_dict(d: Dictionary) -> void:
-	for key in ["water", "thermal", "power", "hydro", "lab", "med"]:
+	if not d.has("press"):
+		clear_pressure()         # a pre-Round-50 save: a healthy, unbroken hull
+		press["makeup"] = 26000.0
+	for key in ["water", "thermal", "power", "hydro", "lab", "med", "air", "press"]:
 		if d.has(key) and d[key] is Dictionary:
 			var cur: Dictionary = get(key)
 			for k in d[key]:
@@ -675,4 +1179,5 @@ func load_dict(d: Dictionary) -> void:
 	tier1_day = int(d.get("tier1_day", -1))
 	night_day = int(d.get("night_day", day()))
 	player_stows = Array(d.get("player_stows", []))
+	press_ghosts = Array(d.get("press_ghosts", []))
 	_acc = 0.0
